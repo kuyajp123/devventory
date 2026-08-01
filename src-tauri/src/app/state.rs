@@ -3,6 +3,7 @@ use std::path::Path;
 use crate::features::backups::repository::{
     BackupRecordDraft, BackupRepository, SqliteBackupRepository,
 };
+use crate::features::projects::{LocalProjectFilesystem, ProjectService, SqliteProjectRepository};
 use crate::features::settings::repository::{SettingsRepository, SqliteSettingsRepository};
 use crate::shared::database::{initialize_database, Database, DatabasePaths};
 use crate::shared::errors::AppError;
@@ -52,6 +53,13 @@ impl AppState {
         let _ = repository.find_by_key("system.health-check").await?;
 
         Ok(())
+    }
+
+    pub(crate) fn project_service(&self) -> ProjectService {
+        ProjectService::new(
+            SqliteProjectRepository::new(self.database.pool().clone()),
+            LocalProjectFilesystem,
+        )
     }
 
     #[cfg(test)]

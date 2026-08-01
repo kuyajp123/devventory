@@ -6,6 +6,9 @@ use tauri::Manager;
 
 use app::state::AppState;
 use features::app_health::commands::health_check;
+use features::projects::commands::{
+    create_project, get_project, list_projects, scan_project_root, validate_project_root,
+};
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -13,6 +16,7 @@ pub fn run() {
 
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_dialog::init())
         .setup(|app| {
             let data_directory = app.path().app_local_data_dir()?;
             let state = tauri::async_runtime::block_on(AppState::initialize(data_directory))?;
@@ -21,7 +25,14 @@ pub fn run() {
             tracing::info!("Devventory application state initialized");
             Ok(())
         })
-        .invoke_handler(tauri::generate_handler![health_check])
+        .invoke_handler(tauri::generate_handler![
+            health_check,
+            validate_project_root,
+            scan_project_root,
+            create_project,
+            list_projects,
+            get_project
+        ])
         .run(tauri::generate_context!())
         .expect("error while running Devventory");
 }

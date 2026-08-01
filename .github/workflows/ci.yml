@@ -10,7 +10,7 @@ permissions:
 
 jobs:
   foundation:
-    name: Phase 2 foundation
+    name: Phase 3 foundation
     runs-on: windows-latest
 
     steps:

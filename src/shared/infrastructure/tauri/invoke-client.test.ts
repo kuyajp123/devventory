@@ -31,4 +31,20 @@ describe('invokeCommand', () => {
       message: expect.stringContaining('inventory.db'),
     });
   });
+
+  it('preserves an allowlisted command code with a safe user message', async () => {
+    mockIPC(() => {
+      throw {
+        code: 'PROJECT_ROOT_CONFLICT',
+        message: 'untrusted backend details',
+        recoverable: true,
+      };
+    });
+
+    await expect(invokeCommand('create_project')).rejects.toMatchObject({
+      code: 'PROJECT_ROOT_CONFLICT',
+      message: 'That project folder is already registered.',
+      recoverable: true,
+    });
+  });
 });

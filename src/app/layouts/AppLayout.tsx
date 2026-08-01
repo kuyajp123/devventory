@@ -1,10 +1,20 @@
 import { Button, useTheme } from '@heroui/react';
+import {
+  IconActivityHeartbeat,
+  IconDeviceDesktop,
+  IconFolders,
+  IconHome,
+  IconLayoutSidebarLeftCollapse,
+  IconLayoutSidebarLeftExpand,
+} from '@tabler/icons-react';
 import { NavLink, Outlet } from 'react-router';
+import { ICON_SIZE, ICON_STROKE } from '@/shared/constants/icon.constants';
 import { useAppUiStore } from '../stores/app-ui.store';
 
 const navigationItems = [
-  { label: 'Home', marker: 'H', to: '/' },
-  { label: 'Diagnostics', marker: 'D', to: '/diagnostics' },
+  { icon: IconHome, label: 'Home', to: '/' },
+  { icon: IconFolders, label: 'Projects', to: '/projects' },
+  { icon: IconActivityHeartbeat, label: 'Diagnostics', to: '/diagnostics' },
 ];
 
 const themeOptions = ['light', 'dark', 'system'] as const;
@@ -53,12 +63,12 @@ function NavigationLink({
       end={item.to === '/'}
       to={item.to}
     >
-      <span
+      <item.icon
         aria-hidden="true"
-        className="flex size-7 shrink-0 items-center justify-center rounded-lg border border-divider bg-surface text-xs font-semibold"
-      >
-        {item.marker}
-      </span>
+        className="shrink-0"
+        size={ICON_SIZE.navigation}
+        stroke={ICON_STROKE}
+      />
       <span className={isCollapsed ? 'sr-only' : undefined}>{item.label}</span>
     </NavLink>
   );
@@ -102,7 +112,19 @@ export function AppLayout() {
             size="sm"
             variant="ghost"
           >
-            <span aria-hidden="true">{isNavigationCollapsed ? '›' : '‹'}</span>
+            {isNavigationCollapsed ? (
+              <IconLayoutSidebarLeftExpand
+                aria-hidden="true"
+                size={ICON_SIZE.button}
+                stroke={ICON_STROKE}
+              />
+            ) : (
+              <IconLayoutSidebarLeftCollapse
+                aria-hidden="true"
+                size={ICON_SIZE.button}
+                stroke={ICON_STROKE}
+              />
+            )}
           </Button>
         </div>
 
@@ -131,7 +153,11 @@ export function AppLayout() {
               size="sm"
               variant="ghost"
             >
-              <span aria-hidden="true">◐</span>
+              <IconDeviceDesktop
+                aria-hidden="true"
+                size={ICON_SIZE.button}
+                stroke={ICON_STROKE}
+              />
             </Button>
           ) : (
             <ThemeSelector onThemeChange={setTheme} theme={theme} />

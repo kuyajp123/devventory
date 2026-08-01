@@ -62,7 +62,7 @@ async fn records_the_snapshot_created_for_an_existing_database() {
     .expect("backup metadata should load");
 
     assert_eq!(backup.1, 0);
-    assert_eq!(backup.2, 1);
+    assert_eq!(backup.2, 2);
     assert!(paths.backups_directory().join(&backup.0).is_file());
 
     state.close().await;
