@@ -1,6 +1,6 @@
 import { Button } from '@heroui/react';
 import { useState } from 'react';
-import { appHealthGateway } from '../features/app-health/services/app-health.gateway';
+import { appHealthGateway } from '@/features/app-health/services/app-health.gateway';
 
 export default function App() {
   const [message, setMessage] = useState('Not checked');
