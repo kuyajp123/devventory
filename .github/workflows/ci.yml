@@ -10,7 +10,7 @@ permissions:
 
 jobs:
   foundation:
-    name: Phase 1 foundation
+    name: Phase 2 foundation
     runs-on: windows-latest
 
     steps:
@@ -69,3 +69,10 @@ jobs:
       - name: Check Rust compilation
         working-directory: src-tauri
         run: cargo check
+
+      - name: Install RustSec cargo-audit
+        run: cargo install cargo-audit --locked
+
+      - name: Audit Rust dependencies
+        working-directory: src-tauri
+        run: cargo audit

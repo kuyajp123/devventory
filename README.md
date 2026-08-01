@@ -11,6 +11,12 @@ Devventory is an offline-first Tauri desktop application for keeping a local inv
 - `npm run test:e2e` runs browser-compatible Playwright tests with mocked Tauri IPC.
 - `npm run build` type-checks and creates the frontend production bundle.
 
-Rust checks run from `src-tauri` with `cargo fmt --check`, `cargo clippy --all-targets --all-features -- -D warnings`, `cargo test`, and `cargo check`.
+Rust checks run from `src-tauri` with `cargo fmt --check`, `cargo clippy --all-targets --all-features -- -D warnings`, `cargo test`, and `cargo check`. CI also audits `Cargo.lock` with RustSec's `cargo-audit`.
 
-Phase 1 establishes only the application shell and development quality gates. Project onboarding, persistence, filesystem access, cloud services, and HTTP synchronization are intentionally out of scope.
+## Local persistence foundation
+
+Phase 2 initializes an SQLx SQLite pool in Tauri's application-local data directory. Embedded, versioned migrations create only foundation-owned settings and backup metadata tables. When an existing database has pending migrations, Devventory creates and verifies a consistent SQLite snapshot before applying them.
+
+Rust code follows the same feature-first boundary as the frontend: settings and backup SQL is owned by repositories under `src-tauri/src/features/`; connection, migration, snapshot, error, and tracing mechanics live under `src-tauri/src/shared/`. Tauri commands receive managed application state and serialize stable error codes rather than raw SQLx or filesystem errors.
+
+Project onboarding, project tables, folder selection, scanning, cloud services, Supabase, and HTTP synchronization remain intentionally out of scope until their later phases.
