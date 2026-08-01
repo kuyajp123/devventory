@@ -1,0 +1,11 @@
+coverage
+dist
+docs
+node_modules
+package-lock.json
+.vscode
+src-tauri/Cargo.lock
+src-tauri/capabilities
+src-tauri/gen
+src-tauri/tauri.conf.json
+src-tauri/target

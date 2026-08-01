@@ -1,0 +1,71 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  foundation:
+    name: Phase 1 foundation
+    runs-on: windows-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install frontend dependencies
+        run: npm ci
+
+      - name: Install Playwright Chromium
+        run: npm exec playwright install chromium
+
+      - name: Lint frontend
+        run: npm run lint
+
+      - name: Check formatting
+        run: npm run format:check
+
+      - name: Type-check frontend and tooling
+        run: npm run typecheck
+
+      - name: Run unit tests
+        run: npm run test:unit
+
+      - name: Run browser tests
+        run: npm run test:e2e
+
+      - name: Build frontend
+        run: npm run build
+
+      - name: Validate pull-request commits
+        if: github.event_name == 'pull_request'
+        run: npm exec commitlint -- --from "${{ github.event.pull_request.base.sha }}" --to "${{ github.event.pull_request.head.sha }}" --verbose
+
+      - name: Install Rust quality components
+        run: rustup component add rustfmt clippy
+
+      - name: Check Rust formatting
+        working-directory: src-tauri
+        run: cargo fmt --check
+
+      - name: Lint Rust
+        working-directory: src-tauri
+        run: cargo clippy --all-targets --all-features -- -D warnings
+
+      - name: Test Rust
+        working-directory: src-tauri
+        run: cargo test
+
+      - name: Check Rust compilation
+        working-directory: src-tauri
+        run: cargo check
