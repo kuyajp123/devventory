@@ -77,8 +77,6 @@ CREATE INDEX indexed_files_asset_filters_idx
 CREATE INDEX indexed_files_content_hash_idx
     ON indexed_files(project_id, size_bytes, content_hash)
     WHERE content_hash IS NOT NULL;
-CREATE INDEX indexed_files_project_size_idx
-    ON indexed_files(project_id, size_bytes, status);
 CREATE INDEX asset_tags_project_name_idx
     ON asset_tags(project_id, normalized_name);
 CREATE INDEX file_tags_tag_idx

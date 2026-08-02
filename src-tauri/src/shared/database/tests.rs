@@ -106,7 +106,7 @@ async fn snapshots_an_existing_database_before_applying_pending_migrations() {
     assert!(snapshot.file_path.starts_with(paths.backups_directory()));
     assert!(snapshot.file_path.is_file());
     assert_eq!(snapshot.from_version, 0);
-    assert_eq!(snapshot.to_version, 4);
+    assert_eq!(snapshot.to_version, 5);
 
     let backup_options = SqliteConnectOptions::new()
         .filename(&snapshot.file_path)
@@ -177,19 +177,20 @@ async fn upgrades_a_database_that_already_applied_the_immutable_asset_migration(
     let upgraded = initialize_database(&paths)
         .await
         .expect("an existing version 4 database should upgrade without a checksum failure");
+    let snapshot = upgraded
+        .pre_migration_backup
+        .as_ref()
+        .expect("the existing database should be backed up before version 5");
     let latest_applied: i64 = query_scalar("SELECT MAX(version) FROM _sqlx_migrations")
         .fetch_one(upgraded.database.pool())
         .await
         .expect("latest migration version should load");
 
+    assert_eq!(snapshot.from_version, 4);
+    assert_eq!(snapshot.to_version, 5);
+    assert!(snapshot.file_path.is_file());
     assert_eq!(latest_applied, 5);
-    assert!(
-        index_exists(
-            upgraded.database.pool(),
-            "indexed_files_project_size_idx"
-        )
-        .await
-    );
+    assert!(index_exists(upgraded.database.pool(), "indexed_files_project_size_idx").await);
 
     upgraded.database.close().await;
 }
