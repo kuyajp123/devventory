@@ -37,6 +37,7 @@ impl TestContext {
     async fn new() -> Self {
         let workspace = tempdir().expect("temporary workspace");
         let root = workspace.path().join("project");
+        let requested_root = root.join(".");
         let external = workspace.path().join("external");
         fs::create_dir_all(root.join("assets")).expect("asset directory");
         fs::create_dir_all(&external).expect("external directory");
@@ -54,20 +55,20 @@ impl TestContext {
                 name: "Asset project".to_owned(),
                 description: None,
                 project_type: ProjectType::Desktop,
-                root_path: root.to_string_lossy().into_owned(),
+                root_path: requested_root.to_string_lossy().into_owned(),
                 watched_locations: vec![".".to_owned()],
                 exclusions: vec![],
             })
             .await
             .expect("project creation");
-        let project_id =
-            sqlx::query_scalar::<_, String>("SELECT id FROM projects WHERE root_path = ? LIMIT 1")
-                .bind(root.to_string_lossy().into_owned())
-                .fetch_one(&pool)
-                .await
-                .expect("persisted project id")
-                .parse()
-                .expect("project UUID");
+        let project_id = project_service
+            .scan_targets()
+            .await
+            .expect("persisted project scan targets")
+            .into_iter()
+            .next()
+            .expect("persisted project")
+            .id;
         let service = AssetService::new(
             SqliteAssetRepository::new(pool.clone()),
             project_service.clone(),
