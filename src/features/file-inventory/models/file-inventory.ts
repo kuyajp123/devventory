@@ -16,6 +16,19 @@ export type FileCategory = z.infer<typeof fileCategorySchema>;
 export const fileStatusSchema = z.enum(['active', 'missing']);
 export type FileStatus = z.infer<typeof fileStatusSchema>;
 
+export const inventorySortFieldSchema = z.enum([
+  'relativePath',
+  'name',
+  'category',
+  'sizeBytes',
+  'modifiedAtMs',
+  'status',
+]);
+export type InventorySortField = z.infer<typeof inventorySortFieldSchema>;
+
+export const sortDirectionSchema = z.enum(['ascending', 'descending']);
+export type SortDirection = z.infer<typeof sortDirectionSchema>;
+
 export const scanStatusSchema = z.enum([
   'running',
   'completed',
@@ -94,6 +107,8 @@ export interface InventoryFilters {
   page: number;
   pageSize: number;
   search?: string;
+  sortBy: InventorySortField;
+  sortDirection: SortDirection;
   status?: FileStatus;
 }
 

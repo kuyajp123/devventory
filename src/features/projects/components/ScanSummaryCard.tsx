@@ -1,3 +1,4 @@
+import { Card, Chip } from '@heroui/react';
 import {
   IconAlertTriangle,
   IconCircleCheck,
@@ -39,11 +40,8 @@ export function ScanSummaryCard({ summary }: { summary: InitialScanSummary }) {
   ];
 
   return (
-    <section
-      aria-labelledby="scan-summary-title"
-      className="rounded-2xl border border-divider bg-surface p-5 sm:p-6"
-    >
-      <div className="flex items-start gap-3">
+    <Card aria-labelledby="scan-summary-title">
+      <Card.Header className="flex items-start gap-3">
         {summary.completed ? (
           <IconCircleCheck
             aria-hidden="true"
@@ -59,7 +57,7 @@ export function ScanSummaryCard({ summary }: { summary: InitialScanSummary }) {
             stroke={ICON_STROKE}
           />
         )}
-        <div>
+        <div className="min-w-0 flex-1">
           <h2 className="text-lg font-semibold" id="scan-summary-title">
             Scan summary
           </h2>
@@ -69,28 +67,39 @@ export function ScanSummaryCard({ summary }: { summary: InitialScanSummary }) {
               : 'The scan finished with limits or unreadable entries. You can review the counts before deciding to save.'}
           </p>
         </div>
-      </div>
+        <Chip
+          color={summary.completed ? 'success' : 'warning'}
+          size="sm"
+          variant="soft"
+        >
+          <Chip.Label>
+            {summary.completed ? 'Completed' : 'Review needed'}
+          </Chip.Label>
+        </Chip>
+      </Card.Header>
 
-      <dl className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
-        {items.map((item) => (
-          <div
-            className="rounded-xl border border-divider bg-surface-secondary p-3"
-            key={item.label}
-          >
-            <dt className="flex items-center gap-2 text-xs font-medium text-muted">
-              <item.icon
-                aria-hidden="true"
-                size={ICON_SIZE.small}
-                stroke={ICON_STROKE}
-              />
-              {item.label}
-            </dt>
-            <dd className="mt-2 text-xl font-semibold tabular-nums">
-              {item.value}
-            </dd>
-          </div>
-        ))}
-      </dl>
-    </section>
+      <Card.Content>
+        <dl className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+          {items.map((item) => (
+            <div
+              className="rounded-lg border border-divider bg-surface-secondary p-3"
+              key={item.label}
+            >
+              <dt className="flex items-center gap-2 text-xs font-medium text-muted">
+                <item.icon
+                  aria-hidden="true"
+                  size={ICON_SIZE.small}
+                  stroke={ICON_STROKE}
+                />
+                {item.label}
+              </dt>
+              <dd className="mt-2 text-xl font-semibold tabular-nums">
+                {item.value}
+              </dd>
+            </div>
+          ))}
+        </dl>
+      </Card.Content>
+    </Card>
   );
 }

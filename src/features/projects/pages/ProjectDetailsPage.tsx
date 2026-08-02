@@ -1,3 +1,4 @@
+import { Alert, buttonVariants, Card, Chip, Skeleton } from '@heroui/react';
 import { IconArrowLeft, IconFiles, IconFolder } from '@tabler/icons-react';
 import { Link, useParams } from 'react-router';
 import { ICON_SIZE, ICON_STROKE } from '@/shared/constants/icon.constants';
@@ -10,16 +11,29 @@ export function ProjectDetailsPage() {
 
   if (project.isPending) {
     return (
-      <p className="mx-auto max-w-5xl text-sm text-muted">Loading project…</p>
+      <div
+        aria-label="Loading project"
+        className="mx-auto max-w-5xl space-y-4"
+        role="status"
+      >
+        <Skeleton className="h-10 w-2/5 rounded-lg" />
+        <Skeleton className="h-28 w-full rounded-xl" />
+        <Skeleton className="h-48 w-full rounded-xl" />
+      </div>
     );
   }
   if (project.isError || !project.data) {
     return (
       <section className="mx-auto max-w-3xl space-y-3">
-        <h1 className="text-3xl font-semibold">Project unavailable</h1>
-        <p className="text-muted">
-          The project could not be loaded from local storage.
-        </p>
+        <Alert role="alert" status="danger">
+          <Alert.Indicator />
+          <Alert.Content>
+            <Alert.Title>Project unavailable</Alert.Title>
+            <Alert.Description>
+              The project could not be loaded from local storage.
+            </Alert.Description>
+          </Alert.Content>
+        </Alert>
         <Link
           className="text-sm font-medium text-accent hover:underline"
           to="/projects"
@@ -53,9 +67,9 @@ export function ProjectDetailsPage() {
             stroke={ICON_STROKE}
           />
           <div className="min-w-0">
-            <p className="text-sm font-medium capitalize text-muted">
-              {data.projectType}
-            </p>
+            <Chip size="sm" variant="soft">
+              <Chip.Label className="capitalize">{data.projectType}</Chip.Label>
+            </Chip>
             <h1 className="break-words text-3xl font-semibold tracking-tight sm:text-4xl">
               {data.name}
             </h1>
@@ -68,26 +82,33 @@ export function ProjectDetailsPage() {
         </div>
       </header>
 
-      <section className="rounded-2xl border border-divider bg-surface p-5 sm:p-6">
-        <h2 className="text-lg font-semibold">Project configuration</h2>
-        <dl className="mt-5 grid gap-5 md:grid-cols-2">
-          <div className="md:col-span-2">
-            <dt className="text-xs font-medium uppercase tracking-wide text-muted">
-              Local root
-            </dt>
-            <dd className="mt-2 break-all rounded-lg bg-surface-secondary p-3 font-mono text-xs">
-              {data.rootPath}
-            </dd>
-          </div>
-          <PathList label="Watched locations" values={data.watchedLocations} />
-          <PathList label="Exclusions" values={data.exclusions} />
-        </dl>
-      </section>
+      <Card>
+        <Card.Header>
+          <Card.Title>Project configuration</Card.Title>
+        </Card.Header>
+        <Card.Content>
+          <dl className="grid gap-5 md:grid-cols-2">
+            <div className="md:col-span-2">
+              <dt className="text-xs font-medium uppercase tracking-wide text-muted">
+                Local root
+              </dt>
+              <dd className="mt-2 break-all rounded-lg bg-surface-secondary p-3 font-mono text-xs">
+                {data.rootPath}
+              </dd>
+            </div>
+            <PathList
+              label="Watched locations"
+              values={data.watchedLocations}
+            />
+            <PathList label="Exclusions" values={data.exclusions} />
+          </dl>
+        </Card.Content>
+      </Card>
 
       <ScanSummaryCard summary={data.initialScan} />
 
-      <section className="rounded-2xl border border-divider bg-surface p-5 sm:p-6">
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+      <Card>
+        <Card.Content className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <h2 className="text-lg font-semibold">File inventory</h2>
             <p className="mt-1 text-sm text-muted">
@@ -96,7 +117,7 @@ export function ProjectDetailsPage() {
             </p>
           </div>
           <Link
-            className="inline-flex min-h-10 items-center justify-center gap-2 rounded-xl bg-accent px-4 py-2 text-sm font-semibold text-accent-foreground"
+            className={buttonVariants({ variant: 'primary' })}
             to={`/projects/${data.id}/files`}
           >
             <IconFiles
@@ -106,8 +127,8 @@ export function ProjectDetailsPage() {
             />
             Open file inventory
           </Link>
-        </div>
-      </section>
+        </Card.Content>
+      </Card>
     </section>
   );
 }

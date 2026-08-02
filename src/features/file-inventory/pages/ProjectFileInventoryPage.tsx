@@ -1,8 +1,9 @@
-import { Button } from '@heroui/react';
+import { Alert, Skeleton, Spinner, toast } from '@heroui/react';
 import { IconArrowLeft, IconFiles } from '@tabler/icons-react';
 import { useMemo } from 'react';
 import { Link, useParams, useSearchParams } from 'react-router';
 import { ICON_SIZE, ICON_STROKE } from '@/shared/constants/icon.constants';
+import { AppPagination } from '@/shared/ui/AppPagination';
 import {
   InventoryFilters,
   type InventoryFilterValues,
@@ -17,7 +18,11 @@ import {
 import {
   fileCategorySchema,
   fileStatusSchema,
+  inventorySortFieldSchema,
+  sortDirectionSchema,
   type InventoryFilters as InventoryQueryFilters,
+  type InventorySortField,
+  type SortDirection,
 } from '../models/file-inventory';
 
 const PAGE_SIZE = 50;
@@ -38,14 +43,47 @@ export function ProjectFileInventoryPage() {
   };
 
   function applyFilters(values: InventoryFilterValues) {
-    setSearchParams(writeFilters({ ...values, page: 1, pageSize: PAGE_SIZE }));
+    setSearchParams(
+      writeFilters({
+        ...values,
+        page: 1,
+        pageSize: PAGE_SIZE,
+        sortBy: filters.sortBy,
+        sortDirection: filters.sortDirection,
+      }),
+    );
   }
 
   function changePage(page: number) {
     setSearchParams(writeFilters({ ...filters, page }));
   }
 
+  function changeSort(
+    sortBy: InventorySortField,
+    sortDirection: SortDirection,
+  ) {
+    setSearchParams(
+      writeFilters({ ...filters, page: 1, sortBy, sortDirection }),
+    );
+  }
+
   const mutationError = rescanProject.error ?? rescanLocation.error;
+
+  function scanProject() {
+    toast.promise(rescanProject.mutateAsync(), {
+      error: 'Project inventory scan failed',
+      loading: 'Scanning project inventory…',
+      success: 'Project inventory scan completed',
+    });
+  }
+
+  function scanLocation(locationId: string) {
+    toast.promise(rescanLocation.mutateAsync(locationId), {
+      error: 'Watched location scan failed',
+      loading: 'Scanning watched location…',
+      success: 'Watched location scan completed',
+    });
+  }
 
   return (
     <section className="mx-auto w-full max-w-7xl space-y-6">
@@ -90,31 +128,36 @@ export function ProjectFileInventoryPage() {
       />
 
       {inventory.isPending && (
-        <p className="text-sm text-muted" role="status">
-          Loading file inventory…
-        </p>
-      )}
-      {inventory.isError && (
         <div
-          className="rounded-xl border border-danger/30 bg-danger/10 p-4"
-          role="alert"
+          aria-label="Loading file inventory"
+          className="space-y-3"
+          role="status"
         >
-          <p className="font-medium text-danger">
-            File inventory is unavailable.
-          </p>
-          <p className="mt-1 text-sm text-muted">
-            Confirm the project root is connected and try again.
-          </p>
+          <Skeleton className="h-14 w-full rounded-xl" />
+          <Skeleton className="h-64 w-full rounded-xl" />
         </div>
       )}
+      {inventory.isError && (
+        <Alert role="alert" status="danger">
+          <Alert.Indicator />
+          <Alert.Content>
+            <Alert.Title>File inventory is unavailable</Alert.Title>
+            <Alert.Description>
+              Confirm the project root is connected and try again.
+            </Alert.Description>
+          </Alert.Content>
+        </Alert>
+      )}
       {mutationError && (
-        <p
-          className="rounded-xl border border-danger/30 bg-danger/10 p-4 text-sm text-danger"
-          role="alert"
-        >
-          The scan could not be completed. Existing inventory records were
-          preserved.
-        </p>
+        <Alert role="alert" status="danger">
+          <Alert.Indicator />
+          <Alert.Content>
+            <Alert.Title>The scan could not be completed</Alert.Title>
+            <Alert.Description>
+              Existing inventory records were preserved.
+            </Alert.Description>
+          </Alert.Content>
+        </Alert>
       )}
 
       {inventory.data && (
@@ -122,8 +165,8 @@ export function ProjectFileInventoryPage() {
           <ScanStatusPanel
             isScanning={isScanning}
             locations={inventory.data.watchedLocations}
-            onRescanLocation={(locationId) => rescanLocation.mutate(locationId)}
-            onRescanProject={() => rescanProject.mutate()}
+            onRescanLocation={scanLocation}
+            onRescanProject={scanProject}
             scans={inventory.data.recentScans}
           />
           <div className="flex items-center justify-between gap-4">
@@ -132,39 +175,27 @@ export function ProjectFileInventoryPage() {
               {inventory.data.totalItems === 1 ? '' : 's'}
             </p>
             {inventory.isFetching && !inventory.isPending && (
-              <span className="text-xs text-muted" role="status">
-                Refreshing…
+              <span
+                className="flex items-center gap-2 text-xs text-muted"
+                role="status"
+              >
+                <Spinner size="sm" /> Refreshing…
               </span>
             )}
           </div>
           <InventoryTable
             files={inventory.data.items}
             hasFilters={hasFilters(filters)}
+            onSortChange={changeSort}
+            sortBy={filters.sortBy}
+            sortDirection={filters.sortDirection}
           />
-          {inventory.data.totalPages > 1 && (
-            <nav
-              aria-label="File inventory pages"
-              className="flex items-center justify-center gap-3"
-            >
-              <Button
-                isDisabled={filters.page <= 1}
-                onPress={() => changePage(filters.page - 1)}
-                variant="secondary"
-              >
-                Previous
-              </Button>
-              <span className="text-sm text-muted">
-                Page {inventory.data.page} of {inventory.data.totalPages}
-              </span>
-              <Button
-                isDisabled={filters.page >= inventory.data.totalPages}
-                onPress={() => changePage(filters.page + 1)}
-                variant="secondary"
-              >
-                Next
-              </Button>
-            </nav>
-          )}
+          <AppPagination
+            ariaLabel="File inventory pages"
+            onPageChange={changePage}
+            page={inventory.data.page}
+            totalPages={inventory.data.totalPages}
+          />
         </>
       )}
     </section>
@@ -175,12 +206,18 @@ function readFilters(searchParams: URLSearchParams): InventoryQueryFilters {
   const rawPage = Number(searchParams.get('page') ?? '1');
   const category = fileCategorySchema.safeParse(searchParams.get('category'));
   const status = fileStatusSchema.safeParse(searchParams.get('status'));
+  const sortBy = inventorySortFieldSchema.safeParse(searchParams.get('sort'));
+  const sortDirection = sortDirectionSchema.safeParse(
+    searchParams.get('direction'),
+  );
   return {
     category: category.success ? category.data : undefined,
     extension: searchParams.get('extension') || undefined,
     page: Number.isSafeInteger(rawPage) && rawPage > 0 ? rawPage : 1,
     pageSize: PAGE_SIZE,
     search: searchParams.get('q') || undefined,
+    sortBy: sortBy.success ? sortBy.data : 'relativePath',
+    sortDirection: sortDirection.success ? sortDirection.data : 'ascending',
     status: status.success ? status.data : undefined,
   };
 }
@@ -191,6 +228,10 @@ function writeFilters(filters: InventoryQueryFilters): URLSearchParams {
   if (filters.category) params.set('category', filters.category);
   if (filters.extension) params.set('extension', filters.extension);
   if (filters.status) params.set('status', filters.status);
+  if (filters.sortBy !== 'relativePath') params.set('sort', filters.sortBy);
+  if (filters.sortDirection !== 'ascending') {
+    params.set('direction', filters.sortDirection);
+  }
   if (filters.page > 1) params.set('page', filters.page.toString());
   return params;
 }

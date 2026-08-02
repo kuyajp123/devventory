@@ -1,4 +1,4 @@
-import { Button } from '@heroui/react';
+import { Alert, Button, Card, Chip, Spinner, toast } from '@heroui/react';
 import { useState } from 'react';
 import { appHealthGateway } from '../services/app-health.gateway';
 
@@ -25,11 +25,13 @@ export function AppHealthPage() {
     try {
       const message = await appHealthGateway.check();
       setStatus({ state: 'success', message });
+      toast.success('Desktop backend is reachable');
     } catch {
       setStatus({
         state: 'error',
         message: 'Unable to communicate with the desktop backend.',
       });
+      toast.danger('Desktop backend could not be reached');
     }
   }
 
@@ -44,10 +46,13 @@ export function AppHealthPage() {
         </p>
       </header>
 
-      <div className="rounded-2xl border border-divider bg-surface p-6 shadow-sm">
-        <div className="flex flex-col gap-5 sm:flex-row sm:items-center sm:justify-between">
+      <Card>
+        <Card.Content className="flex flex-col gap-5 sm:flex-row sm:items-center sm:justify-between">
           <div className="space-y-1">
-            <h2 className="text-lg font-semibold">Desktop backend</h2>
+            <div className="flex flex-wrap items-center gap-2">
+              <h2 className="text-lg font-semibold">Desktop backend</h2>
+              <HealthStatusChip state={status.state} />
+            </div>
             <p aria-live="polite" className="text-sm text-muted">
               {status.message}
             </p>
@@ -58,12 +63,45 @@ export function AppHealthPage() {
             onPress={handleHealthCheck}
             variant="primary"
           >
-            {status.state === 'loading'
-              ? 'Checking…'
-              : 'Check desktop connection'}
+            {status.state === 'loading' ? (
+              <>
+                <Spinner size="sm" /> Checking…
+              </>
+            ) : (
+              'Check desktop connection'
+            )}
           </Button>
-        </div>
-      </div>
+        </Card.Content>
+      </Card>
+
+      {status.state === 'error' && (
+        <Alert status="danger">
+          <Alert.Indicator />
+          <Alert.Content>
+            <Alert.Title>Desktop connection failed</Alert.Title>
+            <Alert.Description>
+              Restart the desktop application and try the check again.
+            </Alert.Description>
+          </Alert.Content>
+        </Alert>
+      )}
     </section>
+  );
+}
+
+function HealthStatusChip({ state }: { state: HealthStatus['state'] }) {
+  const label = {
+    error: 'Unavailable',
+    idle: 'Not checked',
+    loading: 'Checking',
+    success: 'Connected',
+  }[state];
+  const color =
+    state === 'success' ? 'success' : state === 'error' ? 'danger' : 'default';
+
+  return (
+    <Chip color={color} size="sm" variant="soft">
+      <Chip.Label>{label}</Chip.Label>
+    </Chip>
   );
 }

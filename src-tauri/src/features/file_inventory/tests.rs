@@ -7,7 +7,10 @@ use crate::features::projects::{
 };
 use crate::shared::database::{initialize_database, DatabasePaths};
 
-use super::model::{FileCategory, FileStatus, InventoryQuery, ScanStatus, ScanType};
+use super::model::{
+    FileCategory, FileStatus, InventoryQuery, InventorySortField, ScanStatus, ScanType,
+    SortDirection,
+};
 use super::repository::{FileInventoryRepository, SqliteFileInventoryRepository};
 use super::service::FileInventoryService;
 
@@ -68,6 +71,22 @@ async fn reconciles_persistent_metadata_and_recovers_missing_files() {
     assert_eq!(first_page.total_items, 2);
     assert_eq!(first_page.total_pages, 2);
     assert_eq!(first_page.items.len(), 1);
+
+    let largest_first = inventory
+        .query(InventoryQuery {
+            project_id,
+            search: None,
+            category: None,
+            extension: None,
+            status: None,
+            sort_by: InventorySortField::SizeBytes,
+            sort_direction: SortDirection::Descending,
+            page: 1,
+            page_size: 10,
+        })
+        .await
+        .expect("size-sorted inventory");
+    assert!(largest_first.items[0].size_bytes >= largest_first.items[1].size_bytes);
     let watched_location_id = first_page.watched_locations[0].id;
     let location_scan = inventory
         .reconcile_watched_location(project_id, watched_location_id)
@@ -123,6 +142,8 @@ async fn reconciles_persistent_metadata_and_recovers_missing_files() {
             category: None,
             extension: None,
             status: Some(FileStatus::Active),
+            sort_by: InventorySortField::RelativePath,
+            sort_direction: SortDirection::Ascending,
             page: 1,
             page_size: 10,
         })
@@ -146,6 +167,8 @@ async fn reconciles_persistent_metadata_and_recovers_missing_files() {
             category: Some(FileCategory::Image),
             extension: Some("png".to_owned()),
             status: Some(FileStatus::Active),
+            sort_by: InventorySortField::RelativePath,
+            sort_direction: SortDirection::Ascending,
             page: 1,
             page_size: 10,
         })
@@ -243,6 +266,8 @@ fn query(
         category,
         extension: None,
         status,
+        sort_by: InventorySortField::RelativePath,
+        sort_direction: SortDirection::Ascending,
         page,
         page_size,
     }

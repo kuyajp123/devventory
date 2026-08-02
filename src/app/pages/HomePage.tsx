@@ -33,15 +33,17 @@ export function HomePage() {
 
       <div className="grid gap-4 md:grid-cols-3">
         {foundationItems.map((item) => (
-          <article
-            key={item.title}
-            className="rounded-2xl border border-divider bg-surface p-5"
-          >
-            <h2 className="font-semibold">{item.title}</h2>
-            <p className="mt-2 text-sm leading-6 text-muted">{item.detail}</p>
-          </article>
+          <Card key={item.title}>
+            <Card.Header>
+              <Card.Title>{item.title}</Card.Title>
+            </Card.Header>
+            <Card.Content>
+              <p className="text-sm leading-6 text-muted">{item.detail}</p>
+            </Card.Content>
+          </Card>
         ))}
       </div>
     </section>
   );
 }
+import { Card } from '@heroui/react';

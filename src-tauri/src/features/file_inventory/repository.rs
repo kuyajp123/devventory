@@ -6,7 +6,8 @@ use uuid::Uuid;
 use super::error::FileInventoryError;
 use super::model::{
     FileCategory, FileSourceType, FileStatus, IndexedFile, InventoryPage, InventoryQuery,
-    PersistenceSummary, ScanRun, ScanStatus, ScanTraversalSummary, ScanType, ScannedFile,
+    InventorySortField, PersistenceSummary, ScanRun, ScanStatus, ScanTraversalSummary, ScanType,
+    ScannedFile, SortDirection,
 };
 
 const RECENT_SCAN_LIMIT: u32 = 5;
@@ -322,7 +323,8 @@ impl FileInventoryRepository for SqliteFileInventoryRepository {
              FROM indexed_files WHERE project_id = ",
         );
         push_inventory_filters(&mut item_builder, query);
-        item_builder.push(" ORDER BY CASE status WHEN 'active' THEN 0 ELSE 1 END, lower(relative_path), id LIMIT ");
+        push_inventory_order(&mut item_builder, query);
+        item_builder.push(" LIMIT ");
         item_builder.push_bind(i64::from(query.page_size));
         let offset = u64::from(query.page.saturating_sub(1)) * u64::from(query.page_size);
         item_builder.push(" OFFSET ");
@@ -348,6 +350,25 @@ impl FileInventoryRepository for SqliteFileInventoryRepository {
             watched_locations: Vec::new(),
         })
     }
+}
+
+fn push_inventory_order(builder: &mut QueryBuilder<Sqlite>, query: &InventoryQuery) {
+    builder.push(" ORDER BY ");
+    match query.sort_by {
+        InventorySortField::RelativePath => builder.push("lower(relative_path)"),
+        InventorySortField::Name => builder.push("lower(name)"),
+        InventorySortField::Category => builder.push("category"),
+        InventorySortField::SizeBytes => builder.push("size_bytes"),
+        InventorySortField::ModifiedAtMs => {
+            builder.push("CASE WHEN modified_at_ms IS NULL THEN 1 ELSE 0 END, modified_at_ms")
+        }
+        InventorySortField::Status => builder.push("status"),
+    };
+    match query.sort_direction {
+        SortDirection::Ascending => builder.push(" ASC"),
+        SortDirection::Descending => builder.push(" DESC"),
+    };
+    builder.push(", lower(relative_path) ASC, id ASC");
 }
 
 fn push_inventory_filters(builder: &mut QueryBuilder<Sqlite>, query: &InventoryQuery) {

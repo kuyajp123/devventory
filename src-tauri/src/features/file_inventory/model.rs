@@ -240,6 +240,24 @@ pub(crate) struct IndexedFile {
     pub(crate) updated_at: String,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) enum InventorySortField {
+    RelativePath,
+    Name,
+    Category,
+    SizeBytes,
+    ModifiedAtMs,
+    Status,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) enum SortDirection {
+    Ascending,
+    Descending,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct InventoryQuery {
     pub(crate) project_id: Uuid,
@@ -247,6 +265,8 @@ pub(crate) struct InventoryQuery {
     pub(crate) category: Option<FileCategory>,
     pub(crate) extension: Option<String>,
     pub(crate) status: Option<FileStatus>,
+    pub(crate) sort_by: InventorySortField,
+    pub(crate) sort_direction: SortDirection,
     pub(crate) page: u32,
     pub(crate) page_size: u32,
 }

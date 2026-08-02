@@ -1,13 +1,15 @@
-import { IconFile, IconFolder, IconPlus } from '@tabler/icons-react';
+import { Alert, buttonVariants, EmptyState, Skeleton } from '@heroui/react';
+import { IconFolder, IconPlus } from '@tabler/icons-react';
 import { Link } from 'react-router';
 import { ICON_SIZE, ICON_STROKE } from '@/shared/constants/icon.constants';
+import { ProjectsTable } from '../components/ProjectsTable';
 import { useProjectsQuery } from '../hooks/use-projects';
 
 export function ProjectsPage() {
   const projects = useProjectsQuery();
 
   return (
-    <section className="mx-auto w-full max-w-5xl space-y-8">
+    <section className="mx-auto w-full max-w-6xl space-y-8">
       <header className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div>
           <p className="text-sm font-medium text-muted">Local workspace</p>
@@ -20,7 +22,7 @@ export function ProjectsPage() {
           </p>
         </div>
         <Link
-          className="inline-flex min-h-10 items-center justify-center gap-2 rounded-xl bg-accent px-4 py-2 text-sm font-semibold text-accent-foreground"
+          className={buttonVariants({ variant: 'primary' })}
           to="/projects/new"
         >
           <IconPlus
@@ -33,18 +35,25 @@ export function ProjectsPage() {
       </header>
 
       {projects.isPending && (
-        <p className="text-sm text-muted">Loading projects…</p>
+        <div aria-label="Loading projects" className="space-y-3" role="status">
+          <Skeleton className="h-12 w-full rounded-lg" />
+          <Skeleton className="h-12 w-full rounded-lg" />
+          <Skeleton className="h-12 w-full rounded-lg" />
+        </div>
       )}
       {projects.isError && (
-        <p
-          className="rounded-xl border border-danger/30 bg-danger/10 p-4 text-sm text-danger"
-          role="alert"
-        >
-          Projects could not be loaded from local storage.
-        </p>
+        <Alert role="alert" status="danger">
+          <Alert.Indicator />
+          <Alert.Content>
+            <Alert.Title>Projects could not be loaded</Alert.Title>
+            <Alert.Description>
+              Devventory could not read the project list from local storage.
+            </Alert.Description>
+          </Alert.Content>
+        </Alert>
       )}
       {projects.data?.length === 0 && (
-        <div className="rounded-2xl border border-dashed border-divider bg-surface p-8 text-center">
+        <EmptyState className="rounded-xl border border-dashed border-divider bg-surface p-8 text-center">
           <IconFolder
             aria-hidden="true"
             className="mx-auto text-muted"
@@ -55,48 +64,11 @@ export function ProjectsPage() {
           <p className="mt-2 text-sm text-muted">
             Add an existing local project folder to begin.
           </p>
-        </div>
+        </EmptyState>
       )}
 
       {projects.data && projects.data.length > 0 && (
-        <div className="grid gap-4 sm:grid-cols-2">
-          {projects.data.map((project) => (
-            <Link
-              className="rounded-2xl border border-divider bg-surface p-5 transition hover:border-accent hover:shadow-sm focus:outline-none focus:ring-2 focus:ring-accent/30"
-              key={project.id}
-              to={`/projects/${project.id}`}
-            >
-              <div className="flex items-start justify-between gap-4">
-                <div className="min-w-0">
-                  <h2 className="truncate text-lg font-semibold">
-                    {project.name}
-                  </h2>
-                  <p className="mt-1 capitalize text-sm text-muted">
-                    {project.projectType}
-                  </p>
-                </div>
-                <IconFolder
-                  aria-hidden="true"
-                  className="shrink-0 text-accent"
-                  size={ICON_SIZE.navigation}
-                  stroke={ICON_STROKE}
-                />
-              </div>
-              <p className="mt-4 truncate font-mono text-xs text-muted">
-                {project.rootPath}
-              </p>
-              <p className="mt-4 flex items-center gap-2 text-sm text-muted">
-                <IconFile
-                  aria-hidden="true"
-                  size={ICON_SIZE.small}
-                  stroke={ICON_STROKE}
-                />
-                {project.initialScan.filesDiscovered.toLocaleString()} files
-                discovered
-              </p>
-            </Link>
-          ))}
-        </div>
+        <ProjectsTable projects={projects.data} />
       )}
     </section>
   );

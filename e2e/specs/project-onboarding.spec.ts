@@ -12,10 +12,13 @@ test('onboards a local project and shows its saved details', async ({
 
   await page.getByLabel('Project name').fill('Browser project');
   await page.getByLabel('Description (optional)').fill('Playwright onboarding');
-  await page.getByLabel('Project type').selectOption('desktop');
+  await page.getByRole('button', { name: /Project type/ }).click();
+  await page.getByRole('option', { name: 'Desktop application' }).click();
   await page.getByRole('button', { name: 'Choose folder' }).click();
 
-  await expect(page.getByText('Folder validated')).toBeVisible();
+  await expect(
+    page.getByText('Folder validated', { exact: true }),
+  ).toBeVisible();
   await expect(page.getByLabel('Selected project root')).toHaveValue(
     'C:\\workspace\\browser-project',
   );

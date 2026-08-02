@@ -4,7 +4,7 @@ use uuid::Uuid;
 use super::error::FileInventoryError;
 use super::model::{
     FileCategory, FileSourceType, FileStatus, IndexedFile, InventoryPage, InventoryQuery,
-    InventoryWatchedLocation, ScanRun, ScanStatus, ScanType,
+    InventorySortField, InventoryWatchedLocation, ScanRun, ScanStatus, ScanType, SortDirection,
 };
 
 const MAX_SEARCH_LENGTH: usize = 128;
@@ -19,6 +19,8 @@ pub(crate) struct FileInventoryQueryInput {
     category: Option<FileCategory>,
     extension: Option<String>,
     status: Option<FileStatus>,
+    sort_by: Option<InventorySortField>,
+    sort_direction: Option<SortDirection>,
     page: u32,
     page_size: u32,
 }
@@ -62,6 +64,8 @@ impl TryFrom<FileInventoryQueryInput> for InventoryQuery {
             category: input.category,
             extension,
             status: input.status,
+            sort_by: input.sort_by.unwrap_or(InventorySortField::RelativePath),
+            sort_direction: input.sort_direction.unwrap_or(SortDirection::Ascending),
             page: input.page,
             page_size: input.page_size,
         })
@@ -212,6 +216,8 @@ mod tests {
             category: None,
             extension: Some(".TSX".to_owned()),
             status: None,
+            sort_by: Some(super::InventorySortField::SizeBytes),
+            sort_direction: Some(super::SortDirection::Descending),
             page: 1,
             page_size: 50,
         })
@@ -219,6 +225,8 @@ mod tests {
         assert_eq!(query.project_id, project_id);
         assert_eq!(query.search.as_deref(), Some("main"));
         assert_eq!(query.extension.as_deref(), Some("tsx"));
+        assert_eq!(query.sort_by, super::InventorySortField::SizeBytes);
+        assert_eq!(query.sort_direction, super::SortDirection::Descending);
 
         assert!(InventoryQuery::try_from(FileInventoryQueryInput {
             project_id: project_id.to_string(),
@@ -226,6 +234,8 @@ mod tests {
             category: None,
             extension: None,
             status: None,
+            sort_by: None,
+            sort_direction: None,
             page: 1,
             page_size: 50,
         })

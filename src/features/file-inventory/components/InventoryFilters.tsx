@@ -1,4 +1,13 @@
-import { Button } from '@heroui/react';
+import {
+  Button,
+  Form,
+  Input,
+  Label,
+  ListBox,
+  SearchField,
+  Select,
+  TextField,
+} from '@heroui/react';
 import { IconFilter, IconRefresh } from '@tabler/icons-react';
 import { type FormEvent, useState } from 'react';
 import { ICON_SIZE, ICON_STROKE } from '@/shared/constants/icon.constants';
@@ -21,8 +30,7 @@ interface InventoryFiltersProps {
   onReset: () => void;
 }
 
-const fieldClassName =
-  'mt-2 w-full rounded-xl border border-divider bg-background px-3 py-2.5 text-sm text-foreground outline-none transition focus:border-accent focus:ring-2 focus:ring-accent/20';
+const ALL_ITEMS = 'all';
 
 export function InventoryFilters({
   values,
@@ -30,80 +38,131 @@ export function InventoryFilters({
   onReset,
 }: InventoryFiltersProps) {
   const [search, setSearch] = useState(values.search ?? '');
-  const [category, setCategory] = useState<FileCategory | ''>(
-    values.category ?? '',
+  const [category, setCategory] = useState<FileCategory | typeof ALL_ITEMS>(
+    values.category ?? ALL_ITEMS,
   );
   const [extension, setExtension] = useState(values.extension ?? '');
-  const [status, setStatus] = useState<FileStatus | ''>(values.status ?? '');
+  const [status, setStatus] = useState<FileStatus | typeof ALL_ITEMS>(
+    values.status ?? ALL_ITEMS,
+  );
 
   function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     onApply({
-      category: category || undefined,
+      category: category === ALL_ITEMS ? undefined : category,
       extension: extension.trim().replace(/^\./, '') || undefined,
       search: search.trim() || undefined,
-      status: status || undefined,
+      status: status === ALL_ITEMS ? undefined : status,
     });
   }
 
+  function reset() {
+    setSearch('');
+    setCategory(ALL_ITEMS);
+    setExtension('');
+    setStatus(ALL_ITEMS);
+    onReset();
+  }
+
   return (
-    <form
-      className="rounded-2xl border border-divider bg-surface p-4 sm:p-5"
+    <Form
+      className="rounded-xl border border-divider bg-surface p-4 sm:p-5"
       onSubmit={submit}
+      validationBehavior="aria"
     >
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <label className="text-sm font-medium xl:col-span-2">
-          Search file name or path
-          <input
-            className={fieldClassName}
-            maxLength={128}
-            onChange={(event) => setSearch(event.target.value)}
-            placeholder="main.ts or src/components"
-            type="search"
-            value={search}
-          />
-        </label>
-        <label className="text-sm font-medium">
-          Category
-          <select
-            className={fieldClassName}
-            onChange={(event) =>
-              setCategory(event.target.value as FileCategory | '')
-            }
-            value={category}
-          >
-            <option value="">All categories</option>
-            {fileCategoryOptions.map((option) => (
-              <option key={option.value} value={option.value}>
-                {option.label}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label className="text-sm font-medium">
-          Status
-          <select
-            className={fieldClassName}
-            onChange={(event) =>
-              setStatus(event.target.value as FileStatus | '')
-            }
-            value={status}
-          >
-            <option value="">All statuses</option>
-            <option value="active">Active</option>
-            <option value="missing">Missing</option>
-          </select>
-        </label>
-        <label className="text-sm font-medium sm:max-w-xs">
-          Extension
-          <input
-            className={fieldClassName}
-            maxLength={33}
-            onChange={(event) => setExtension(event.target.value)}
-            placeholder="tsx"
-            value={extension}
-          />
-        </label>
+        <SearchField
+          className="xl:col-span-2"
+          fullWidth
+          onChange={setSearch}
+          value={search}
+          variant="secondary"
+        >
+          <Label>Search file name or path</Label>
+          <SearchField.Group>
+            <SearchField.SearchIcon />
+            <SearchField.Input
+              maxLength={128}
+              placeholder="main.ts or src/components"
+            />
+            <SearchField.ClearButton aria-label="Clear file search" />
+          </SearchField.Group>
+        </SearchField>
+
+        <Select
+          fullWidth
+          onChange={(value) =>
+            setCategory((value ?? ALL_ITEMS) as FileCategory | typeof ALL_ITEMS)
+          }
+          value={category}
+          variant="secondary"
+        >
+          <Label>Category</Label>
+          <Select.Trigger>
+            <Select.Value />
+            <Select.Indicator />
+          </Select.Trigger>
+          <Select.Popover>
+            <ListBox>
+              <ListBox.Item id={ALL_ITEMS} textValue="All categories">
+                <Label>All categories</Label>
+                <ListBox.ItemIndicator />
+              </ListBox.Item>
+              {fileCategoryOptions.map((option) => (
+                <ListBox.Item
+                  id={option.value}
+                  key={option.value}
+                  textValue={option.label}
+                >
+                  <Label>{option.label}</Label>
+                  <ListBox.ItemIndicator />
+                </ListBox.Item>
+              ))}
+            </ListBox>
+          </Select.Popover>
+        </Select>
+
+        <Select
+          fullWidth
+          onChange={(value) =>
+            setStatus((value ?? ALL_ITEMS) as FileStatus | typeof ALL_ITEMS)
+          }
+          value={status}
+          variant="secondary"
+        >
+          <Label>Status</Label>
+          <Select.Trigger>
+            <Select.Value />
+            <Select.Indicator />
+          </Select.Trigger>
+          <Select.Popover>
+            <ListBox>
+              <ListBox.Item id={ALL_ITEMS} textValue="All statuses">
+                <Label>All statuses</Label>
+                <ListBox.ItemIndicator />
+              </ListBox.Item>
+              <ListBox.Item id="active" textValue="Active">
+                <Label>Active</Label>
+                <ListBox.ItemIndicator />
+              </ListBox.Item>
+              <ListBox.Item id="missing" textValue="Missing">
+                <Label>Missing</Label>
+                <ListBox.ItemIndicator />
+              </ListBox.Item>
+            </ListBox>
+          </Select.Popover>
+        </Select>
+
+        <TextField
+          className="sm:max-w-xs"
+          fullWidth
+          onChange={setExtension}
+          value={extension}
+          variant="secondary"
+        >
+          <Label>Extension</Label>
+          <Input maxLength={33} placeholder="tsx" />
+        </TextField>
       </div>
       <div className="mt-4 flex flex-wrap gap-3">
         <Button type="submit" variant="primary">
@@ -114,7 +173,7 @@ export function InventoryFilters({
           />
           Apply filters
         </Button>
-        <Button onPress={onReset} type="button" variant="secondary">
+        <Button onPress={reset} type="button" variant="secondary">
           <IconRefresh
             aria-hidden="true"
             size={ICON_SIZE.button}
@@ -123,6 +182,6 @@ export function InventoryFilters({
           Reset
         </Button>
       </div>
-    </form>
+    </Form>
   );
 }

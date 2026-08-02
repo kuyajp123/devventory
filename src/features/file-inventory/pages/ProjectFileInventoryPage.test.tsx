@@ -42,13 +42,32 @@ describe('ProjectFileInventoryPage', () => {
       pageSize: 50,
       recentScans: [],
       totalItems: 1,
-      totalPages: 1,
+      totalPages: 3,
       watchedLocations: [
         {
           id: 'f5443f4c-f04c-4ccf-850b-fbe53d24fcba',
           relativePath: '.',
         },
       ],
+    });
+    vi.mocked(fileInventoryGateway.rescanProject).mockResolvedValue({
+      completedAt: '2026-08-02T00:00:01.000Z',
+      directoriesVisited: 3,
+      durationMs: 18,
+      entriesExcluded: 1,
+      entriesUnreadable: 0,
+      errorSummary: null,
+      filesAdded: 0,
+      filesDiscovered: 1,
+      filesMissing: 0,
+      filesUnchanged: 1,
+      filesUpdated: 0,
+      id: 'b3e91b34-6629-4ff4-b92a-b3c65d7b1093',
+      projectId,
+      scanType: 'manual_project',
+      startedAt: '2026-08-02T00:00:00.000Z',
+      status: 'completed',
+      watchedLocationId: null,
     });
   });
 
@@ -72,7 +91,8 @@ describe('ProjectFileInventoryPage', () => {
     expect(screen.getByText('1 file')).toBeVisible();
 
     await user.type(screen.getByLabelText('Search file name or path'), 'main');
-    await user.selectOptions(screen.getByLabelText('Category'), 'source');
+    await user.click(screen.getByRole('button', { name: /Category/ }));
+    await user.click(screen.getByRole('option', { name: 'Source' }));
     await user.click(screen.getByRole('button', { name: 'Apply filters' }));
 
     await waitFor(() =>
@@ -82,8 +102,43 @@ describe('ProjectFileInventoryPage', () => {
         page: 1,
         pageSize: 50,
         search: 'main',
+        sortBy: 'relativePath',
+        sortDirection: 'ascending',
         status: undefined,
       }),
     );
-  });
+
+    await user.click(screen.getByRole('columnheader', { name: 'File' }));
+    await waitFor(() =>
+      expect(fileInventoryGateway.list).toHaveBeenLastCalledWith(projectId, {
+        category: 'source',
+        extension: undefined,
+        page: 1,
+        pageSize: 50,
+        search: 'main',
+        sortBy: 'relativePath',
+        sortDirection: 'descending',
+        status: undefined,
+      }),
+    );
+
+    await user.click(screen.getByRole('button', { name: /^2$/ }));
+    await waitFor(() =>
+      expect(fileInventoryGateway.list).toHaveBeenLastCalledWith(projectId, {
+        category: 'source',
+        extension: undefined,
+        page: 2,
+        pageSize: 50,
+        search: 'main',
+        sortBy: 'relativePath',
+        sortDirection: 'descending',
+        status: undefined,
+      }),
+    );
+
+    await user.click(screen.getByRole('button', { name: 'Rescan project' }));
+    expect(
+      await screen.findByText('Project inventory scan completed'),
+    ).toBeVisible();
+  }, 10_000);
 });

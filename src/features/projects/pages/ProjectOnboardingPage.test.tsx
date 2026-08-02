@@ -3,6 +3,7 @@ import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes } from 'react-router';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { renderWithProviders } from '@/test/render';
+import { DEFAULT_PROJECT_EXCLUSIONS } from '../models/project';
 import { folderPickerGateway } from '../services/folder-picker.gateway';
 import { projectsGateway } from '../services/projects.gateway';
 import { ProjectOnboardingPage } from './ProjectOnboardingPage';
@@ -64,12 +65,19 @@ describe('ProjectOnboardingPage', () => {
       </MemoryRouter>,
     );
 
+    expect(screen.getByLabelText('Watched locations')).toHaveValue('.');
+    expect(screen.getByLabelText('Exclusions')).toHaveValue(
+      DEFAULT_PROJECT_EXCLUSIONS.join('\n'),
+    );
     await user.type(screen.getByLabelText('Project name'), 'Devventory');
     await user.type(
       screen.getByLabelText('Description (optional)'),
       'Offline inventory',
     );
-    await user.selectOptions(screen.getByLabelText('Project type'), 'desktop');
+    await user.click(screen.getByRole('button', { name: /Project type/ }));
+    await user.click(
+      screen.getByRole('option', { name: 'Desktop application' }),
+    );
     await user.click(screen.getByRole('button', { name: 'Choose folder' }));
 
     expect(await screen.findByText('Folder validated')).toBeVisible();
@@ -80,6 +88,9 @@ describe('ProjectOnboardingPage', () => {
       await screen.findByRole('heading', { name: 'Scan summary' }),
     ).toBeVisible();
     expect(screen.getByText('42')).toBeVisible();
+    expect(
+      await screen.findByText('Initial project scan completed'),
+    ).toBeVisible();
 
     await user.click(screen.getByRole('button', { name: 'Save project' }));
     expect(
@@ -93,5 +104,8 @@ describe('ProjectOnboardingPage', () => {
         watchedLocations: ['.'],
       }),
     );
+    expect(
+      await screen.findByText('Project saved to this device'),
+    ).toBeVisible();
   });
 });

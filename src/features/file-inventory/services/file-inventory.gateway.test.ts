@@ -14,6 +14,8 @@ describe('fileInventoryGateway', () => {
           pageSize: 50,
           projectId,
           search: 'main',
+          sortBy: 'relativePath',
+          sortDirection: 'ascending',
         },
       });
       return {
@@ -33,6 +35,8 @@ describe('fileInventoryGateway', () => {
         page: 1,
         pageSize: 50,
         search: 'main',
+        sortBy: 'relativePath',
+        sortDirection: 'ascending',
       }),
     ).resolves.toMatchObject({ totalItems: 0 });
   });
@@ -43,6 +47,8 @@ describe('fileInventoryGateway', () => {
       fileInventoryGateway.list('30af17bd-2dd6-4b89-a5e7-8517191815a7', {
         page: 1,
         pageSize: 50,
+        sortBy: 'relativePath',
+        sortDirection: 'ascending',
       }),
     ).rejects.toThrow();
   });

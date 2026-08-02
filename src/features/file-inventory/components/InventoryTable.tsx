@@ -1,16 +1,35 @@
-import { IconFileOff, IconFiles } from '@tabler/icons-react';
+import { Chip, EmptyState, Table } from '@heroui/react';
+import { IconFileOff } from '@tabler/icons-react';
 import { ICON_SIZE, ICON_STROKE } from '@/shared/constants/icon.constants';
-import { formatFileSize, type IndexedFile } from '../models/file-inventory';
+import {
+  formatFileSize,
+  inventorySortFieldSchema,
+  type IndexedFile,
+  type InventorySortField,
+  type SortDirection,
+} from '../models/file-inventory';
 
 interface InventoryTableProps {
   files: IndexedFile[];
   hasFilters: boolean;
+  onSortChange: (
+    sortBy: InventorySortField,
+    sortDirection: SortDirection,
+  ) => void;
+  sortBy: InventorySortField;
+  sortDirection: SortDirection;
 }
 
-export function InventoryTable({ files, hasFilters }: InventoryTableProps) {
+export function InventoryTable({
+  files,
+  hasFilters,
+  onSortChange,
+  sortBy,
+  sortDirection,
+}: InventoryTableProps) {
   if (files.length === 0) {
     return (
-      <div className="rounded-2xl border border-dashed border-divider bg-surface p-8 text-center">
+      <EmptyState className="rounded-xl border border-dashed border-divider bg-surface p-8 text-center">
         <IconFileOff
           aria-hidden="true"
           className="mx-auto text-muted"
@@ -25,103 +44,89 @@ export function InventoryTable({ files, hasFilters }: InventoryTableProps) {
             ? 'Adjust the filters or reset them to see more files.'
             : 'Run a project scan to build the local metadata inventory.'}
         </p>
-      </div>
+      </EmptyState>
     );
   }
 
   return (
-    <section
-      aria-labelledby="inventory-results-heading"
-      className="overflow-hidden rounded-2xl border border-divider bg-surface"
-    >
-      <h2 className="sr-only" id="inventory-results-heading">
-        Indexed files
-      </h2>
-      <div className="hidden overflow-x-auto md:block">
-        <table className="w-full text-left text-sm">
-          <thead className="bg-surface-secondary text-xs uppercase tracking-wide text-muted">
-            <tr>
-              <th className="px-4 py-3 font-medium" scope="col">
-                File
-              </th>
-              <th className="px-4 py-3 font-medium" scope="col">
-                Category
-              </th>
-              <th className="px-4 py-3 font-medium" scope="col">
-                Size
-              </th>
-              <th className="px-4 py-3 font-medium" scope="col">
-                Modified
-              </th>
-              <th className="px-4 py-3 font-medium" scope="col">
-                Status
-              </th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-divider">
-            {files.map((file) => (
-              <tr key={file.id}>
-                <td className="max-w-md px-4 py-3">
+    <Table variant="secondary">
+      <Table.ScrollContainer>
+        <Table.Content
+          aria-label="Indexed files"
+          onSortChange={(descriptor) => {
+            const nextSort = inventorySortFieldSchema.safeParse(
+              descriptor.column,
+            );
+            if (nextSort.success) {
+              onSortChange(nextSort.data, descriptor.direction);
+            }
+          }}
+          sortDescriptor={{ column: sortBy, direction: sortDirection }}
+        >
+          <Table.Header>
+            <SortableColumn id="relativePath" isRowHeader label="File" />
+            <SortableColumn id="category" label="Category" />
+            <SortableColumn id="sizeBytes" label="Size" />
+            <SortableColumn id="modifiedAtMs" label="Modified" />
+            <SortableColumn id="status" label="Status" />
+          </Table.Header>
+          <Table.Body items={files}>
+            {(file) => (
+              <Table.Row id={file.id}>
+                <Table.Cell className="max-w-md">
                   <p className="truncate font-medium">{file.name}</p>
                   <p className="truncate font-mono text-xs text-muted">
                     {file.relativePath}
                   </p>
-                </td>
-                <td className="px-4 py-3 capitalize">{file.category}</td>
-                <td className="whitespace-nowrap px-4 py-3">
+                </Table.Cell>
+                <Table.Cell className="capitalize">{file.category}</Table.Cell>
+                <Table.Cell className="whitespace-nowrap">
                   {formatFileSize(file.sizeBytes)}
-                </td>
-                <td className="whitespace-nowrap px-4 py-3 text-muted">
+                </Table.Cell>
+                <Table.Cell className="whitespace-nowrap text-muted">
                   {formatModified(file.modifiedAtMs)}
-                </td>
-                <td className="px-4 py-3">
-                  <StatusBadge status={file.status} />
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-      <ul className="divide-y divide-divider md:hidden">
-        {files.map((file) => (
-          <li className="space-y-3 p-4" key={file.id}>
-            <div className="flex items-start gap-3">
-              <IconFiles
-                aria-hidden="true"
-                className="mt-0.5 shrink-0 text-accent"
-                size={ICON_SIZE.navigation}
-                stroke={ICON_STROKE}
-              />
-              <div className="min-w-0 flex-1">
-                <p className="truncate font-medium">{file.name}</p>
-                <p className="break-all font-mono text-xs text-muted">
-                  {file.relativePath}
-                </p>
-              </div>
-              <StatusBadge status={file.status} />
-            </div>
-            <p className="text-xs capitalize text-muted">
-              {file.category} · {formatFileSize(file.sizeBytes)} ·{' '}
-              {formatModified(file.modifiedAtMs)}
-            </p>
-          </li>
-        ))}
-      </ul>
-    </section>
+                </Table.Cell>
+                <Table.Cell>
+                  <StatusChip status={file.status} />
+                </Table.Cell>
+              </Table.Row>
+            )}
+          </Table.Body>
+        </Table.Content>
+      </Table.ScrollContainer>
+    </Table>
   );
 }
 
-function StatusBadge({ status }: { status: IndexedFile['status'] }) {
+function SortableColumn({
+  id,
+  isRowHeader,
+  label,
+}: {
+  id: InventorySortField;
+  isRowHeader?: boolean;
+  label: string;
+}) {
   return (
-    <span
-      className={`inline-flex rounded-full px-2 py-1 text-xs font-medium ${
-        status === 'active'
-          ? 'bg-success/10 text-success'
-          : 'bg-warning/10 text-warning'
-      }`}
+    <Table.Column allowsSorting id={id} isRowHeader={isRowHeader}>
+      {({ sortDirection }) => (
+        <Table.SortableColumnHeader sortDirection={sortDirection}>
+          {label}
+        </Table.SortableColumnHeader>
+      )}
+    </Table.Column>
+  );
+}
+
+function StatusChip({ status }: { status: IndexedFile['status'] }) {
+  return (
+    <Chip
+      color={status === 'active' ? 'success' : 'warning'}
+      size="sm"
+      variant="soft"
     >
-      {status === 'active' ? 'Active' : 'Missing'}
-    </span>
+      <Chip.Label>{status === 'active' ? 'Active' : 'Missing'}</Chip.Label>
+    </Chip>
   );
 }
 
