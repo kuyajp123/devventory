@@ -1,5 +1,10 @@
 import { Alert, buttonVariants, Card, Chip, Skeleton } from '@heroui/react';
-import { IconArrowLeft, IconFiles, IconFolder } from '@tabler/icons-react';
+import {
+  IconArrowLeft,
+  IconFiles,
+  IconFolder,
+  IconLibrary,
+} from '@tabler/icons-react';
 import { Link, useParams } from 'react-router';
 import { ICON_SIZE, ICON_STROKE } from '@/shared/constants/icon.constants';
 import { ScanSummaryCard } from '../components/ScanSummaryCard';
@@ -106,6 +111,29 @@ export function ProjectDetailsPage() {
       </Card>
 
       <ScanSummaryCard summary={data.initialScan} />
+
+      <Card>
+        <Card.Content className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <h2 className="text-lg font-semibold">Asset library</h2>
+            <p className="mt-1 text-sm text-muted">
+              Browse indexed files and import managed assets with local
+              metadata.
+            </p>
+          </div>
+          <Link
+            className={buttonVariants({ variant: 'primary' })}
+            to={`/projects/${data.id}/assets`}
+          >
+            <IconLibrary
+              aria-hidden="true"
+              size={ICON_SIZE.button}
+              stroke={ICON_STROKE}
+            />
+            Open asset library
+          </Link>
+        </Card.Content>
+      </Card>
 
       <Card>
         <Card.Content className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">

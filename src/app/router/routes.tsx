@@ -9,6 +9,7 @@ import {
 import { AppLayout } from '../layouts/AppLayout';
 import { HomePage } from '../pages/HomePage';
 import { NotFoundPage } from '../pages/NotFoundPage';
+import { LazyAssetDetailsPage, LazyAssetLibraryPage } from './LazyAssetRoutes';
 
 export const appRoutes: RouteObject[] = [
   {
@@ -22,6 +23,14 @@ export const appRoutes: RouteObject[] = [
       {
         path: 'projects/:projectId/files',
         Component: ProjectFileInventoryPage,
+      },
+      {
+        path: 'projects/:projectId/assets',
+        Component: LazyAssetLibraryPage,
+      },
+      {
+        path: 'projects/:projectId/assets/:assetId',
+        Component: LazyAssetDetailsPage,
       },
       { path: 'diagnostics', Component: AppHealthPage },
       { path: '*', Component: NotFoundPage },

@@ -13,6 +13,7 @@ const scanSummary = {
 export function installTauriBrowserMocks() {
   const projects: Project[] = [];
   const inventoryScans: Record<string, Array<Record<string, unknown>>> = {};
+  const managedAssets: Array<Record<string, unknown>> = [];
 
   mockIPC((command, args) => {
     if (command === 'health_check') {
@@ -123,6 +124,77 @@ export function installTauriBrowserMocks() {
       };
       inventoryScans[projectId] = [scan];
       return scan;
+    }
+    if (command === 'list_assets') {
+      const input = commandArguments(args).input as {
+        page: number;
+        pageSize: number;
+        projectId: string;
+      };
+      const discovered = {
+        category: 'source',
+        extension: 'ts',
+        favorite: false,
+        id: 'd63f9ad6-0817-4b8b-ad88-ec19881295b8',
+        mimeType: 'video/mp2t',
+        modifiedAtMs: 1_775_257_200_000,
+        name: 'main.ts',
+        note: null,
+        origin: 'discovered',
+        projectId: input.projectId,
+        relativePath: 'src/main.ts',
+        sizeBytes: 1536,
+        status: 'active',
+        tags: [],
+        updatedAt: '2026-08-02T00:00:00.000Z',
+        variantIds: [],
+      };
+      const items = [discovered, ...managedAssets];
+      return {
+        items,
+        page: input.page,
+        pageSize: input.pageSize,
+        totalItems: items.length,
+        totalPages: 1,
+      };
+    }
+    if (command === 'preview_asset_import') {
+      return {
+        category: 'image',
+        duplicate: null,
+        extension: 'png',
+        mimeType: 'image/png',
+        name: 'logo.png',
+        sizeBytes: 2048,
+      };
+    }
+    if (command === 'import_asset') {
+      const input = commandArguments(args).input as {
+        destination: string;
+        favorite: boolean;
+        projectId: string;
+        tags: string[];
+      };
+      const asset = {
+        category: 'image',
+        extension: 'png',
+        favorite: input.favorite,
+        id: '8b2d755f-6639-448e-a4cf-3c8979820ceb',
+        mimeType: 'image/png',
+        modifiedAtMs: 1_775_257_200_000,
+        name: 'logo.png',
+        note: null,
+        origin: 'managed',
+        projectId: input.projectId,
+        relativePath: `${input.destination === '.' ? '' : `${input.destination}/`}logo.png`,
+        sizeBytes: 2048,
+        status: 'active',
+        tags: input.tags,
+        updatedAt: '2026-08-02T00:00:00.000Z',
+        variantIds: [],
+      };
+      managedAssets.push(asset);
+      return { asset, duplicate: null, status: 'imported' };
     }
 
     throw new Error(`Unhandled E2E command: ${command}`);

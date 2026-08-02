@@ -14,6 +14,16 @@ async fn table_exists(pool: &sqlx::SqlitePool, table_name: &str) -> bool {
     .expect("table lookup should succeed")
 }
 
+async fn index_exists(pool: &sqlx::SqlitePool, index_name: &str) -> bool {
+    query_scalar::<_, bool>(
+        "SELECT EXISTS(SELECT 1 FROM sqlite_master WHERE type = 'index' AND name = ?)",
+    )
+    .bind(index_name)
+    .fetch_one(pool)
+    .await
+    .expect("index lookup should succeed")
+}
+
 async fn create_unmigrated_database(paths: &DatabasePaths) {
     std::fs::create_dir_all(paths.data_directory()).expect("test data directory should exist");
 
@@ -57,6 +67,10 @@ async fn initializes_the_foundation_schema_without_a_first_run_backup() {
     assert!(table_exists(initialization.database.pool(), "initial_scan_summaries").await);
     assert!(table_exists(initialization.database.pool(), "indexed_files").await);
     assert!(table_exists(initialization.database.pool(), "scan_runs").await);
+    assert!(table_exists(initialization.database.pool(), "asset_tags").await);
+    assert!(table_exists(initialization.database.pool(), "file_tags").await);
+    assert!(table_exists(initialization.database.pool(), "file_notes").await);
+    assert!(table_exists(initialization.database.pool(), "asset_relations").await);
     assert!(table_exists(initialization.database.pool(), "_sqlx_migrations").await);
 
     let journal_mode: String = query_scalar("PRAGMA journal_mode")
@@ -92,7 +106,7 @@ async fn snapshots_an_existing_database_before_applying_pending_migrations() {
     assert!(snapshot.file_path.starts_with(paths.backups_directory()));
     assert!(snapshot.file_path.is_file());
     assert_eq!(snapshot.from_version, 0);
-    assert_eq!(snapshot.to_version, 3);
+    assert_eq!(snapshot.to_version, 4);
 
     let backup_options = SqliteConnectOptions::new()
         .filename(&snapshot.file_path)
@@ -131,4 +145,51 @@ async fn does_not_snapshot_a_database_with_no_pending_migrations() {
     assert!(second.pre_migration_backup.is_none());
 
     second.database.close().await;
+}
+
+#[tokio::test]
+async fn upgrades_a_database_that_already_applied_the_immutable_asset_migration() {
+    let temp = TempDir::new().expect("temporary directory should be created");
+    let paths = DatabasePaths::new(temp.path());
+
+    let initial = initialize_database(&paths)
+        .await
+        .expect("initial database should migrate");
+
+    query("DROP INDEX IF EXISTS indexed_files_project_size_idx")
+        .execute(initial.database.pool())
+        .await
+        .expect("later optimization index should be absent from the version 4 fixture");
+    query("DELETE FROM _sqlx_migrations WHERE version >= 5")
+        .execute(initial.database.pool())
+        .await
+        .expect("later migration rows should be removed from the version 4 fixture");
+    query(
+        "UPDATE _sqlx_migrations
+         SET checksum = X'6c4b4fcef4bde3aea7ee83655aac7807c332303f1431dc355334d0f0e2b48d728436834a561d8e0b96730201383ebcd3'
+         WHERE version = 4",
+    )
+    .execute(initial.database.pool())
+    .await
+    .expect("version 4 fixture should retain its originally applied checksum");
+    initial.database.close().await;
+
+    let upgraded = initialize_database(&paths)
+        .await
+        .expect("an existing version 4 database should upgrade without a checksum failure");
+    let latest_applied: i64 = query_scalar("SELECT MAX(version) FROM _sqlx_migrations")
+        .fetch_one(upgraded.database.pool())
+        .await
+        .expect("latest migration version should load");
+
+    assert_eq!(latest_applied, 5);
+    assert!(
+        index_exists(
+            upgraded.database.pool(),
+            "indexed_files_project_size_idx"
+        )
+        .await
+    );
+
+    upgraded.database.close().await;
 }

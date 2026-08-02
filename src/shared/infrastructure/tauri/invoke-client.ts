@@ -15,10 +15,13 @@ export async function invokeCommand<TResponse>(
 }
 
 const safeMessages: Record<string, string> = {
+  ASSET_CONFLICT:
+    'A file already exists at that destination. Choose how to continue.',
   FILESYSTEM_UNAVAILABLE:
     'The selected folder cannot be read. Check its permissions and try again.',
-  INVALID_INPUT: 'The project configuration contains invalid data.',
+  INVALID_INPUT: 'The request contains invalid data.',
   NOT_FOUND: 'The requested project could not be found.',
+  OPERATION_UNAVAILABLE: 'That file action is unavailable on this device.',
   PATH_OUTSIDE_ROOT:
     'Watched locations must stay inside the selected project folder.',
   PROJECT_ROOT_CONFLICT: 'That project folder is already registered.',

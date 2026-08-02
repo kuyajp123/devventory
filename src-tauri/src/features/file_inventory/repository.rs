@@ -179,6 +179,7 @@ impl FileInventoryRepository for SqliteFileInventoryRepository {
                         "UPDATE indexed_files SET
                             watched_location_id = ?, name = ?, extension = ?, mime_type = ?,
                             size_bytes = ?, modified_at_ms = ?, category = ?, status = 'active',
+                            content_hash = NULL, hashed_size_bytes = NULL, hashed_modified_at_ms = NULL,
                             last_seen_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now'),
                             last_scan_id = ?, updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
                          WHERE id = ?",

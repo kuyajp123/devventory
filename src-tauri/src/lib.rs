@@ -6,6 +6,10 @@ use tauri::Manager;
 
 use app::state::AppState;
 use features::app_health::commands::health_check;
+use features::asset_library::commands::{
+    get_asset, import_asset, list_assets, preview_asset_import, run_asset_action,
+    update_asset_metadata,
+};
 use features::file_inventory::commands::{
     list_project_files, rescan_project, rescan_watched_location,
 };
@@ -41,7 +45,13 @@ pub fn run() {
             get_project,
             list_project_files,
             rescan_project,
-            rescan_watched_location
+            rescan_watched_location,
+            list_assets,
+            get_asset,
+            preview_asset_import,
+            import_asset,
+            update_asset_metadata,
+            run_asset_action
         ])
         .run(tauri::generate_context!())
         .expect("error while running Devventory");

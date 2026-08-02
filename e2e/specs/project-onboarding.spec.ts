@@ -3,6 +3,7 @@ import { expect, test } from '@playwright/test';
 test('onboards a local project and shows its saved details', async ({
   page,
 }) => {
+  test.setTimeout(60_000);
   await page.goto('/projects');
 
   await expect(
@@ -46,4 +47,18 @@ test('onboards a local project and shows its saved details', async ({
   await expect(page.getByText('src/main.ts').first()).toBeVisible();
   await page.getByRole('button', { name: 'Rescan project' }).click();
   await expect(page.getByText(/Completed: 1 files found/)).toBeVisible();
+
+  await page.getByRole('link', { name: 'Back to project details' }).click();
+  await page.getByRole('link', { name: 'Open asset library' }).click();
+  await expect(page).toHaveURL(/\/projects\/[^/]+\/assets$/);
+  await expect(
+    page.getByRole('heading', { level: 1, name: 'Asset library' }),
+  ).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByRole('link', { name: 'main.ts' })).toBeVisible();
+
+  await page.getByRole('button', { name: 'Import asset' }).click();
+  await page.getByRole('button', { name: 'Choose source file' }).click();
+  await expect(page.getByText('Safe metadata preview')).toBeVisible();
+  await page.getByRole('button', { name: 'Import and index' }).click();
+  await expect(page.getByRole('link', { name: 'logo.png' })).toBeVisible();
 });

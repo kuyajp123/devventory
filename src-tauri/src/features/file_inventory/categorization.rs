@@ -2,7 +2,7 @@ use std::path::Path;
 
 use super::model::FileCategory;
 
-pub(super) fn extension(path: &Path) -> Option<String> {
+pub(crate) fn extension(path: &Path) -> Option<String> {
     path.extension()
         .and_then(|value| value.to_str())
         .map(str::trim)
@@ -10,13 +10,13 @@ pub(super) fn extension(path: &Path) -> Option<String> {
         .map(str::to_lowercase)
 }
 
-pub(super) fn mime_type(path: &Path) -> Option<String> {
+pub(crate) fn mime_type(path: &Path) -> Option<String> {
     mime_guess::from_path(path)
         .first_raw()
         .map(ToOwned::to_owned)
 }
 
-pub(super) fn category(path: &Path) -> FileCategory {
+pub(crate) fn category(path: &Path) -> FileCategory {
     let Some(extension) = extension(path) else {
         return FileCategory::Other;
     };

@@ -5,9 +5,11 @@ use super::AppError;
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 enum CommandErrorCode {
+    AssetConflict,
     FilesystemUnavailable,
     InvalidInput,
     NotFound,
+    OperationUnavailable,
     PathOutsideRoot,
     ProjectRootConflict,
     RootNotDirectory,
@@ -25,6 +27,14 @@ pub(crate) struct CommandError {
 }
 
 impl CommandError {
+    pub(crate) fn asset_conflict(message: &'static str) -> Self {
+        Self {
+            code: CommandErrorCode::AssetConflict,
+            message,
+            recoverable: true,
+        }
+    }
+
     pub(crate) fn filesystem_unavailable(message: &'static str) -> Self {
         Self {
             code: CommandErrorCode::FilesystemUnavailable,
@@ -44,6 +54,14 @@ impl CommandError {
     pub(crate) fn not_found(message: &'static str) -> Self {
         Self {
             code: CommandErrorCode::NotFound,
+            message,
+            recoverable: true,
+        }
+    }
+
+    pub(crate) fn operation_unavailable(message: &'static str) -> Self {
+        Self {
+            code: CommandErrorCode::OperationUnavailable,
             message,
             recoverable: true,
         }
@@ -99,9 +117,11 @@ impl CommandError {
 
     pub(crate) fn code(&self) -> &'static str {
         match self.code {
+            CommandErrorCode::AssetConflict => "ASSET_CONFLICT",
             CommandErrorCode::FilesystemUnavailable => "FILESYSTEM_UNAVAILABLE",
             CommandErrorCode::InvalidInput => "INVALID_INPUT",
             CommandErrorCode::NotFound => "NOT_FOUND",
+            CommandErrorCode::OperationUnavailable => "OPERATION_UNAVAILABLE",
             CommandErrorCode::PathOutsideRoot => "PATH_OUTSIDE_ROOT",
             CommandErrorCode::ProjectRootConflict => "PROJECT_ROOT_CONFLICT",
             CommandErrorCode::RootNotDirectory => "ROOT_NOT_DIRECTORY",

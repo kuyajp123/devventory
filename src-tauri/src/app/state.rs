@@ -2,6 +2,7 @@ use std::path::Path;
 
 use tauri::AppHandle;
 
+use crate::features::asset_library::{AssetService, LocalAssetFilesystem, SqliteAssetRepository};
 use crate::features::backups::repository::{
     BackupRecordDraft, BackupRepository, SqliteBackupRepository,
 };
@@ -17,6 +18,7 @@ use crate::shared::errors::AppError;
 pub(crate) struct AppState {
     database: Database,
     file_inventory_service: FileInventoryService,
+    asset_service: AssetService,
     inventory_runtime: InventoryRuntime,
 }
 
@@ -59,9 +61,18 @@ impl AppState {
             SqliteFileInventoryRepository::new(database.pool().clone()),
             project_service,
         );
+        let asset_service = AssetService::new(
+            SqliteAssetRepository::new(database.pool().clone()),
+            ProjectService::new(
+                SqliteProjectRepository::new(database.pool().clone()),
+                LocalProjectFilesystem,
+            ),
+            LocalAssetFilesystem,
+        );
 
         Ok(Self {
             database,
+            asset_service,
             file_inventory_service,
             inventory_runtime: InventoryRuntime::new(),
         })
@@ -83,6 +94,10 @@ impl AppState {
 
     pub(crate) fn file_inventory_service(&self) -> FileInventoryService {
         self.file_inventory_service.clone()
+    }
+
+    pub(crate) fn asset_service(&self) -> AssetService {
+        self.asset_service.clone()
     }
 
     pub(crate) async fn start_inventory_runtime(
