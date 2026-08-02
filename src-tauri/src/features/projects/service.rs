@@ -3,7 +3,8 @@ use uuid::Uuid;
 use super::error::ProjectError;
 use super::filesystem::LocalProjectFilesystem;
 use super::model::{
-    CreateProject, InitialScanSummary, NewProjectRecord, Project, ScanConfiguration,
+    CreateProject, InitialScanSummary, NewProjectRecord, Project, ProjectScanTarget,
+    ResolvedProjectScanTarget, ResolvedWatchedLocation, ScanConfiguration,
 };
 use super::repository::{ProjectRepository, SqliteProjectRepository};
 
@@ -109,5 +110,60 @@ impl ProjectService {
             .find_by_id(id)
             .await?
             .ok_or(ProjectError::ProjectNotFound)
+    }
+
+    pub(crate) async fn scan_target(&self, id: Uuid) -> Result<ProjectScanTarget, ProjectError> {
+        self.repository
+            .find_scan_target(id)
+            .await?
+            .ok_or(ProjectError::ProjectNotFound)
+    }
+
+    pub(crate) async fn scan_targets(&self) -> Result<Vec<ProjectScanTarget>, ProjectError> {
+        self.repository.find_scan_targets().await
+    }
+
+    pub(crate) fn resolve_scan_target(
+        &self,
+        target: &ProjectScanTarget,
+        watched_location_id: Option<Uuid>,
+    ) -> Result<Option<ResolvedProjectScanTarget>, ProjectError> {
+        let requested_locations = target
+            .watched_locations
+            .iter()
+            .filter(|location| watched_location_id.is_none_or(|id| id == location.id))
+            .collect::<Vec<_>>();
+        if requested_locations.is_empty() {
+            return Ok(None);
+        }
+
+        let requested_paths = requested_locations
+            .iter()
+            .map(|location| location.relative_path.clone())
+            .collect::<Vec<_>>();
+        let validated = self.filesystem.validate_configuration(
+            &target.root_path,
+            &requested_paths,
+            &target.exclusions,
+        )?;
+        let mut resolved_locations = Vec::with_capacity(validated.watched_locations.len());
+        for location in validated.watched_locations {
+            let stored = requested_locations
+                .iter()
+                .find(|stored| stored.relative_path == location.relative_path)
+                .ok_or(ProjectError::InvalidPersistedData)?;
+            resolved_locations.push(ResolvedWatchedLocation {
+                id: stored.id,
+                relative_path: location.relative_path,
+                absolute_path: location.absolute_path,
+            });
+        }
+
+        Ok(Some(ResolvedProjectScanTarget {
+            id: target.id,
+            root_path: validated.root_path,
+            watched_locations: resolved_locations,
+            exclusions: validated.exclusions,
+        }))
     }
 }

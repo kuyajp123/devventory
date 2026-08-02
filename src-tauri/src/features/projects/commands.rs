@@ -8,6 +8,7 @@ use super::dto::{
     ValidatedProjectRootDto,
 };
 use super::model::InitialScanSummary;
+use crate::features::file_inventory::ScanType;
 
 #[tauri::command]
 pub(crate) async fn validate_project_root(
@@ -37,12 +38,25 @@ pub(crate) async fn create_project(
     state: State<'_, AppState>,
     input: CreateProjectInput,
 ) -> Result<ProjectDto, CommandError> {
-    state
+    let project = state
         .project_service()
         .create(input.into())
         .await
-        .map(ProjectDto::from)
-        .map_err(Into::into)
+        .map_err(CommandError::from)?;
+    let project_id = project.id;
+
+    if let Err(error) = state
+        .file_inventory_service()
+        .reconcile_project(project_id, ScanType::Initial)
+        .await
+    {
+        tracing::warn!(project_id = %project_id, error = %error, "initial persistent inventory scan failed");
+    }
+    if let Err(error) = state.refresh_inventory_watchers().await {
+        tracing::warn!(project_id = %project_id, error = %error, "project watcher refresh failed");
+    }
+
+    Ok(ProjectDto::from(project))
 }
 
 #[tauri::command]

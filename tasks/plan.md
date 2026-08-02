@@ -1,91 +1,81 @@
-# Implementation Plan: Phase 2 Rust and SQLite Foundation
+# Implementation Plan: Phase 4 File Inventory and Watching
 
-## Overview
+## Objective
 
-Implement the Phase 2 backend foundation from `docs/Devventory_Implementation_Plan.md` without exposing Phase 3 project onboarding. The result will initialize a local SQLite database in Tauri application-local data, create consistent pre-migration snapshots, run embedded versioned migrations, manage the database through Tauri state, expose typed command failures, and prove feature-owned repositories against temporary SQLite databases.
+Implement only Phase 4 from `docs/Devventory_Implementation_Plan.md`: persistent file metadata inventory, deterministic categorization, paginated search/filtering, manual and startup reconciliation, native file watching, missing-file recovery, and frontend refresh after native changes. Phase 5 environment parsing and every later phase remain out of scope.
 
-## Locked Architecture Decisions
+## Locked Contracts
 
-- Use SQLx 0.9 with its bundled SQLite driver, Tokio runtime, and embedded migration support.
-- Store the database under Tauri's application-local data directory; tests inject temporary directories.
-- Keep SQL inside feature repository implementations or database infrastructure.
-- Limit the first migration to `application_settings` and `backup_records`; Phase 3 owns project tables.
-- Detect unapplied embedded migrations before creating a backup. Use parameterized `VACUUM INTO` so the snapshot is consistent with WAL databases.
-- Use UUID v4 identifiers for foundation records.
-- Keep internal `thiserror` sources private and serialize only stable, safe command error codes and messages.
-- Emit structured tracing events without settings values, file contents, secrets, or full database paths.
+- Preserve the Phase 1-3 feature-first dependency direction and keep the new frontend feature under `src/features/file-inventory/` with a controlled `index.ts` API.
+- Keep Tauri commands thin. Rust services own scan/reconciliation rules, filesystem adapters own traversal and watcher mechanics, and repositories own all SQL.
+- Reuse canonical project roots, relative watched locations, exclusions, SQLite state, UUIDs, typed errors, and tracing from Phases 2-3.
+- Store file identity as a stable UUID plus unique `(project_id, relative_path)`. Store only metadata; never read or persist file contents.
+- Determine MIME type only from the extension. Use deterministic extension/category rules and an `other` fallback.
+- Exclude symbolic links and Windows reparse points. Never traverse a link target, even when it resolves inside the root.
+- Stream scan results through bounded batches rather than returning an entire inventory in memory.
+- Mark unseen records missing only after an authoritative, completed scan for the relevant scope. Partial, failed, unavailable-root, and ambiguous scans preserve existing status.
+- Keep missing records so reappearance can reactivate the same local identity at the same relative path.
+- Keep watcher intake bounded and debounced. Coalesce logical changes and use a full project reconciliation for correctness when native events are ambiguous, renamed, moved, or dropped.
+- Expose paginated inventory queries with bounded page sizes and parameterized filters. Phase 8 full-text search is not introduced.
+- Invalidate only the affected project inventory query prefix after a successful manual scan or backend inventory event.
+- No hashes are computed in Phase 4 because no demonstrated feature requires them.
 
-## Task List
+## Threat Model
 
-### Task 1: Lock Rust dependencies and module contracts
+| Threat                                                                       | Boundary                                        | Mitigation                                                                                                                                    |
+| ---------------------------------------------------------------------------- | ----------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| Traversal or watched path escapes the approved root                          | Stored project configuration to scanner/watcher | Re-canonicalize the root and each watched location; reject anything outside the root; never accept frontend-provided absolute inventory paths |
+| Symlink/junction escape or cycle                                             | Recursive traversal                             | Inspect link metadata, skip symlinks/reparse points, and never follow them                                                                    |
+| Inaccessible or temporarily unavailable storage creates mass false deletions | Filesystem to reconciliation                    | Record partial/failed scan status and never mark unseen rows missing unless the scan completes authoritatively                                |
+| Event storms exhaust memory or run overlapping scans                         | OS watcher to service                           | Bounded queue, debounce/coalescing, serialized reconciliation, and overflow-to-full-reconciliation fallback                                   |
+| Search input alters SQL                                                      | Frontend/IPC to repository                      | Validate lengths/enums/page bounds and bind all values through SQLx query parameters                                                          |
+| Sensitive local data is leaked                                               | DTO/log boundary                                | Return relative paths and metadata only; do not read contents; log project/scan IDs and counts, never file contents or environment values     |
+| Large projects exhaust memory or stall UI                                    | Scanner/query boundary                          | Fixed scan batch size, bounded channels, blocking traversal off the async runtime, paginated queries, and indexed filter columns              |
 
-**Acceptance criteria:**
+## Ordered Slices
 
-- Cargo enables only the required SQLx SQLite/migration/runtime features plus UUID, thiserror, tracing, and test utilities.
-- Shared error and telemetry modules compile without changing the frontend command contract.
+### 1. Schema and public contracts
 
-**Verification:** `cargo check`
+- Add append-only `0003_file_inventory.sql` for `indexed_files` and `scan_runs` with constraints and indexes.
+- Define Rust inventory models, DTOs, typed errors, and repository/service interfaces.
+- Add failing migration, categorization, filter-validation, and repository tests first.
 
-### Task 2: Initialize SQLite and embedded migrations
+### 2. Authoritative scanner and reconciliation
 
-**Acceptance criteria:**
+- Add a safe recursive scanner over configured watched locations.
+- Capture relative path, name, extension, extension-derived MIME, size, modified timestamp, category, source, and watched-location ID.
+- Stream fixed-size batches to SQLite and record added/updated/unchanged/missing/excluded/unreadable counts.
+- Support initial/startup/manual-project/manual-location/watcher scan kinds and completed/partial/failed status.
 
-- A pool is created with foreign keys, WAL, a busy timeout, and bounded connections.
-- Embedded migrations create only foundation tables and are tracked by SQLx.
-- Migration SQL is forced to LF in Git for stable SQLx checksums.
+### 3. Query and rescan IPC
 
-**Verification:** focused Rust migration tests
+- Add paginated searchable/filterable inventory and recent scan DTOs.
+- Add full-project and watched-location rescan commands.
+- Register commands without expanding Tauri filesystem permissions.
 
-### Task 3: Create and verify pre-migration backups
+### 4. Frontend inventory feature
 
-**Acceptance criteria:**
+- Add Zod-validated gateway contracts and TanStack Query hooks.
+- Add a responsive inventory page with search, category/extension/status filters, pagination, scan status, empty/loading/error states, and manual rescan actions.
+- Link the public page from routing and project details without deep imports.
 
-- Existing databases with pending migrations receive one consistent snapshot before migration.
-- New or fully migrated databases do not receive unnecessary snapshots.
-- A failed or corrupt snapshot blocks migration and does not become a valid backup.
+### 5. Native watcher and reconciliation lifecycle
 
-**Verification:** focused temporary-database backup tests
+- Add a testable notify adapter, logical event coalescer, bounded runtime queue, and serialized reconciliation worker.
+- Register project watched locations at startup, reconcile all projects at startup, refresh watcher registrations after new project creation, and emit safe project-scoped inventory change events.
+- Add frontend event cleanup and query invalidation.
 
-### Task 4: Add feature-owned repository contracts
+### 6. Validation and scope review
 
-**Acceptance criteria:**
+- Run all existing frontend and Rust checks, plus focused inventory tests and Playwright when supported.
+- Review filesystem safety, query bounds, event overload behavior, error sanitization, file sizes, feature boundaries, and Phase 5 scope exclusion.
+- Update `AGENTS.md` and this checklist to describe the implemented Phase 4 boundary.
 
-- Settings and backup records use feature-owned models and repository traits.
-- SQLite implementations use parameterized queries and do not expose database rows.
-- UUID-backed records persist and load correctly from temporary databases.
+## Definition of Done
 
-**Verification:** colocated repository integration tests
-
-### Task 5: Wire Tauri application state and typed command errors
-
-**Acceptance criteria:**
-
-- Tauri setup resolves application-local data, initializes the database, and manages `AppState`.
-- `health_check` confirms the managed pool is responsive while retaining its string success contract.
-- Internal database/filesystem details never appear in serialized command errors.
-
-**Verification:** command-error tests, `cargo test`, frontend contract tests
-
-### Task 6: Extend quality gates and documentation
-
-**Acceptance criteria:**
-
-- CI validates migrations and audits the Rust lockfile in addition to existing checks.
-- `AGENTS.md` and the README document the Phase 2 ownership boundaries and commands.
-- No project onboarding, folder picker, scanner, cloud, Supabase, or HTTP-sync code is added.
-
-**Verification:** all frontend gates, Rust format/Clippy/test/check, dependency audit, and final diff review
-
-## Risks and Mitigations
-
-| Risk                                                | Impact | Mitigation                                                      |
-| --------------------------------------------------- | ------ | --------------------------------------------------------------- |
-| Copying only the main SQLite file can omit WAL data | High   | Use SQLite `VACUUM INTO` for a transactional snapshot           |
-| Migration checksum drift across Windows and CI      | High   | Force migration SQL to LF with `.gitattributes`                 |
-| Raw SQLx or filesystem errors cross IPC             | High   | Map internal errors to a stable serializable command error DTO  |
-| Future feature schema leaks into Phase 2            | Medium | Limit migration ownership to settings and backup records        |
-| A test leaves SQLite handles open on Windows        | Medium | Explicitly close pools before temporary directories are dropped |
-
-## Open Questions
-
-None blocking. Phase 3 will decide the project schema and onboarding commands.
+- A registered project can be reconciled into persistent, queryable file metadata without reading file contents.
+- Create/modify/delete/rename/move changes converge correctly through native watching and reconciliation.
+- Partial failures are visible and cannot silently mark the entire inventory missing.
+- UI users can search/filter/page through records, inspect last scan state, and trigger project or watched-location rescans.
+- Tests cover categorization, exclusions, traversal/link safety, batch persistence, missing/recovery, pagination/filtering, event coalescing, typed IPC parsing, query invalidation, and key UI states.
+- No Phase 5+ behavior, cloud/HTTP dependency, environment parsing, file content storage, or broad filesystem permission is added.

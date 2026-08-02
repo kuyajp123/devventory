@@ -1,4 +1,4 @@
-import { IconArrowLeft, IconFolder } from '@tabler/icons-react';
+import { IconArrowLeft, IconFiles, IconFolder } from '@tabler/icons-react';
 import { Link, useParams } from 'react-router';
 import { ICON_SIZE, ICON_STROKE } from '@/shared/constants/icon.constants';
 import { ScanSummaryCard } from '../components/ScanSummaryCard';
@@ -85,6 +85,29 @@ export function ProjectDetailsPage() {
       </section>
 
       <ScanSummaryCard summary={data.initialScan} />
+
+      <section className="rounded-2xl border border-divider bg-surface p-5 sm:p-6">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <h2 className="text-lg font-semibold">File inventory</h2>
+            <p className="mt-1 text-sm text-muted">
+              Search persisted metadata and review missing files or scan
+              activity.
+            </p>
+          </div>
+          <Link
+            className="inline-flex min-h-10 items-center justify-center gap-2 rounded-xl bg-accent px-4 py-2 text-sm font-semibold text-accent-foreground"
+            to={`/projects/${data.id}/files`}
+          >
+            <IconFiles
+              aria-hidden="true"
+              size={ICON_SIZE.button}
+              stroke={ICON_STROKE}
+            />
+            Open file inventory
+          </Link>
+        </div>
+      </section>
     </section>
   );
 }

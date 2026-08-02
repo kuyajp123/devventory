@@ -80,7 +80,21 @@ async fn service_persists_projects_and_rejects_a_duplicate_canonical_root() {
         .expect("project creation");
     assert_eq!(created.name, "Devventory");
     assert_eq!(created.initial_scan.files_discovered, 1);
-    assert_eq!(service.list().await.expect("project list"), vec![created]);
+    assert_eq!(
+        service.list().await.expect("project list"),
+        vec![created.clone()]
+    );
+
+    let target = service
+        .scan_target(created.id)
+        .await
+        .expect("project scan target");
+    assert_eq!(target.id, created.id);
+    assert_eq!(target.root_path, created.root_path);
+    assert_eq!(target.watched_locations.len(), 1);
+    assert_eq!(target.watched_locations[0].relative_path, ".");
+    assert_eq!(target.exclusions, ["target/"]);
+    assert_eq!(target.watched_locations[0].id.get_version_num(), 4);
 
     let duplicate = service.create(input).await;
     assert!(matches!(duplicate, Err(ProjectError::DuplicateRoot)));
@@ -95,4 +109,27 @@ fn scan_configuration_keeps_only_relative_inputs() {
     };
 
     assert_eq!(input.watched_locations, ["src"]);
+}
+
+#[cfg(unix)]
+#[test]
+fn watched_locations_reject_symbolic_link_components() {
+    use std::os::unix::fs::symlink;
+
+    let workspace = tempdir().expect("temporary workspace");
+    let root = workspace.path().join("project");
+    let real = root.join("real");
+    fs::create_dir_all(&real).expect("real directory");
+    symlink(&real, root.join("linked")).expect("watched symlink");
+
+    let result = LocalProjectFilesystem.validate_configuration(
+        root.to_str().expect("UTF-8 root"),
+        &["linked".to_owned()],
+        &[],
+    );
+
+    assert!(matches!(
+        result,
+        Err(ProjectError::WatchedLocationLinkNotAllowed)
+    ));
 }

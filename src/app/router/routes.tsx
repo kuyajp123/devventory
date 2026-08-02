@@ -1,5 +1,6 @@
 import type { RouteObject } from 'react-router';
 import { AppHealthPage } from '@/features/app-health';
+import { ProjectFileInventoryPage } from '@/features/file-inventory';
 import {
   ProjectDetailsPage,
   ProjectOnboardingPage,
@@ -18,6 +19,10 @@ export const appRoutes: RouteObject[] = [
       { path: 'projects', Component: ProjectsPage },
       { path: 'projects/new', Component: ProjectOnboardingPage },
       { path: 'projects/:projectId', Component: ProjectDetailsPage },
+      {
+        path: 'projects/:projectId/files',
+        Component: ProjectFileInventoryPage,
+      },
       { path: 'diagnostics', Component: AppHealthPage },
       { path: '*', Component: NotFoundPage },
     ],

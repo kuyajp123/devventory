@@ -1,7 +1,12 @@
 use std::path::Path;
 
+use tauri::AppHandle;
+
 use crate::features::backups::repository::{
     BackupRecordDraft, BackupRepository, SqliteBackupRepository,
+};
+use crate::features::file_inventory::{
+    FileInventoryService, InventoryRuntime, SqliteFileInventoryRepository,
 };
 use crate::features::projects::{LocalProjectFilesystem, ProjectService, SqliteProjectRepository};
 use crate::features::settings::repository::{SettingsRepository, SqliteSettingsRepository};
@@ -11,6 +16,8 @@ use crate::shared::errors::AppError;
 #[derive(Debug)]
 pub(crate) struct AppState {
     database: Database,
+    file_inventory_service: FileInventoryService,
+    inventory_runtime: InventoryRuntime,
 }
 
 impl AppState {
@@ -43,8 +50,20 @@ impl AppState {
             );
         }
 
+        let database = initialization.database;
+        let project_service = ProjectService::new(
+            SqliteProjectRepository::new(database.pool().clone()),
+            LocalProjectFilesystem,
+        );
+        let file_inventory_service = FileInventoryService::new(
+            SqliteFileInventoryRepository::new(database.pool().clone()),
+            project_service,
+        );
+
         Ok(Self {
-            database: initialization.database,
+            database,
+            file_inventory_service,
+            inventory_runtime: InventoryRuntime::new(),
         })
     }
 
@@ -60,6 +79,27 @@ impl AppState {
             SqliteProjectRepository::new(self.database.pool().clone()),
             LocalProjectFilesystem,
         )
+    }
+
+    pub(crate) fn file_inventory_service(&self) -> FileInventoryService {
+        self.file_inventory_service.clone()
+    }
+
+    pub(crate) async fn start_inventory_runtime(
+        &self,
+        app: AppHandle,
+    ) -> Result<(), crate::features::file_inventory::FileInventoryError> {
+        self.refresh_inventory_watchers().await?;
+        self.inventory_runtime
+            .start(app, self.file_inventory_service())
+            .await
+    }
+
+    pub(crate) async fn refresh_inventory_watchers(
+        &self,
+    ) -> Result<(), crate::features::file_inventory::FileInventoryError> {
+        let targets = self.file_inventory_service.watch_targets().await;
+        self.inventory_runtime.replace_watchers(targets)
     }
 
     #[cfg(test)]

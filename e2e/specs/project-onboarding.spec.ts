@@ -35,4 +35,12 @@ test('onboards a local project and shows its saved details', async ({
   ).toBeVisible();
   await expect(page.getByText('Playwright onboarding')).toBeVisible();
   await expect(page.getByText('node_modules/')).toBeVisible();
+
+  await page.getByRole('link', { name: 'Open file inventory' }).click();
+  await expect(
+    page.getByRole('heading', { name: 'File inventory' }),
+  ).toBeVisible();
+  await expect(page.getByText('src/main.ts').first()).toBeVisible();
+  await page.getByRole('button', { name: 'Rescan project' }).click();
+  await expect(page.getByText(/Completed: 1 files found/)).toBeVisible();
 });

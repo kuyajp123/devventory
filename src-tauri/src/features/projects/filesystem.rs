@@ -60,6 +60,11 @@ impl LocalProjectFilesystem {
             } else {
                 root_path.join(&relative)
             };
+            if contains_link_or_reparse_component(&root_path, &requested_location)
+                .map_err(|_| ProjectError::WatchedLocationUnreadable)?
+            {
+                return Err(ProjectError::WatchedLocationLinkNotAllowed);
+            }
             let absolute_path = canonicalize_watched_location(&requested_location)?;
 
             if absolute_path.strip_prefix(&root_path).is_err() {
@@ -341,4 +346,32 @@ fn is_link_or_reparse_point(path: &Path, file_type: &FileType) -> std::io::Resul
         let _ = path;
         Ok(false)
     }
+}
+
+fn contains_link_or_reparse_component(root: &Path, path: &Path) -> std::io::Result<bool> {
+    let relative = path
+        .strip_prefix(root)
+        .map_err(|_| std::io::Error::other("path is outside root"))?;
+    let mut current = root.to_path_buf();
+    for component in relative.components() {
+        let Component::Normal(part) = component else {
+            return Ok(true);
+        };
+        current.push(part);
+        let metadata = fs::symlink_metadata(&current)?;
+        if metadata.file_type().is_symlink() {
+            return Ok(true);
+        }
+
+        #[cfg(windows)]
+        {
+            use std::os::windows::fs::MetadataExt;
+
+            const FILE_ATTRIBUTE_REPARSE_POINT: u32 = 0x0400;
+            if metadata.file_attributes() & FILE_ATTRIBUTE_REPARSE_POINT != 0 {
+                return Ok(true);
+            }
+        }
+    }
+    Ok(false)
 }

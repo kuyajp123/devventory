@@ -50,12 +50,12 @@ impl TryFrom<&str> for ProjectType {
 
 #[derive(Debug, Clone)]
 pub(crate) struct CreateProject {
-    pub(super) name: String,
-    pub(super) description: Option<String>,
-    pub(super) project_type: ProjectType,
-    pub(super) root_path: String,
-    pub(super) watched_locations: Vec<String>,
-    pub(super) exclusions: Vec<String>,
+    pub(crate) name: String,
+    pub(crate) description: Option<String>,
+    pub(crate) project_type: ProjectType,
+    pub(crate) root_path: String,
+    pub(crate) watched_locations: Vec<String>,
+    pub(crate) exclusions: Vec<String>,
 }
 
 #[derive(Debug, Clone)]
@@ -63,6 +63,35 @@ pub(crate) struct ScanConfiguration {
     pub(super) root_path: String,
     pub(super) watched_locations: Vec<String>,
     pub(super) exclusions: Vec<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct ProjectScanTarget {
+    pub(crate) id: Uuid,
+    pub(crate) root_path: String,
+    pub(crate) watched_locations: Vec<WatchedLocationScanTarget>,
+    pub(crate) exclusions: Vec<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct WatchedLocationScanTarget {
+    pub(crate) id: Uuid,
+    pub(crate) relative_path: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct ResolvedProjectScanTarget {
+    pub(crate) id: Uuid,
+    pub(crate) root_path: PathBuf,
+    pub(crate) watched_locations: Vec<ResolvedWatchedLocation>,
+    pub(crate) exclusions: Vec<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct ResolvedWatchedLocation {
+    pub(crate) id: Uuid,
+    pub(crate) relative_path: String,
+    pub(crate) absolute_path: PathBuf,
 }
 
 #[derive(Debug, Clone)]

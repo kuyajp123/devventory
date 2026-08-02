@@ -2,8 +2,8 @@
 
 ## Scope
 
-- Keep the application offline-first. Phase 3 permits local SQLite persistence, a native folder picker, root validation, watched-location configuration, exclusions, and a summary-only initial scan.
-- Phase 2 owns application state, the SQLite pool, versioned migrations, pre-migration backups, repository contracts, shared errors, tracing, and UUID identifiers. Phase 3 projects must reuse those foundations.
+- Keep the application offline-first. Phase 4 permits local file metadata inventory, persistent scan history, bounded project-scoped search, native watching, reconciliation, and missing-file recovery.
+- Phase 2 owns application state, the SQLite pool, versioned migrations, pre-migration backups, repository contracts, shared errors, tracing, and UUID identifiers. Phase 3 owns project roots, watched locations, exclusions, and onboarding. Phase 4 must reuse those foundations.
 - Preserve the current Tauri window size, minimum size, centering, label, and resizable settings.
 
 ## Architecture
@@ -18,7 +18,11 @@
 - Keep migrations append-only under `src-tauri/migrations/` and preserve LF line endings so SQLx checksums remain stable.
 - Project onboarding frontend code stays colocated under `src/features/projects/` and exposes app-facing pages and types only through its `index.ts`.
 - Project commands stay thin; path rules and scanning belong to the Rust project service/filesystem adapter, and project SQL belongs to the project repository.
-- Do not add persistent file inventory, metadata indexing, file categorization, filesystem watching, reconciliation, missing-file detection, assets, or environment-file parsing before their later phases.
+- File-inventory frontend code stays colocated under `src/features/file-inventory/` and exposes app-facing pages and event synchronization only through its `index.ts`.
+- File-inventory Rust code stays under `src-tauri/src/features/file_inventory/`; scanning, categorization, reconciliation, and watcher event processing belong to services/domain modules, while all inventory SQL belongs to its repository.
+- Inventory scans store metadata only, stay inside canonical registered roots, apply exclusions before descent, skip symbolic links and junctions, use bounded batches, and never expose raw filesystem errors.
+- Watcher callbacks only enqueue bounded, sanitized change signals. Services and repositories perform authoritative reconciliation and persistence.
+- Do not add asset management, tags, notes, environment-file parsing, persistent content search, global search, dashboards, cloud sync, or any Phase 5+ behavior.
 - Do not add cloud, Supabase, HTTP-sync, or broad frontend filesystem dependencies or permissions.
 
 ## Commands

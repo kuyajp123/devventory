@@ -6,6 +6,9 @@ use tauri::Manager;
 
 use app::state::AppState;
 use features::app_health::commands::health_check;
+use features::file_inventory::commands::{
+    list_project_files, rescan_project, rescan_watched_location,
+};
 use features::projects::commands::{
     create_project, get_project, list_projects, scan_project_root, validate_project_root,
 };
@@ -21,6 +24,10 @@ pub fn run() {
             let data_directory = app.path().app_local_data_dir()?;
             let state = tauri::async_runtime::block_on(AppState::initialize(data_directory))?;
             app.manage(state);
+            let app_handle = app.handle().clone();
+            tauri::async_runtime::block_on(
+                app.state::<AppState>().start_inventory_runtime(app_handle),
+            )?;
 
             tracing::info!("Devventory application state initialized");
             Ok(())
@@ -31,7 +38,10 @@ pub fn run() {
             scan_project_root,
             create_project,
             list_projects,
-            get_project
+            get_project,
+            list_project_files,
+            rescan_project,
+            rescan_watched_location
         ])
         .run(tauri::generate_context!())
         .expect("error while running Devventory");

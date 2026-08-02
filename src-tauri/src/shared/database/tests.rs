@@ -55,6 +55,8 @@ async fn initializes_the_foundation_schema_without_a_first_run_backup() {
     assert!(table_exists(initialization.database.pool(), "watched_locations").await);
     assert!(table_exists(initialization.database.pool(), "project_exclusions").await);
     assert!(table_exists(initialization.database.pool(), "initial_scan_summaries").await);
+    assert!(table_exists(initialization.database.pool(), "indexed_files").await);
+    assert!(table_exists(initialization.database.pool(), "scan_runs").await);
     assert!(table_exists(initialization.database.pool(), "_sqlx_migrations").await);
 
     let journal_mode: String = query_scalar("PRAGMA journal_mode")
@@ -90,7 +92,7 @@ async fn snapshots_an_existing_database_before_applying_pending_migrations() {
     assert!(snapshot.file_path.starts_with(paths.backups_directory()));
     assert!(snapshot.file_path.is_file());
     assert_eq!(snapshot.from_version, 0);
-    assert_eq!(snapshot.to_version, 2);
+    assert_eq!(snapshot.to_version, 3);
 
     let backup_options = SqliteConnectOptions::new()
         .filename(&snapshot.file_path)

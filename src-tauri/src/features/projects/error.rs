@@ -40,6 +40,8 @@ pub(crate) enum ProjectError {
     WatchedLocationNotFound,
     #[error("watched location is not a directory")]
     WatchedLocationNotDirectory,
+    #[error("watched location cannot be a symbolic link or junction")]
+    WatchedLocationLinkNotAllowed,
     #[error("watched location is outside the project root")]
     WatchedLocationOutsideRoot,
     #[error("watched location cannot be read")]
@@ -68,6 +70,9 @@ impl From<ProjectError> for CommandError {
             ProjectError::WatchedLocationNotDirectory => {
                 Self::watched_location_invalid("Every watched location must be a folder.")
             }
+            ProjectError::WatchedLocationLinkNotAllowed => Self::watched_location_invalid(
+                "Watched locations cannot be symbolic links or junctions.",
+            ),
             ProjectError::WatchedLocationUnreadable => Self::filesystem_unavailable(
                 "A watched location cannot be read. Check its permissions.",
             ),

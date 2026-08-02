@@ -2,7 +2,10 @@ use sqlx::{query, query_as, FromRow, Sqlite, SqlitePool, Transaction};
 use uuid::Uuid;
 
 use super::error::ProjectError;
-use super::model::{InitialScanSummary, NewProjectRecord, Project, ProjectType};
+use super::model::{
+    InitialScanSummary, NewProjectRecord, Project, ProjectScanTarget, ProjectType,
+    WatchedLocationScanTarget,
+};
 
 #[allow(async_fn_in_trait)]
 pub(super) trait ProjectRepository: Send + Sync {
@@ -10,6 +13,8 @@ pub(super) trait ProjectRepository: Send + Sync {
     async fn exists_by_root_key(&self, root_key: &str) -> Result<bool, ProjectError>;
     async fn find_all(&self) -> Result<Vec<Project>, ProjectError>;
     async fn find_by_id(&self, id: Uuid) -> Result<Option<Project>, ProjectError>;
+    async fn find_scan_target(&self, id: Uuid) -> Result<Option<ProjectScanTarget>, ProjectError>;
+    async fn find_scan_targets(&self) -> Result<Vec<ProjectScanTarget>, ProjectError>;
 }
 
 #[derive(Debug, Clone)]
@@ -148,6 +153,49 @@ impl SqliteProjectRepository {
             },
         })
     }
+
+    async fn hydrate_scan_target(
+        &self,
+        row: ProjectScanTargetRow,
+    ) -> Result<ProjectScanTarget, ProjectError> {
+        let watched_locations = query_as::<_, WatchedLocationRow>(
+            "SELECT id, relative_path
+             FROM watched_locations
+             WHERE project_id = ?
+             ORDER BY relative_path",
+        )
+        .bind(&row.id)
+        .fetch_all(&self.pool)
+        .await?
+        .into_iter()
+        .map(|location| {
+            Ok(WatchedLocationScanTarget {
+                id: Uuid::parse_str(&location.id)
+                    .map_err(|_| ProjectError::InvalidPersistedData)?,
+                relative_path: location.relative_path,
+            })
+        })
+        .collect::<Result<Vec<_>, ProjectError>>()?;
+        let exclusions = query_as::<_, RelativePathRow>(
+            "SELECT relative_pattern AS value
+             FROM project_exclusions
+             WHERE project_id = ?
+             ORDER BY relative_pattern",
+        )
+        .bind(&row.id)
+        .fetch_all(&self.pool)
+        .await?
+        .into_iter()
+        .map(|item| item.value)
+        .collect();
+
+        Ok(ProjectScanTarget {
+            id: Uuid::parse_str(&row.id).map_err(|_| ProjectError::InvalidPersistedData)?,
+            root_path: row.root_path,
+            watched_locations,
+            exclusions,
+        })
+    }
 }
 
 impl ProjectRepository for SqliteProjectRepository {
@@ -197,6 +245,32 @@ impl ProjectRepository for SqliteProjectRepository {
             Some(row) => Ok(Some(self.hydrate(row).await?)),
             None => Ok(None),
         }
+    }
+
+    async fn find_scan_target(&self, id: Uuid) -> Result<Option<ProjectScanTarget>, ProjectError> {
+        let row =
+            query_as::<_, ProjectScanTargetRow>("SELECT id, root_path FROM projects WHERE id = ?")
+                .bind(id.to_string())
+                .fetch_optional(&self.pool)
+                .await?;
+
+        match row {
+            Some(row) => Ok(Some(self.hydrate_scan_target(row).await?)),
+            None => Ok(None),
+        }
+    }
+
+    async fn find_scan_targets(&self) -> Result<Vec<ProjectScanTarget>, ProjectError> {
+        let rows = query_as::<_, ProjectScanTargetRow>(
+            "SELECT id, root_path FROM projects ORDER BY created_at, id",
+        )
+        .fetch_all(&self.pool)
+        .await?;
+        let mut targets = Vec::with_capacity(rows.len());
+        for row in rows {
+            targets.push(self.hydrate_scan_target(row).await?);
+        }
+        Ok(targets)
     }
 }
 
@@ -256,6 +330,18 @@ struct ProjectRow {
 #[derive(Debug, FromRow)]
 struct RelativePathRow {
     value: String,
+}
+
+#[derive(Debug, FromRow)]
+struct WatchedLocationRow {
+    id: String,
+    relative_path: String,
+}
+
+#[derive(Debug, FromRow)]
+struct ProjectScanTargetRow {
+    id: String,
+    root_path: String,
 }
 
 #[derive(Debug, FromRow)]

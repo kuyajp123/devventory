@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { projectOnboardingSchema, splitConfigurationLines } from './project';
+import {
+  DEFAULT_PROJECT_EXCLUSIONS,
+  projectOnboardingSchema,
+  splitConfigurationLines,
+} from './project';
 
 const validForm = {
   description: '',
@@ -11,6 +15,21 @@ const validForm = {
 };
 
 describe('project onboarding schema', () => {
+  it('keeps the documented Phase 3 and Phase 4 default exclusions', () => {
+    expect(DEFAULT_PROJECT_EXCLUSIONS).toEqual([
+      'node_modules/',
+      '.git/',
+      '.next/',
+      'dist/',
+      'build/',
+      'target/',
+      'coverage/',
+      '.cache/',
+      '.turbo/',
+      'vendor/',
+    ]);
+  });
+
   it('allows the user to remove every default exclusion', () => {
     expect(
       projectOnboardingSchema.safeParse({
