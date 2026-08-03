@@ -1,3 +1,4 @@
+pub(crate) mod commands;
 pub(crate) mod repository;
 
 #[cfg(test)]

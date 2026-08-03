@@ -4,8 +4,45 @@ import { MemoryRouter, Route, Routes } from 'react-router';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { renderWithProviders } from '@/test/render';
 import { fileInventoryGateway } from '../services/file-inventory.gateway';
-import { ProjectFileInventoryPage } from './ProjectFileInventoryPage';
+import { FileInventoryPage } from './FileInventoryPage';
 
+const projectMocks = vi.hoisted(() => {
+  const projectId = '30af17bd-2dd6-4b89-a5e7-8517191815a7';
+  return {
+    project: {
+      createdAt: '2026-08-01T00:00:00.000Z',
+      description: null,
+      exclusions: [],
+      id: projectId,
+      initialScan: {
+        completed: true,
+        directoriesVisited: 1,
+        durationMs: 1,
+        entriesExcluded: 0,
+        entriesUnreadable: 0,
+        filesDiscovered: 1,
+      },
+      name: 'Desktop app',
+      projectType: 'desktop',
+      rootPath: 'C:\\workspace\\app',
+      updatedAt: '2026-08-01T00:00:00.000Z',
+      watchedLocations: ['.'],
+    },
+    projectId,
+  };
+});
+
+vi.mock('@/features/projects', () => ({
+  useActiveProject: () => ({
+    activeProject: projectMocks.project,
+    activeProjectId: projectMocks.projectId,
+    hasProjects: true,
+    isHydrating: false,
+    projectLoadFailed: false,
+    projects: [projectMocks.project],
+    selectProject: vi.fn(),
+  }),
+}));
 vi.mock('../services/file-inventory.gateway', () => ({
   fileInventoryGateway: {
     list: vi.fn(),
@@ -14,9 +51,7 @@ vi.mock('../services/file-inventory.gateway', () => ({
   },
 }));
 
-const projectId = '30af17bd-2dd6-4b89-a5e7-8517191815a7';
-
-describe('ProjectFileInventoryPage', () => {
+describe('FileInventoryPage', () => {
   beforeEach(() => {
     vi.mocked(fileInventoryGateway.list).mockResolvedValue({
       items: [
@@ -29,7 +64,7 @@ describe('ProjectFileInventoryPage', () => {
           mimeType: 'video/mp2t',
           modifiedAtMs: 1_775_257_200_000,
           name: 'main.ts',
-          projectId,
+          projectId: projectMocks.projectId,
           relativePath: 'src/main.ts',
           sizeBytes: 1536,
           sourceType: 'discovered',
@@ -63,7 +98,7 @@ describe('ProjectFileInventoryPage', () => {
       filesUnchanged: 1,
       filesUpdated: 0,
       id: 'b3e91b34-6629-4ff4-b92a-b3c65d7b1093',
-      projectId,
+      projectId: projectMocks.projectId,
       scanType: 'manual_project',
       startedAt: '2026-08-02T00:00:00.000Z',
       status: 'completed',
@@ -74,12 +109,9 @@ describe('ProjectFileInventoryPage', () => {
   it('renders paginated metadata and applies accessible filters', async () => {
     const user = userEvent.setup();
     renderWithProviders(
-      <MemoryRouter initialEntries={[`/projects/${projectId}/files`]}>
+      <MemoryRouter initialEntries={['/files']}>
         <Routes>
-          <Route
-            element={<ProjectFileInventoryPage />}
-            path="/projects/:projectId/files"
-          />
+          <Route element={<FileInventoryPage />} path="/files" />
         </Routes>
       </MemoryRouter>,
     );
@@ -96,44 +128,53 @@ describe('ProjectFileInventoryPage', () => {
     await user.click(screen.getByRole('button', { name: 'Apply filters' }));
 
     await waitFor(() =>
-      expect(fileInventoryGateway.list).toHaveBeenLastCalledWith(projectId, {
-        category: 'source',
-        extension: undefined,
-        page: 1,
-        pageSize: 50,
-        search: 'main',
-        sortBy: 'relativePath',
-        sortDirection: 'ascending',
-        status: undefined,
-      }),
+      expect(fileInventoryGateway.list).toHaveBeenLastCalledWith(
+        projectMocks.projectId,
+        {
+          category: 'source',
+          extension: undefined,
+          page: 1,
+          pageSize: 50,
+          search: 'main',
+          sortBy: 'relativePath',
+          sortDirection: 'ascending',
+          status: undefined,
+        },
+      ),
     );
 
     await user.click(screen.getByRole('columnheader', { name: 'File' }));
     await waitFor(() =>
-      expect(fileInventoryGateway.list).toHaveBeenLastCalledWith(projectId, {
-        category: 'source',
-        extension: undefined,
-        page: 1,
-        pageSize: 50,
-        search: 'main',
-        sortBy: 'relativePath',
-        sortDirection: 'descending',
-        status: undefined,
-      }),
+      expect(fileInventoryGateway.list).toHaveBeenLastCalledWith(
+        projectMocks.projectId,
+        {
+          category: 'source',
+          extension: undefined,
+          page: 1,
+          pageSize: 50,
+          search: 'main',
+          sortBy: 'relativePath',
+          sortDirection: 'descending',
+          status: undefined,
+        },
+      ),
     );
 
     await user.click(screen.getByRole('button', { name: /^2$/ }));
     await waitFor(() =>
-      expect(fileInventoryGateway.list).toHaveBeenLastCalledWith(projectId, {
-        category: 'source',
-        extension: undefined,
-        page: 2,
-        pageSize: 50,
-        search: 'main',
-        sortBy: 'relativePath',
-        sortDirection: 'descending',
-        status: undefined,
-      }),
+      expect(fileInventoryGateway.list).toHaveBeenLastCalledWith(
+        projectMocks.projectId,
+        {
+          category: 'source',
+          extension: undefined,
+          page: 2,
+          pageSize: 50,
+          search: 'main',
+          sortBy: 'relativePath',
+          sortDirection: 'descending',
+          status: undefined,
+        },
+      ),
     );
 
     await user.click(screen.getByRole('button', { name: 'Rescan project' }));

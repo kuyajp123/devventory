@@ -1,4 +1,4 @@
-use sqlx::{query_as, FromRow, SqlitePool};
+use sqlx::{query, query_as, FromRow, SqlitePool};
 use uuid::Uuid;
 
 use crate::shared::errors::AppError;
@@ -37,6 +37,7 @@ impl TryFrom<ApplicationSettingRow> for ApplicationSetting {
 #[allow(async_fn_in_trait)]
 pub(crate) trait SettingsRepository: Send + Sync {
     async fn find_by_key(&self, key: &str) -> Result<Option<ApplicationSetting>, AppError>;
+    async fn upsert(&self, key: &str, value: &str) -> Result<ApplicationSetting, AppError>;
 }
 
 #[derive(Debug, Clone)]
@@ -64,6 +65,29 @@ impl SettingsRepository for SqliteSettingsRepository {
         .await?;
 
         row.map(TryInto::try_into).transpose()
+    }
+
+    async fn upsert(&self, key: &str, value: &str) -> Result<ApplicationSetting, AppError> {
+        validate_key(key)?;
+
+        query(
+            "INSERT INTO application_settings (id, setting_key, setting_value)
+             VALUES (?, ?, ?)
+             ON CONFLICT(setting_key) DO UPDATE SET
+                 setting_value = excluded.setting_value,
+                 updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')",
+        )
+        .bind(Uuid::new_v4().to_string())
+        .bind(key)
+        .bind(value)
+        .execute(&self.pool)
+        .await?;
+
+        self.find_by_key(key)
+            .await?
+            .ok_or(AppError::InvalidPersistedData(
+                "setting upsert did not return a row",
+            ))
     }
 }
 

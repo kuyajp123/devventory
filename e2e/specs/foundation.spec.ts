@@ -4,10 +4,17 @@ test.beforeEach(async ({ page }) => {
   await page.goto('/');
 });
 
-test('navigates through the application shell', async ({ page }) => {
+test('navigates through the project-aware application shell', async ({
+  page,
+}) => {
+  await expect(page).toHaveURL('/dashboard');
   await expect(
-    page.getByRole('heading', { name: 'Project foundation' }),
+    page.getByRole('heading', { name: 'Add your first project' }),
   ).toBeVisible();
+  await expect(page.getByRole('link', { name: 'Home' })).toHaveCount(0);
+  await expect(page.getByRole('link', { name: 'Projects' })).toHaveCount(0);
+  await expect(page.getByText('Asset Library', { exact: true })).toBeVisible();
+  await expect(page.getByText('File Inventory', { exact: true })).toBeVisible();
 
   await page.getByRole('link', { name: 'Diagnostics' }).click();
 

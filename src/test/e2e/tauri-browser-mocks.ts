@@ -1,6 +1,17 @@
 import { mockIPC } from '@tauri-apps/api/mocks';
 import type { Project } from '@/features/projects';
 
+const MOCK_DATABASE_KEY = 'devventory.e2e.database';
+const LAST_OPENED_PROJECT_KEY = 'workspace.last_opened_project_id';
+
+interface MockDatabase {
+  inventoryScans: Record<string, Array<Record<string, unknown>>>;
+  managedAssets: Array<Record<string, unknown>>;
+  projects: Project[];
+  settings: Record<string, string>;
+  variantIdsByAsset: Record<string, string[]>;
+}
+
 const scanSummary = {
   completed: true,
   directoriesVisited: 18,
@@ -11,10 +22,13 @@ const scanSummary = {
 };
 
 export function installTauriBrowserMocks() {
-  const projects: Project[] = [];
-  const inventoryScans: Record<string, Array<Record<string, unknown>>> = {};
-  const managedAssets: Array<Record<string, unknown>> = [];
-  const variantIdsByAsset = new Map<string, string[]>();
+  const database = loadDatabase();
+  const projects = database.projects;
+  const inventoryScans = database.inventoryScans;
+  const managedAssets = database.managedAssets;
+  const variantIdsByAsset = new Map<string, string[]>(
+    Object.entries(database.variantIdsByAsset),
+  );
   const suggestedVariant = {
     category: 'image',
     extension: 'png',
@@ -32,12 +46,26 @@ export function installTauriBrowserMocks() {
     status: 'active',
   };
 
+  function persist() {
+    database.variantIdsByAsset = Object.fromEntries(variantIdsByAsset);
+    localStorage.setItem(MOCK_DATABASE_KEY, JSON.stringify(database));
+  }
+
   mockIPC((command, args) => {
     if (command === 'health_check') {
       return 'Devventory Rust backend is running';
     }
     if (command === 'plugin:dialog|open') {
       return 'C:\\workspace\\browser-project';
+    }
+    if (command === 'get_last_opened_project_id') {
+      return database.settings[LAST_OPENED_PROJECT_KEY] ?? null;
+    }
+    if (command === 'save_last_opened_project_id') {
+      database.settings[LAST_OPENED_PROJECT_KEY] = commandArguments(args)
+        .projectId as string;
+      persist();
+      return null;
     }
     if (command === 'validate_project_root') {
       const input = commandArguments(args).input as { rootPath: string };
@@ -63,7 +91,13 @@ export function installTauriBrowserMocks() {
         initialScan: scanSummary,
         updatedAt: '2026-08-01T00:00:00.000Z',
       };
-      projects.push(project);
+      projects.splice(
+        0,
+        projects.length,
+        project,
+        ...projects.filter((item) => item.id !== project.id),
+      );
+      persist();
       return project;
     }
     if (command === 'list_projects') {
@@ -140,6 +174,7 @@ export function installTauriBrowserMocks() {
             : null,
       };
       inventoryScans[projectId] = [scan];
+      persist();
       return scan;
     }
     if (command === 'list_assets') {
@@ -166,7 +201,10 @@ export function installTauriBrowserMocks() {
         updatedAt: '2026-08-02T00:00:00.000Z',
         variantIds: [],
       };
-      const items = [discovered, ...managedAssets];
+      const items = [
+        discovered,
+        ...managedAssets.filter((asset) => asset.projectId === input.projectId),
+      ];
       return {
         items,
         page: input.page,
@@ -219,6 +257,7 @@ export function installTauriBrowserMocks() {
       const asset = managedAssets.find((item) => item.id === input.assetId);
       if (!asset) throw new Error('Missing managed asset in E2E mock');
       asset.variantIds = input.variantIds;
+      persist();
       return asset;
     }
     if (command === 'preview_asset_import') {
@@ -256,12 +295,43 @@ export function installTauriBrowserMocks() {
         updatedAt: '2026-08-02T00:00:00.000Z',
         variantIds: [],
       };
-      managedAssets.push(asset);
+      const existingIndex = managedAssets.findIndex(
+        (item) => item.id === asset.id,
+      );
+      if (existingIndex >= 0) managedAssets[existingIndex] = asset;
+      else managedAssets.push(asset);
+      persist();
       return { asset, duplicate: null, status: 'imported' };
     }
 
     throw new Error(`Unhandled E2E command: ${command}`);
   });
+}
+
+function loadDatabase(): MockDatabase {
+  const empty: MockDatabase = {
+    inventoryScans: {},
+    managedAssets: [],
+    projects: [],
+    settings: {},
+    variantIdsByAsset: {},
+  };
+  const stored = localStorage.getItem(MOCK_DATABASE_KEY);
+  if (!stored) return empty;
+
+  try {
+    const parsed = JSON.parse(stored) as Partial<MockDatabase>;
+    return {
+      inventoryScans: parsed.inventoryScans ?? {},
+      managedAssets: parsed.managedAssets ?? [],
+      projects: parsed.projects ?? [],
+      settings: parsed.settings ?? {},
+      variantIdsByAsset: parsed.variantIdsByAsset ?? {},
+    };
+  } catch {
+    localStorage.removeItem(MOCK_DATABASE_KEY);
+    return empty;
+  }
 }
 
 function commandArguments(args: unknown): Record<string, unknown> {
