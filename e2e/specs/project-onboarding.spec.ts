@@ -66,9 +66,7 @@ test('adds a project through the selector and restores it after reload', async (
   const importedAsset = page.getByRole('link', { name: 'logo.png' });
   await expect(importedAsset).toBeVisible();
   await importedAsset.click();
-  await expect(page).toHaveURL(
-    '/assets/8b2d755f-6639-448e-a4cf-3c8979820ceb',
-  );
+  await expect(page).toHaveURL('/assets/8b2d755f-6639-448e-a4cf-3c8979820ceb');
   await expect(
     page.getByRole('heading', { name: 'Manage variants' }),
   ).toBeVisible();

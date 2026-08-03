@@ -41,7 +41,11 @@ export function LegacyProjectRedirect({
   ]);
 
   return (
-    <div aria-label="Opening project module" className="space-y-4" role="status">
+    <div
+      aria-label="Opening project module"
+      className="space-y-4"
+      role="status"
+    >
       <Skeleton className="h-12 w-2/5 rounded-lg" />
       <Skeleton className="h-56 w-full rounded-xl" />
     </div>
