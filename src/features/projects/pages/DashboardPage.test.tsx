@@ -4,34 +4,36 @@ import { describe, expect, it, vi } from 'vitest';
 import { renderWithProviders } from '@/test/render';
 import { DashboardPage } from './DashboardPage';
 
-const project = {
-  createdAt: '2026-08-01T00:00:00.000Z',
-  description: 'Local-first project inventory',
-  exclusions: ['node_modules/', '.git/'],
-  id: '30af17bd-2dd6-4b89-a5e7-8517191815a7',
-  initialScan: {
-    completed: true,
-    directoriesVisited: 8,
-    durationMs: 24,
-    entriesExcluded: 3,
-    entriesUnreadable: 0,
-    filesDiscovered: 42,
+const dashboardMocks = vi.hoisted(() => ({
+  project: {
+    createdAt: '2026-08-01T00:00:00.000Z',
+    description: 'Local-first project inventory',
+    exclusions: ['node_modules/', '.git/'],
+    id: '30af17bd-2dd6-4b89-a5e7-8517191815a7',
+    initialScan: {
+      completed: true,
+      directoriesVisited: 8,
+      durationMs: 24,
+      entriesExcluded: 3,
+      entriesUnreadable: 0,
+      filesDiscovered: 42,
+    },
+    name: 'Devventory',
+    projectType: 'desktop',
+    rootPath: 'C:\\workspace\\devventory',
+    updatedAt: '2026-08-02T00:00:00.000Z',
+    watchedLocations: ['.', 'assets'],
   },
-  name: 'Devventory',
-  projectType: 'desktop',
-  rootPath: 'C:\\workspace\\devventory',
-  updatedAt: '2026-08-02T00:00:00.000Z',
-  watchedLocations: ['.', 'assets'],
-};
+}));
 
 vi.mock('../providers/ActiveProjectProvider', () => ({
   useActiveProject: () => ({
-    activeProject: project,
-    activeProjectId: project.id,
+    activeProject: dashboardMocks.project,
+    activeProjectId: dashboardMocks.project.id,
     hasProjects: true,
     isHydrating: false,
     projectLoadFailed: false,
-    projects: [project],
+    projects: [dashboardMocks.project],
     selectProject: vi.fn(),
   }),
 }));
