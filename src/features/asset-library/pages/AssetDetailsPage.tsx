@@ -1,4 +1,5 @@
 import { formatFileSize } from '@/features/file-inventory';
+import { useActiveProject } from '@/features/projects';
 import { ICON_SIZE, ICON_STROKE } from '@/shared/constants/icon.constants';
 import { Alert, Card, Chip, Skeleton } from '@heroui/react';
 import { IconArrowLeft, IconHeartFilled } from '@tabler/icons-react';
@@ -9,10 +10,14 @@ import { AssetVariantManager } from '../components/AssetVariantManager';
 import { useAssetQuery } from '../hooks/use-assets';
 
 export function AssetDetailsPage() {
-  const { assetId = '', projectId = '' } = useParams();
-  const asset = useAssetQuery(projectId, assetId);
+  const { assetId = '' } = useParams();
+  const {
+    activeProjectId: projectId,
+    isHydrating,
+  } = useActiveProject();
+  const asset = useAssetQuery(projectId ?? '', assetId);
 
-  if (asset.isPending) {
+  if (isHydrating || asset.isPending) {
     return (
       <div
         aria-label="Loading asset"
@@ -24,14 +29,14 @@ export function AssetDetailsPage() {
       </div>
     );
   }
-  if (asset.isError || !asset.data) {
+  if (!projectId || asset.isError || !asset.data) {
     return (
       <Alert role="alert" status="danger">
         <Alert.Indicator />
         <Alert.Content>
           <Alert.Title>Asset unavailable</Alert.Title>
           <Alert.Description>
-            The asset record could not be loaded from local storage.
+            The asset record could not be loaded for the active project.
           </Alert.Description>
         </Alert.Content>
       </Alert>
@@ -44,7 +49,7 @@ export function AssetDetailsPage() {
       <header className="space-y-4">
         <Link
           className="inline-flex items-center gap-2 text-sm font-medium text-accent hover:underline"
-          to={`/projects/${projectId}/assets`}
+          to="/assets"
         >
           <IconArrowLeft
             aria-hidden="true"
