@@ -79,8 +79,10 @@ impl AppState {
     }
 
     pub(crate) async fn verify_storage(&self) -> Result<(), AppError> {
-        let repository = SqliteSettingsRepository::new(self.database.pool().clone());
-        let _ = repository.find_by_key("system.health-check").await?;
+        let _ = self
+            .settings_repository()
+            .find_by_key("system.health-check")
+            .await?;
 
         Ok(())
     }
@@ -90,6 +92,10 @@ impl AppState {
             SqliteProjectRepository::new(self.database.pool().clone()),
             LocalProjectFilesystem,
         )
+    }
+
+    pub(crate) fn settings_repository(&self) -> SqliteSettingsRepository {
+        SqliteSettingsRepository::new(self.database.pool().clone())
     }
 
     pub(crate) fn file_inventory_service(&self) -> FileInventoryService {
