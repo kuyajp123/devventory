@@ -6,35 +6,40 @@ import { renderWithProviders } from '@/test/render';
 import { fileInventoryGateway } from '../services/file-inventory.gateway';
 import { FileInventoryPage } from './ProjectFileInventoryPage';
 
-const projectId = '30af17bd-2dd6-4b89-a5e7-8517191815a7';
-const project = {
-  createdAt: '2026-08-01T00:00:00.000Z',
-  description: null,
-  exclusions: [],
-  id: projectId,
-  initialScan: {
-    completed: true,
-    directoriesVisited: 1,
-    durationMs: 1,
-    entriesExcluded: 0,
-    entriesUnreadable: 0,
-    filesDiscovered: 1,
-  },
-  name: 'Desktop app',
-  projectType: 'desktop',
-  rootPath: 'C:\\workspace\\app',
-  updatedAt: '2026-08-01T00:00:00.000Z',
-  watchedLocations: ['.'],
-};
+const projectMocks = vi.hoisted(() => {
+  const projectId = '30af17bd-2dd6-4b89-a5e7-8517191815a7';
+  return {
+    project: {
+      createdAt: '2026-08-01T00:00:00.000Z',
+      description: null,
+      exclusions: [],
+      id: projectId,
+      initialScan: {
+        completed: true,
+        directoriesVisited: 1,
+        durationMs: 1,
+        entriesExcluded: 0,
+        entriesUnreadable: 0,
+        filesDiscovered: 1,
+      },
+      name: 'Desktop app',
+      projectType: 'desktop',
+      rootPath: 'C:\\workspace\\app',
+      updatedAt: '2026-08-01T00:00:00.000Z',
+      watchedLocations: ['.'],
+    },
+    projectId,
+  };
+});
 
 vi.mock('@/features/projects', () => ({
   useActiveProject: () => ({
-    activeProject: project,
-    activeProjectId: projectId,
+    activeProject: projectMocks.project,
+    activeProjectId: projectMocks.projectId,
     hasProjects: true,
     isHydrating: false,
     projectLoadFailed: false,
-    projects: [project],
+    projects: [projectMocks.project],
     selectProject: vi.fn(),
   }),
 }));
@@ -59,7 +64,7 @@ describe('FileInventoryPage', () => {
           mimeType: 'video/mp2t',
           modifiedAtMs: 1_775_257_200_000,
           name: 'main.ts',
-          projectId,
+          projectId: projectMocks.projectId,
           relativePath: 'src/main.ts',
           sizeBytes: 1536,
           sourceType: 'discovered',
@@ -93,7 +98,7 @@ describe('FileInventoryPage', () => {
       filesUnchanged: 1,
       filesUpdated: 0,
       id: 'b3e91b34-6629-4ff4-b92a-b3c65d7b1093',
-      projectId,
+      projectId: projectMocks.projectId,
       scanType: 'manual_project',
       startedAt: '2026-08-02T00:00:00.000Z',
       status: 'completed',
@@ -123,44 +128,53 @@ describe('FileInventoryPage', () => {
     await user.click(screen.getByRole('button', { name: 'Apply filters' }));
 
     await waitFor(() =>
-      expect(fileInventoryGateway.list).toHaveBeenLastCalledWith(projectId, {
-        category: 'source',
-        extension: undefined,
-        page: 1,
-        pageSize: 50,
-        search: 'main',
-        sortBy: 'relativePath',
-        sortDirection: 'ascending',
-        status: undefined,
-      }),
+      expect(fileInventoryGateway.list).toHaveBeenLastCalledWith(
+        projectMocks.projectId,
+        {
+          category: 'source',
+          extension: undefined,
+          page: 1,
+          pageSize: 50,
+          search: 'main',
+          sortBy: 'relativePath',
+          sortDirection: 'ascending',
+          status: undefined,
+        },
+      ),
     );
 
     await user.click(screen.getByRole('columnheader', { name: 'File' }));
     await waitFor(() =>
-      expect(fileInventoryGateway.list).toHaveBeenLastCalledWith(projectId, {
-        category: 'source',
-        extension: undefined,
-        page: 1,
-        pageSize: 50,
-        search: 'main',
-        sortBy: 'relativePath',
-        sortDirection: 'descending',
-        status: undefined,
-      }),
+      expect(fileInventoryGateway.list).toHaveBeenLastCalledWith(
+        projectMocks.projectId,
+        {
+          category: 'source',
+          extension: undefined,
+          page: 1,
+          pageSize: 50,
+          search: 'main',
+          sortBy: 'relativePath',
+          sortDirection: 'descending',
+          status: undefined,
+        },
+      ),
     );
 
     await user.click(screen.getByRole('button', { name: /^2$/ }));
     await waitFor(() =>
-      expect(fileInventoryGateway.list).toHaveBeenLastCalledWith(projectId, {
-        category: 'source',
-        extension: undefined,
-        page: 2,
-        pageSize: 50,
-        search: 'main',
-        sortBy: 'relativePath',
-        sortDirection: 'descending',
-        status: undefined,
-      }),
+      expect(fileInventoryGateway.list).toHaveBeenLastCalledWith(
+        projectMocks.projectId,
+        {
+          category: 'source',
+          extension: undefined,
+          page: 2,
+          pageSize: 50,
+          search: 'main',
+          sortBy: 'relativePath',
+          sortDirection: 'descending',
+          status: undefined,
+        },
+      ),
     );
 
     await user.click(screen.getByRole('button', { name: 'Rescan project' }));
