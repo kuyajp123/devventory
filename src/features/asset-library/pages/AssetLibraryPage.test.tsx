@@ -6,36 +6,41 @@ import { renderWithProviders } from '@/test/render';
 import { assetLibraryGateway } from '../services/asset-library.gateway';
 import { AssetLibraryPage } from './AssetLibraryPage';
 
-const projectId = '30af17bd-2dd6-4b89-a5e7-8517191815a7';
-const assetId = '5d6c9c89-0c1d-45a7-ad97-72c7a3ca03dc';
-const project = {
-  createdAt: '2026-08-01T00:00:00.000Z',
-  description: null,
-  exclusions: [],
-  id: projectId,
-  initialScan: {
-    completed: true,
-    directoriesVisited: 1,
-    durationMs: 1,
-    entriesExcluded: 0,
-    entriesUnreadable: 0,
-    filesDiscovered: 1,
-  },
-  name: 'Desktop app',
-  projectType: 'desktop',
-  rootPath: 'C:\\workspace\\app',
-  updatedAt: '2026-08-01T00:00:00.000Z',
-  watchedLocations: ['.', 'assets'],
-};
+const projectMocks = vi.hoisted(() => {
+  const projectId = '30af17bd-2dd6-4b89-a5e7-8517191815a7';
+  return {
+    assetId: '5d6c9c89-0c1d-45a7-ad97-72c7a3ca03dc',
+    project: {
+      createdAt: '2026-08-01T00:00:00.000Z',
+      description: null,
+      exclusions: [],
+      id: projectId,
+      initialScan: {
+        completed: true,
+        directoriesVisited: 1,
+        durationMs: 1,
+        entriesExcluded: 0,
+        entriesUnreadable: 0,
+        filesDiscovered: 1,
+      },
+      name: 'Desktop app',
+      projectType: 'desktop',
+      rootPath: 'C:\\workspace\\app',
+      updatedAt: '2026-08-01T00:00:00.000Z',
+      watchedLocations: ['.', 'assets'],
+    },
+    projectId,
+  };
+});
 
 vi.mock('@/features/projects', () => ({
   useActiveProject: () => ({
-    activeProject: project,
-    activeProjectId: projectId,
+    activeProject: projectMocks.project,
+    activeProjectId: projectMocks.projectId,
     hasProjects: true,
     isHydrating: false,
     projectLoadFailed: false,
-    projects: [project],
+    projects: [projectMocks.project],
     selectProject: vi.fn(),
   }),
 }));
@@ -60,13 +65,13 @@ describe('AssetLibraryPage', () => {
           category: 'image',
           extension: 'png',
           favorite: true,
-          id: assetId,
+          id: projectMocks.assetId,
           mimeType: 'image/png',
           modifiedAtMs: 1_786_000_000_000,
           name: 'logo.png',
           note: null,
           origin: 'managed',
-          projectId,
+          projectId: projectMocks.projectId,
           relativePath: 'assets/logo.png',
           sizeBytes: 2048,
           status: 'active',
@@ -97,7 +102,7 @@ describe('AssetLibraryPage', () => {
     ).toBeVisible();
     expect(
       await screen.findByRole('link', { name: 'logo.png' }),
-    ).toHaveAttribute('href', `/assets/${assetId}`);
+    ).toHaveAttribute('href', `/assets/${projectMocks.assetId}`);
 
     await user.type(
       screen.getByRole('searchbox', { name: 'Search name or relative path' }),
@@ -106,7 +111,7 @@ describe('AssetLibraryPage', () => {
     await user.click(screen.getByRole('button', { name: 'Apply filters' }));
 
     expect(assetLibraryGateway.list).toHaveBeenLastCalledWith(
-      projectId,
+      projectMocks.projectId,
       expect.objectContaining({ page: 1, pageSize: 30, search: 'logo' }),
     );
   });
