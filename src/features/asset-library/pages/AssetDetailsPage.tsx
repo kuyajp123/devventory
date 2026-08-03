@@ -11,10 +11,7 @@ import { useAssetQuery } from '../hooks/use-assets';
 
 export function AssetDetailsPage() {
   const { assetId = '' } = useParams();
-  const {
-    activeProjectId: projectId,
-    isHydrating,
-  } = useActiveProject();
+  const { activeProjectId: projectId, isHydrating } = useActiveProject();
   const asset = useAssetQuery(projectId ?? '', assetId);
 
   if (isHydrating || asset.isPending) {

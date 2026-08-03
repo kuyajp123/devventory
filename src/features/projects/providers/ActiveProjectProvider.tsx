@@ -116,15 +116,20 @@ export function ActiveProjectProvider({ children }: PropsWithChildren) {
       projects.some((project) => project.id === activeProjectId)
     ) {
       if (activeProjectId === null && projects[0]) {
-        setActiveProjectId(projects[0].id);
-        void persistSelection(projects[0].id);
+        const fallbackProjectId = projects[0].id;
+        queueMicrotask(() => {
+          setActiveProjectId(fallbackProjectId);
+          void persistSelection(fallbackProjectId);
+        });
       }
       return;
     }
 
     const fallback = projects[0]?.id ?? null;
-    setActiveProjectId(fallback);
-    if (fallback) void persistSelection(fallback);
+    queueMicrotask(() => {
+      setActiveProjectId(fallback);
+      if (fallback) void persistSelection(fallback);
+    });
   }, [activeProjectId, persistSelection, projects]);
 
   const selectProject = useCallback(
@@ -172,7 +177,9 @@ export function ActiveProjectProvider({ children }: PropsWithChildren) {
 export function useActiveProject(): ActiveProjectContextValue {
   const context = useContext(ActiveProjectContext);
   if (!context) {
-    throw new Error('useActiveProject must be used inside ActiveProjectProvider.');
+    throw new Error(
+      'useActiveProject must be used inside ActiveProjectProvider.',
+    );
   }
   return context;
 }

@@ -46,9 +46,7 @@ describe('DashboardPage', () => {
       </MemoryRouter>,
     );
 
-    expect(
-      screen.getByRole('heading', { name: 'Devventory' }),
-    ).toBeVisible();
+    expect(screen.getByRole('heading', { name: 'Devventory' })).toBeVisible();
     expect(screen.getByText('Local-first project inventory')).toBeVisible();
     expect(screen.getByText('desktop')).toBeVisible();
     expect(screen.getByText('C:\\workspace\\devventory')).toBeVisible();

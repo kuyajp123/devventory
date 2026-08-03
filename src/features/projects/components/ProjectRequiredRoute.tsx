@@ -7,7 +7,11 @@ export function ProjectRequiredRoute() {
 
   if (isHydrating) {
     return (
-      <div aria-label="Loading active project" className="space-y-4" role="status">
+      <div
+        aria-label="Loading active project"
+        className="space-y-4"
+        role="status"
+      >
         <Skeleton className="h-12 w-2/5 rounded-lg" />
         <Skeleton className="h-64 w-full rounded-xl" />
       </div>
