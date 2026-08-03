@@ -17,6 +17,9 @@ use features::file_inventory::commands::{
 use features::projects::commands::{
     create_project, get_project, list_projects, scan_project_root, validate_project_root,
 };
+use features::settings::commands::{
+    get_last_opened_project_id, save_last_opened_project_id,
+};
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -44,6 +47,8 @@ pub fn run() {
             create_project,
             list_projects,
             get_project,
+            get_last_opened_project_id,
+            save_last_opened_project_id,
             list_project_files,
             rescan_project,
             rescan_watched_location,
