@@ -139,6 +139,16 @@ function NavigationLink({
   );
 }
 
+function isNavigationDisabled(
+  item: (typeof navigationItems)[number],
+  isHydrating: boolean,
+  hasProjects: boolean,
+): boolean {
+  if (item.to === '/diagnostics') return false;
+  if (isHydrating) return true;
+  return item.requiresProject && !hasProjects;
+}
+
 export function AppLayout() {
   const isNavigationCollapsed = useAppUiStore(
     (state) => state.isNavigationCollapsed,
@@ -146,8 +156,6 @@ export function AppLayout() {
   const toggleNavigation = useAppUiStore((state) => state.toggleNavigation);
   const { hasProjects, isHydrating } = useActiveProject();
   const { setTheme, theme } = useTheme();
-
-  const isProjectNavigationDisabled = isHydrating || !hasProjects;
 
   return (
     <div
@@ -203,7 +211,7 @@ export function AppLayout() {
         <nav className="mt-6 flex-1 space-y-1 overflow-y-auto">
           {navigationItems.map((item) => (
             <NavigationLink
-              disabled={item.requiresProject && isProjectNavigationDisabled}
+              disabled={isNavigationDisabled(item, isHydrating, hasProjects)}
               isCollapsed={isNavigationCollapsed}
               item={item}
               key={item.to}
@@ -279,8 +287,11 @@ export function AppLayout() {
             className="mt-3 flex flex-wrap gap-2"
           >
             {navigationItems.map((item) => {
-              const disabled =
-                item.requiresProject && isProjectNavigationDisabled;
+              const disabled = isNavigationDisabled(
+                item,
+                isHydrating,
+                hasProjects,
+              );
               if (disabled) {
                 return (
                   <span
