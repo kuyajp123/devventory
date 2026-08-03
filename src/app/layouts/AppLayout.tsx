@@ -2,21 +2,44 @@ import { Button, useTheme } from '@heroui/react';
 import {
   IconActivityHeartbeat,
   IconDeviceDesktop,
-  IconFolders,
-  IconHome,
+  IconFiles,
+  IconLayoutDashboard,
   IconLayoutSidebarLeftCollapse,
   IconLayoutSidebarLeftExpand,
+  IconLibrary,
   IconMoon,
   IconSun,
 } from '@tabler/icons-react';
 import { NavLink, Outlet } from 'react-router';
+import { ProjectSelector, useActiveProject } from '@/features/projects';
 import { ICON_SIZE, ICON_STROKE } from '@/shared/constants/icon.constants';
 import { useAppUiStore } from '../stores/app-ui.store';
 
 const navigationItems = [
-  { icon: IconHome, label: 'Home', to: '/' },
-  { icon: IconFolders, label: 'Projects', to: '/projects' },
-  { icon: IconActivityHeartbeat, label: 'Diagnostics', to: '/diagnostics' },
+  {
+    icon: IconLayoutDashboard,
+    label: 'Dashboard',
+    requiresProject: false,
+    to: '/dashboard',
+  },
+  {
+    icon: IconLibrary,
+    label: 'Asset Library',
+    requiresProject: true,
+    to: '/assets',
+  },
+  {
+    icon: IconFiles,
+    label: 'File Inventory',
+    requiresProject: true,
+    to: '/files',
+  },
+  {
+    icon: IconActivityHeartbeat,
+    label: 'Diagnostics',
+    requiresProject: false,
+    to: '/diagnostics',
+  },
 ];
 
 const themeOptions = [
@@ -67,12 +90,37 @@ function ThemeSelector({ onThemeChange, theme }: ThemeSelectorProps) {
 }
 
 function NavigationLink({
+  disabled,
   isCollapsed,
   item,
 }: {
+  disabled: boolean;
   isCollapsed: boolean;
   item: (typeof navigationItems)[number];
 }) {
+  const content = (
+    <>
+      <item.icon
+        aria-hidden="true"
+        className="shrink-0"
+        size={ICON_SIZE.navigation}
+        stroke={ICON_STROKE}
+      />
+      <span className={isCollapsed ? 'sr-only' : undefined}>{item.label}</span>
+    </>
+  );
+
+  if (disabled) {
+    return (
+      <span
+        aria-disabled="true"
+        className="flex min-h-11 cursor-not-allowed items-center gap-3 rounded-xl px-3 text-sm font-medium text-muted opacity-45"
+      >
+        {content}
+      </span>
+    );
+  }
+
   return (
     <NavLink
       className={({ isActive }) =>
@@ -83,16 +131,10 @@ function NavigationLink({
             : 'text-muted hover:bg-surface-secondary hover:text-foreground',
         ].join(' ')
       }
-      end={item.to === '/'}
+      end={item.to === '/dashboard' || item.to === '/diagnostics'}
       to={item.to}
     >
-      <item.icon
-        aria-hidden="true"
-        className="shrink-0"
-        size={ICON_SIZE.navigation}
-        stroke={ICON_STROKE}
-      />
-      <span className={isCollapsed ? 'sr-only' : undefined}>{item.label}</span>
+      {content}
     </NavLink>
   );
 }
@@ -102,7 +144,10 @@ export function AppLayout() {
     (state) => state.isNavigationCollapsed,
   );
   const toggleNavigation = useAppUiStore((state) => state.toggleNavigation);
+  const { hasProjects, isHydrating } = useActiveProject();
   const { setTheme, theme } = useTheme();
+
+  const isProjectNavigationDisabled = isHydrating || !hasProjects;
 
   return (
     <div
@@ -151,9 +196,14 @@ export function AppLayout() {
           </Button>
         </div>
 
+        <div className="mt-4 shrink-0">
+          <ProjectSelector compact={isNavigationCollapsed} />
+        </div>
+
         <nav className="mt-6 flex-1 space-y-1 overflow-y-auto">
           {navigationItems.map((item) => (
             <NavigationLink
+              disabled={item.requiresProject && isProjectNavigationDisabled}
               isCollapsed={isNavigationCollapsed}
               item={item}
               key={item.to}
@@ -214,25 +264,52 @@ export function AppLayout() {
         <header className="border-b border-divider bg-surface px-4 py-3 lg:hidden">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <span className="font-semibold tracking-tight">Devventory</span>
-            <ThemeSelector onThemeChange={setTheme} theme={theme ?? 'system'} />
+            <div className="min-w-48">
+              <ThemeSelector
+                onThemeChange={setTheme}
+                theme={theme ?? 'system'}
+              />
+            </div>
           </div>
-          <nav aria-label="Primary navigation" className="mt-3 flex gap-2">
-            {navigationItems.map((item) => (
-              <NavLink
-                className={({ isActive }) =>
-                  `rounded-lg px-3 py-2 text-sm font-medium ${
-                    isActive
-                      ? 'bg-accent-soft text-accent-soft-foreground'
-                      : 'text-muted'
-                  }`
-                }
-                end={item.to === '/'}
-                key={item.to}
-                to={item.to}
-              >
-                {item.label}
-              </NavLink>
-            ))}
+          <div className="mt-3">
+            <ProjectSelector />
+          </div>
+          <nav
+            aria-label="Primary navigation"
+            className="mt-3 flex flex-wrap gap-2"
+          >
+            {navigationItems.map((item) => {
+              const disabled =
+                item.requiresProject && isProjectNavigationDisabled;
+              if (disabled) {
+                return (
+                  <span
+                    aria-disabled="true"
+                    className="cursor-not-allowed rounded-lg px-3 py-2 text-sm font-medium text-muted opacity-45"
+                    key={item.to}
+                  >
+                    {item.label}
+                  </span>
+                );
+              }
+
+              return (
+                <NavLink
+                  className={({ isActive }) =>
+                    `rounded-lg px-3 py-2 text-sm font-medium ${
+                      isActive
+                        ? 'bg-accent-soft text-accent-soft-foreground'
+                        : 'text-muted'
+                    }`
+                  }
+                  end={item.to === '/dashboard' || item.to === '/diagnostics'}
+                  key={item.to}
+                  to={item.to}
+                >
+                  {item.label}
+                </NavLink>
+              );
+            })}
           </nav>
         </header>
 
