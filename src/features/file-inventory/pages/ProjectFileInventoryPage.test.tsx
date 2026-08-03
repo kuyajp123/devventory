@@ -4,8 +4,40 @@ import { MemoryRouter, Route, Routes } from 'react-router';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { renderWithProviders } from '@/test/render';
 import { fileInventoryGateway } from '../services/file-inventory.gateway';
-import { ProjectFileInventoryPage } from './ProjectFileInventoryPage';
+import { FileInventoryPage } from './ProjectFileInventoryPage';
 
+const projectId = '30af17bd-2dd6-4b89-a5e7-8517191815a7';
+const project = {
+  createdAt: '2026-08-01T00:00:00.000Z',
+  description: null,
+  exclusions: [],
+  id: projectId,
+  initialScan: {
+    completed: true,
+    directoriesVisited: 1,
+    durationMs: 1,
+    entriesExcluded: 0,
+    entriesUnreadable: 0,
+    filesDiscovered: 1,
+  },
+  name: 'Desktop app',
+  projectType: 'desktop',
+  rootPath: 'C:\\workspace\\app',
+  updatedAt: '2026-08-01T00:00:00.000Z',
+  watchedLocations: ['.'],
+};
+
+vi.mock('@/features/projects', () => ({
+  useActiveProject: () => ({
+    activeProject: project,
+    activeProjectId: projectId,
+    hasProjects: true,
+    isHydrating: false,
+    projectLoadFailed: false,
+    projects: [project],
+    selectProject: vi.fn(),
+  }),
+}));
 vi.mock('../services/file-inventory.gateway', () => ({
   fileInventoryGateway: {
     list: vi.fn(),
@@ -14,9 +46,7 @@ vi.mock('../services/file-inventory.gateway', () => ({
   },
 }));
 
-const projectId = '30af17bd-2dd6-4b89-a5e7-8517191815a7';
-
-describe('ProjectFileInventoryPage', () => {
+describe('FileInventoryPage', () => {
   beforeEach(() => {
     vi.mocked(fileInventoryGateway.list).mockResolvedValue({
       items: [
@@ -74,12 +104,9 @@ describe('ProjectFileInventoryPage', () => {
   it('renders paginated metadata and applies accessible filters', async () => {
     const user = userEvent.setup();
     renderWithProviders(
-      <MemoryRouter initialEntries={[`/projects/${projectId}/files`]}>
+      <MemoryRouter initialEntries={['/files']}>
         <Routes>
-          <Route
-            element={<ProjectFileInventoryPage />}
-            path="/projects/:projectId/files"
-          />
+          <Route element={<FileInventoryPage />} path="/files" />
         </Routes>
       </MemoryRouter>,
     );
