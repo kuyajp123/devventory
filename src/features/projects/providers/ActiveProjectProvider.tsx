@@ -129,14 +129,10 @@ export function ActiveProjectProvider({ children }: PropsWithChildren) {
 
   const selectProject = useCallback(
     async (projectId: string) => {
-      if (!projects.some((project) => project.id === projectId)) {
-        throw new Error('The selected project is no longer available.');
-      }
-
       setActiveProjectId(projectId);
       await persistSelection(projectId);
     },
-    [persistSelection, projects],
+    [persistSelection],
   );
 
   const activeProject =
