@@ -1,13 +1,13 @@
-import type { RouteObject } from 'react-router';
+import { Navigate, type RouteObject } from 'react-router';
 import { AppHealthPage } from '@/features/app-health';
-import { ProjectFileInventoryPage } from '@/features/file-inventory';
+import { FileInventoryPage } from '@/features/file-inventory';
 import {
-  ProjectDetailsPage,
+  DashboardPage,
+  LegacyProjectRedirect,
   ProjectOnboardingPage,
-  ProjectsPage,
+  ProjectRequiredRoute,
 } from '@/features/projects';
 import { AppLayout } from '../layouts/AppLayout';
-import { HomePage } from '../pages/HomePage';
 import { NotFoundPage } from '../pages/NotFoundPage';
 import { LazyAssetDetailsPage, LazyAssetLibraryPage } from './LazyAssetRoutes';
 
@@ -16,23 +16,38 @@ export const appRoutes: RouteObject[] = [
     path: '/',
     Component: AppLayout,
     children: [
-      { index: true, Component: HomePage },
-      { path: 'projects', Component: ProjectsPage },
+      { index: true, element: <Navigate replace to="/dashboard" /> },
+      { path: 'dashboard', Component: DashboardPage },
       { path: 'projects/new', Component: ProjectOnboardingPage },
-      { path: 'projects/:projectId', Component: ProjectDetailsPage },
+      {
+        element: <ProjectRequiredRoute />,
+        children: [
+          { path: 'files', Component: FileInventoryPage },
+          { path: 'assets', Component: LazyAssetLibraryPage },
+          { path: 'assets/:assetId', Component: LazyAssetDetailsPage },
+        ],
+      },
+      { path: 'diagnostics', Component: AppHealthPage },
+      {
+        path: 'projects',
+        element: <Navigate replace to="/dashboard" />,
+      },
+      {
+        path: 'projects/:projectId',
+        element: <LegacyProjectRedirect destination="dashboard" />,
+      },
       {
         path: 'projects/:projectId/files',
-        Component: ProjectFileInventoryPage,
+        element: <LegacyProjectRedirect destination="files" />,
       },
       {
         path: 'projects/:projectId/assets',
-        Component: LazyAssetLibraryPage,
+        element: <LegacyProjectRedirect destination="assets" />,
       },
       {
         path: 'projects/:projectId/assets/:assetId',
-        Component: LazyAssetDetailsPage,
+        element: <LegacyProjectRedirect destination="asset-details" />,
       },
-      { path: 'diagnostics', Component: AppHealthPage },
       { path: '*', Component: NotFoundPage },
     ],
   },
