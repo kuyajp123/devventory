@@ -12,8 +12,8 @@ const LAST_OPENED_PROJECT_KEY: &str = "workspace.last_opened_project_id";
 pub(crate) async fn get_last_opened_project_id(
     state: State<'_, AppState>,
 ) -> Result<Option<String>, CommandError> {
-    state
-        .settings_repository()
+    let repository = state.settings_repository();
+    repository
         .find_by_key(LAST_OPENED_PROJECT_KEY)
         .await
         .map(|setting| setting.map(|value| value.value))
@@ -26,11 +26,12 @@ pub(crate) async fn save_last_opened_project_id(
     project_id: String,
 ) -> Result<(), CommandError> {
     let project_id = Uuid::parse_str(&project_id)
-        .map_err(|_| CommandError::invalid_input("The project ID must be a valid UUID."))?;
+        .map_err(|_| CommandError::invalid_input("The project ID must be a valid UUID."))?
+        .to_string();
+    let repository = state.settings_repository();
 
-    state
-        .settings_repository()
-        .upsert(LAST_OPENED_PROJECT_KEY, &project_id.to_string())
+    repository
+        .upsert(LAST_OPENED_PROJECT_KEY, &project_id)
         .await
         .map(|_| ())
         .map_err(Into::into)
