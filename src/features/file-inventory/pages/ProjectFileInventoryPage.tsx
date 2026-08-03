@@ -1,7 +1,8 @@
 import { Alert, Skeleton, Spinner, toast } from '@heroui/react';
-import { IconArrowLeft, IconFiles } from '@tabler/icons-react';
+import { IconFiles } from '@tabler/icons-react';
 import { useMemo } from 'react';
-import { Link, useParams, useSearchParams } from 'react-router';
+import { useSearchParams } from 'react-router';
+import { useActiveProject } from '@/features/projects';
 import { ICON_SIZE, ICON_STROKE } from '@/shared/constants/icon.constants';
 import { AppPagination } from '@/shared/ui/AppPagination';
 import {
@@ -27,13 +28,17 @@ import {
 
 const PAGE_SIZE = 50;
 
-export function ProjectFileInventoryPage() {
-  const { projectId = '' } = useParams();
+export function FileInventoryPage() {
+  const {
+    activeProject,
+    activeProjectId: projectId,
+    isHydrating,
+  } = useActiveProject();
   const [searchParams, setSearchParams] = useSearchParams();
   const filters = useMemo(() => readFilters(searchParams), [searchParams]);
-  const inventory = useFileInventoryQuery(projectId, filters);
-  const rescanProject = useRescanProjectMutation(projectId);
-  const rescanLocation = useRescanWatchedLocationMutation(projectId);
+  const inventory = useFileInventoryQuery(projectId ?? '', filters);
+  const rescanProject = useRescanProjectMutation(projectId ?? '');
+  const rescanLocation = useRescanWatchedLocationMutation(projectId ?? '');
   const isScanning = rescanProject.isPending || rescanLocation.isPending;
   const filterValues: InventoryFilterValues = {
     category: filters.category,
@@ -85,20 +90,36 @@ export function ProjectFileInventoryPage() {
     });
   }
 
+  if (isHydrating) {
+    return (
+      <div
+        aria-label="Loading file inventory"
+        className="space-y-3"
+        role="status"
+      >
+        <Skeleton className="h-14 w-full rounded-xl" />
+        <Skeleton className="h-64 w-full rounded-xl" />
+      </div>
+    );
+  }
+
+  if (!activeProject || !projectId) {
+    return (
+      <Alert role="alert" status="danger">
+        <Alert.Indicator />
+        <Alert.Content>
+          <Alert.Title>Project unavailable</Alert.Title>
+          <Alert.Description>
+            Select an available project before opening File Inventory.
+          </Alert.Description>
+        </Alert.Content>
+      </Alert>
+    );
+  }
+
   return (
     <section className="mx-auto w-full max-w-7xl space-y-6">
       <header className="space-y-4">
-        <Link
-          className="inline-flex items-center gap-2 text-sm font-medium text-accent hover:underline"
-          to={`/projects/${projectId}`}
-        >
-          <IconArrowLeft
-            aria-hidden="true"
-            size={ICON_SIZE.small}
-            stroke={ICON_STROKE}
-          />
-          Back to project details
-        </Link>
         <div className="flex items-start gap-3">
           <IconFiles
             aria-hidden="true"
@@ -107,7 +128,9 @@ export function ProjectFileInventoryPage() {
             stroke={ICON_STROKE}
           />
           <div>
-            <p className="text-sm font-medium text-muted">Local metadata</p>
+            <p className="text-sm font-medium text-muted">
+              {activeProject.name}
+            </p>
             <h1 className="text-3xl font-semibold tracking-tight sm:text-4xl">
               File inventory
             </h1>
