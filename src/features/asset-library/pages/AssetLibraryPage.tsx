@@ -1,6 +1,6 @@
 import { Alert, Button, Spinner, toast } from '@heroui/react';
 import { IconLibrary, IconPlus } from '@tabler/icons-react';
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router';
 import { useActiveProject } from '@/features/projects';
 import { ICON_SIZE, ICON_STROKE } from '@/shared/constants/icon.constants';
@@ -40,6 +40,14 @@ export function AssetLibraryPage() {
   const picker = useSelectAssetSourceMutation();
   const [isImportOpen, setImportOpen] = useState(false);
   const [sourcePath, setSourcePath] = useState<string | null>(null);
+  const previousProjectId = useRef(projectId);
+
+  useEffect(() => {
+    if (previousProjectId.current === projectId) return;
+    previousProjectId.current = projectId;
+    setImportOpen(false);
+    setSourcePath(null);
+  }, [projectId]);
 
   const openDroppedFile = useCallback((path: string) => {
     setSourcePath(path);
