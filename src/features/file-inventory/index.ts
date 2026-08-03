@@ -6,4 +6,4 @@ export {
   formatFileSize,
 } from './models/file-inventory';
 export type { FileCategory } from './models/file-inventory';
-export { FileInventoryPage } from './pages/ProjectFileInventoryPage';
+export { FileInventoryPage } from './pages/FileInventoryPage';
