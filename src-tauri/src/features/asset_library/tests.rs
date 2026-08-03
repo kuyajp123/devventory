@@ -17,8 +17,9 @@ use crate::shared::errors::command::CommandError;
 use super::error::AssetError;
 use super::filesystem::LocalAssetFilesystem;
 use super::model::{
-    AssetMetadataUpdate, AssetOrigin, AssetQuery, AssetSortField, CollisionChoice, ImportAsset,
-    ImportStatus, SortDirection,
+    AssetMetadataUpdate, AssetOrigin, AssetQuery, AssetSortField, AssetVariantsUpdate,
+    CollisionChoice, ImportAsset, ImportStatus, SortDirection, VariantCandidateQuery,
+    VariantCandidateScope, VariantPathInput,
 };
 use super::repository::SqliteAssetRepository;
 use super::service::AssetService;
@@ -353,7 +354,7 @@ async fn metadata_updates_prevent_duplicate_tags_and_invalid_variant_relationshi
                 variant_ids: vec![first.id],
             })
             .await,
-        Err(AssetError::InvalidMetadata)
+        Err(AssetError::VariantSelfReference)
     ));
 }
 
@@ -470,6 +471,281 @@ async fn missing_files_return_typed_quick_action_errors_without_opening_applicat
     ));
 }
 
+#[tokio::test]
+async fn variant_suggestions_rank_same_folder_then_filename_and_hide_unrelated_files() {
+    let context = TestContext::new().await;
+    let current = context
+        .index_file("assets/branding/logo.png", "image", false, "active")
+        .await;
+    let same_folder = context
+        .index_file("assets/branding/logo-dark.png", "image", false, "active")
+        .await;
+    let similar_name = context
+        .index_file("assets/mobile/logo-small.png", "image", false, "active")
+        .await;
+    let compatible_type = context
+        .index_file("assets/other/banner.png", "image", false, "active")
+        .await;
+    let matching_metadata = context
+        .index_file("assets/other/readme.pdf", "document", false, "active")
+        .await;
+    for asset_id in [current, matching_metadata] {
+        context
+            .service
+            .update_metadata(AssetMetadataUpdate {
+                project_id: context.project_id,
+                asset_id,
+                tags: vec!["brand".to_owned()],
+                note: None,
+                favorite: false,
+                variant_ids: vec![],
+            })
+            .await
+            .expect("ranking metadata");
+    }
+    context
+        .index_file("assets/branding/theme.ts", "source", false, "active")
+        .await;
+    context
+        .index_file(
+            "assets/branding/vite.config.ts",
+            "configuration",
+            false,
+            "active",
+        )
+        .await;
+    context
+        .index_file("assets/branding/missing.png", "image", false, "missing")
+        .await;
+
+    let page = context
+        .service
+        .variant_candidates(VariantCandidateQuery {
+            project_id: context.project_id,
+            asset_id: current,
+            scope: VariantCandidateScope::Suggested,
+            search: None,
+            excluded_ids: vec![],
+            page: 1,
+            page_size: 25,
+        })
+        .await
+        .expect("suggested variants");
+
+    assert_eq!(page.asset_root, "assets");
+    assert_eq!(page.current_folder, "assets/branding");
+    assert_eq!(
+        page.items.iter().map(|item| item.id).collect::<Vec<_>>(),
+        [
+            same_folder,
+            similar_name,
+            compatible_type,
+            matching_metadata
+        ]
+    );
+    assert!(page.items[0].reasons.same_folder);
+    assert!(page.items[1].reasons.similar_name);
+    assert!(page.items[2].reasons.compatible_type);
+    assert!(page.items[3].reasons.matching_metadata);
+
+    let same_folder_page = context
+        .service
+        .variant_candidates(VariantCandidateQuery {
+            project_id: context.project_id,
+            asset_id: current,
+            scope: VariantCandidateScope::SameFolder,
+            search: None,
+            excluded_ids: vec![],
+            page: 1,
+            page_size: 25,
+        })
+        .await
+        .expect("same-folder variants");
+    assert!(same_folder_page
+        .items
+        .iter()
+        .all(|item| item.relative_path.starts_with("assets/branding/") && item.status == "active"));
+}
+
+#[tokio::test]
+async fn variant_scopes_search_paths_and_paginate_thousands_without_loading_them_all() {
+    let context = TestContext::new().await;
+    let current = context
+        .index_file("assets/icons/logo.svg", "image", true, "active")
+        .await;
+    for index in 0..1_205_u32 {
+        context
+            .index_file(
+                &format!("assets/icons/generated/icon-{index:04}.svg"),
+                "image",
+                index % 2 == 0,
+                "active",
+            )
+            .await;
+    }
+    context
+        .index_file("src/icon-helper.ts", "source", false, "active")
+        .await;
+
+    let page = context
+        .service
+        .variant_candidates(VariantCandidateQuery {
+            project_id: context.project_id,
+            asset_id: current,
+            scope: VariantCandidateScope::AssetRoot,
+            search: Some("generated/icon-1".to_owned()),
+            excluded_ids: vec![],
+            page: 2,
+            page_size: 25,
+        })
+        .await
+        .expect("paginated variants");
+
+    assert_eq!(page.page, 2);
+    assert_eq!(page.page_size, 25);
+    assert_eq!(page.items.len(), 25);
+    assert_eq!(page.total_items, 205);
+    assert_eq!(page.total_pages, 9);
+    assert!(page.has_more);
+    assert!(page
+        .items
+        .iter()
+        .all(|item| item.relative_path.contains("generated/icon-1")));
+
+    let managed = context
+        .service
+        .variant_candidates(VariantCandidateQuery {
+            project_id: context.project_id,
+            asset_id: current,
+            scope: VariantCandidateScope::Managed,
+            search: Some("icon-000".to_owned()),
+            excluded_ids: vec![],
+            page: 1,
+            page_size: 25,
+        })
+        .await
+        .expect("managed variants");
+    assert!(managed
+        .items
+        .iter()
+        .all(|item| item.origin == AssetOrigin::Managed));
+}
+
+#[tokio::test]
+async fn manual_variant_paths_reject_traversal_self_duplicates_missing_and_cycles() {
+    let context = TestContext::new().await;
+    let first = context
+        .index_file("assets/a.png", "image", false, "active")
+        .await;
+    let second = context
+        .index_file("assets/b.png", "image", false, "active")
+        .await;
+    let third = context
+        .index_file("assets/c.png", "image", false, "active")
+        .await;
+    context
+        .index_file("assets/gone.png", "image", false, "missing")
+        .await;
+    context
+        .service
+        .update_variants(AssetVariantsUpdate {
+            project_id: context.project_id,
+            asset_id: second,
+            variant_ids: vec![third],
+        })
+        .await
+        .expect("seed relation");
+
+    for (path, expected) in [
+        ("../outside.png", "outside"),
+        ("assets/a.png", "itself"),
+        ("assets/missing.png", "indexed"),
+        ("assets/gone.png", "missing"),
+    ] {
+        let error = context
+            .service
+            .resolve_variant_path(VariantPathInput {
+                project_id: context.project_id,
+                asset_id: first,
+                relative_path: path.to_owned(),
+                selected_variant_ids: vec![],
+            })
+            .await
+            .expect_err("invalid manual path");
+        assert!(error.to_string().contains(expected));
+    }
+
+    let resolved = context
+        .service
+        .resolve_variant_path(VariantPathInput {
+            project_id: context.project_id,
+            asset_id: first,
+            relative_path: "assets/b.png".to_owned(),
+            selected_variant_ids: vec![],
+        })
+        .await
+        .expect("valid manual path");
+    assert_eq!(resolved.id, second);
+
+    let duplicate = context
+        .service
+        .resolve_variant_path(VariantPathInput {
+            project_id: context.project_id,
+            asset_id: first,
+            relative_path: "assets/b.png".to_owned(),
+            selected_variant_ids: vec![second],
+        })
+        .await
+        .expect_err("duplicate selected relation");
+    assert!(duplicate.to_string().contains("already selected"));
+
+    let circular = context
+        .service
+        .resolve_variant_path(VariantPathInput {
+            project_id: context.project_id,
+            asset_id: first,
+            relative_path: "assets/c.png".to_owned(),
+            selected_variant_ids: vec![second],
+        })
+        .await
+        .expect_err("circular relation");
+    assert!(circular.to_string().contains("circular"));
+}
+
+#[tokio::test]
+async fn variant_updates_save_and_remove_relationships_without_changing_metadata() {
+    let context = TestContext::new().await;
+    let first = context
+        .index_file("assets/one.svg", "image", true, "active")
+        .await;
+    let second = context
+        .index_file("assets/two.svg", "image", false, "active")
+        .await;
+
+    let saved = context
+        .service
+        .update_variants(AssetVariantsUpdate {
+            project_id: context.project_id,
+            asset_id: first,
+            variant_ids: vec![second],
+        })
+        .await
+        .expect("save variants");
+    assert_eq!(saved.variant_ids, [second]);
+
+    let removed = context
+        .service
+        .update_variants(AssetVariantsUpdate {
+            project_id: context.project_id,
+            asset_id: first,
+            variant_ids: vec![],
+        })
+        .await
+        .expect("remove variants");
+    assert!(removed.variant_ids.is_empty());
+    assert!(removed.favorite);
+}
+
 #[test]
 fn command_errors_do_not_serialize_sensitive_source_paths() {
     let error = CommandError::from(AssetError::Filesystem(std::io::Error::other(
@@ -502,5 +778,67 @@ fn query(
         sort_direction: SortDirection::Ascending,
         page,
         page_size,
+    }
+}
+
+impl TestContext {
+    async fn index_file(
+        &self,
+        relative_path: &str,
+        category: &str,
+        managed: bool,
+        status: &str,
+    ) -> Uuid {
+        if status == "active" {
+            let absolute = self
+                .root
+                .join(relative_path.replace('/', std::path::MAIN_SEPARATOR_STR));
+            fs::create_dir_all(absolute.parent().expect("indexed file parent"))
+                .expect("indexed file directory");
+            fs::write(&absolute, relative_path).expect("indexed file contents");
+        }
+        let watched_location_id: String = sqlx::query_scalar(
+            "SELECT id FROM watched_locations WHERE project_id = ? ORDER BY relative_path LIMIT 1",
+        )
+        .bind(self.project_id.to_string())
+        .fetch_one(&self.pool)
+        .await
+        .expect("watched location id");
+        let scan_id = Uuid::new_v4();
+        sqlx::query(
+            "INSERT INTO scan_runs (id, project_id, watched_location_id, scan_type, status, completed_at)
+             VALUES (?, ?, ?, 'manual_project', 'completed', strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))",
+        )
+        .bind(scan_id.to_string())
+        .bind(self.project_id.to_string())
+        .bind(&watched_location_id)
+        .execute(&self.pool)
+        .await
+        .expect("scan run");
+        let id = Uuid::new_v4();
+        let name = relative_path.rsplit('/').next().expect("file name");
+        let extension = name.rsplit_once('.').map(|(_, extension)| extension);
+        sqlx::query(
+            "INSERT INTO indexed_files (
+                id, project_id, watched_location_id, relative_path, name, extension,
+                mime_type, size_bytes, category, source_type, status, last_scan_id, managed,
+                is_favorite
+             ) VALUES (?, ?, ?, ?, ?, ?, NULL, 1, ?, 'discovered', ?, ?, ?, ?)",
+        )
+        .bind(id.to_string())
+        .bind(self.project_id.to_string())
+        .bind(watched_location_id)
+        .bind(relative_path)
+        .bind(name)
+        .bind(extension)
+        .bind(category)
+        .bind(status)
+        .bind(scan_id.to_string())
+        .bind(managed)
+        .bind(managed)
+        .execute(&self.pool)
+        .await
+        .expect("indexed file");
+        id
     }
 }

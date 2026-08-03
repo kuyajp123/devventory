@@ -16,6 +16,12 @@ enum CommandErrorCode {
     RootNotFound,
     StorageUnavailable,
     WatchedLocationInvalid,
+    VariantAlreadySelected,
+    VariantCircular,
+    VariantMissing,
+    VariantNotIndexed,
+    VariantPathOutsideRoot,
+    VariantSelfReference,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -115,6 +121,54 @@ impl CommandError {
         }
     }
 
+    pub(crate) fn variant_already_selected() -> Self {
+        Self {
+            code: CommandErrorCode::VariantAlreadySelected,
+            message: "That file is already selected as a variant.",
+            recoverable: true,
+        }
+    }
+
+    pub(crate) fn variant_circular() -> Self {
+        Self {
+            code: CommandErrorCode::VariantCircular,
+            message: "That file would create a circular variant relationship.",
+            recoverable: true,
+        }
+    }
+
+    pub(crate) fn variant_missing() -> Self {
+        Self {
+            code: CommandErrorCode::VariantMissing,
+            message: "That indexed file is currently missing or unavailable.",
+            recoverable: true,
+        }
+    }
+
+    pub(crate) fn variant_not_indexed() -> Self {
+        Self {
+            code: CommandErrorCode::VariantNotIndexed,
+            message: "That project-relative file path is not indexed.",
+            recoverable: true,
+        }
+    }
+
+    pub(crate) fn variant_path_outside_root() -> Self {
+        Self {
+            code: CommandErrorCode::VariantPathOutsideRoot,
+            message: "Variant paths must stay inside the current project root.",
+            recoverable: true,
+        }
+    }
+
+    pub(crate) fn variant_self_reference() -> Self {
+        Self {
+            code: CommandErrorCode::VariantSelfReference,
+            message: "An asset cannot be a variant of itself.",
+            recoverable: true,
+        }
+    }
+
     pub(crate) fn code(&self) -> &'static str {
         match self.code {
             CommandErrorCode::AssetConflict => "ASSET_CONFLICT",
@@ -128,6 +182,12 @@ impl CommandError {
             CommandErrorCode::RootNotFound => "ROOT_NOT_FOUND",
             CommandErrorCode::StorageUnavailable => "STORAGE_UNAVAILABLE",
             CommandErrorCode::WatchedLocationInvalid => "WATCHED_LOCATION_INVALID",
+            CommandErrorCode::VariantAlreadySelected => "VARIANT_ALREADY_SELECTED",
+            CommandErrorCode::VariantCircular => "VARIANT_CIRCULAR",
+            CommandErrorCode::VariantMissing => "VARIANT_MISSING",
+            CommandErrorCode::VariantNotIndexed => "VARIANT_NOT_INDEXED",
+            CommandErrorCode::VariantPathOutsideRoot => "VARIANT_PATH_OUTSIDE_ROOT",
+            CommandErrorCode::VariantSelfReference => "VARIANT_SELF_REFERENCE",
         }
     }
 }

@@ -33,6 +33,18 @@ pub(crate) enum AssetError {
     Project(#[from] ProjectError),
     #[error("source file is invalid")]
     SourceInvalid,
+    #[error("variant path is outside the project root")]
+    VariantPathOutsideRoot,
+    #[error("variant file is not indexed")]
+    VariantNotIndexed,
+    #[error("variant file is missing")]
+    VariantMissing,
+    #[error("an asset cannot be a variant of itself")]
+    VariantSelfReference,
+    #[error("variant is already selected")]
+    VariantAlreadySelected,
+    #[error("variant relationship would be circular")]
+    VariantCircular,
 }
 
 impl From<AssetError> for CommandError {
@@ -52,6 +64,12 @@ impl From<AssetError> for CommandError {
                 Self::invalid_input("The asset request contains invalid data.")
             }
             AssetError::NotFound => Self::not_found("The requested asset could not be found."),
+            AssetError::VariantNotIndexed => Self::variant_not_indexed(),
+            AssetError::VariantMissing => Self::variant_missing(),
+            AssetError::VariantSelfReference => Self::variant_self_reference(),
+            AssetError::VariantAlreadySelected => Self::variant_already_selected(),
+            AssetError::VariantCircular => Self::variant_circular(),
+            AssetError::VariantPathOutsideRoot => Self::variant_path_outside_root(),
             AssetError::ActionUnavailable => {
                 Self::operation_unavailable("That file action is unavailable on this device.")
             }

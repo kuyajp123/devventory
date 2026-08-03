@@ -7,8 +7,9 @@ use tauri::Manager;
 use app::state::AppState;
 use features::app_health::commands::health_check;
 use features::asset_library::commands::{
-    get_asset, import_asset, list_assets, preview_asset_import, run_asset_action,
-    update_asset_metadata,
+    get_asset, import_asset, list_asset_variant_candidates, list_asset_variants, list_assets,
+    preview_asset_import, resolve_asset_variant_path, run_asset_action, update_asset_metadata,
+    update_asset_variants,
 };
 use features::file_inventory::commands::{
     list_project_files, rescan_project, rescan_watched_location,
@@ -51,6 +52,10 @@ pub fn run() {
             preview_asset_import,
             import_asset,
             update_asset_metadata,
+            list_asset_variant_candidates,
+            list_asset_variants,
+            resolve_asset_variant_path,
+            update_asset_variants,
             run_asset_action
         ])
         .run(tauri::generate_context!())

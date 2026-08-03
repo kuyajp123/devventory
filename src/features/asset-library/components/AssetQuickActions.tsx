@@ -1,4 +1,4 @@
-import { Button, Card, Spinner, toast } from '@heroui/react';
+import { Button, Spinner, toast } from '@heroui/react';
 import {
   IconBrandVscode,
   IconCopy,
@@ -9,6 +9,38 @@ import { ICON_SIZE, ICON_STROKE } from '@/shared/constants/icon.constants';
 import { TauriCommandError } from '@/shared/infrastructure/tauri/tauri-error';
 import { useAssetActionMutation } from '../hooks/use-assets';
 import type { QuickAction } from '../models/asset';
+
+const ACTIONS: Array<{
+  action: QuickAction;
+  icon: typeof IconCopy;
+  label: string;
+}> = [
+  {
+    action: 'open',
+    icon: IconExternalLink,
+    label: 'Open',
+  },
+  {
+    action: 'reveal',
+    icon: IconFolderOpen,
+    label: 'Reveal',
+  },
+  {
+    action: 'open_in_vscode',
+    icon: IconBrandVscode,
+    label: 'Open in VS Code',
+  },
+  {
+    action: 'copy_relative_path',
+    icon: IconCopy,
+    label: 'Copy relative path',
+  },
+  {
+    action: 'copy_absolute_path',
+    icon: IconCopy,
+    label: 'Copy absolute path',
+  },
+];
 
 export function AssetQuickActions({
   assetId,
@@ -38,60 +70,25 @@ export function AssetQuickActions({
   }
 
   return (
-    <Card>
-      <Card.Header>
-        <Card.Title>Quick actions</Card.Title>
-        <Card.Description>
-          Paths are revalidated inside the project before every native action.
-        </Card.Description>
-      </Card.Header>
-      <Card.Content className="flex flex-wrap gap-3">
-        {action.isPending && (
-          <Spinner aria-label="Running file action" size="sm" />
-        )}
-        <ActionButton
-          icon={IconExternalLink}
-          label="Open"
-          onPress={() => void run('open')}
-        />
-        <ActionButton
-          icon={IconFolderOpen}
-          label="Reveal"
-          onPress={() => void run('reveal')}
-        />
-        <ActionButton
-          icon={IconBrandVscode}
-          label="Open in VS Code"
-          onPress={() => void run('open_in_vscode')}
-        />
-        <ActionButton
-          icon={IconCopy}
-          label="Copy relative path"
-          onPress={() => void run('copy_relative_path')}
-        />
-        <ActionButton
-          icon={IconCopy}
-          label="Copy absolute path"
-          onPress={() => void run('copy_absolute_path')}
-        />
-      </Card.Content>
-    </Card>
-  );
-}
-
-function ActionButton({
-  icon: Icon,
-  label,
-  onPress,
-}: {
-  icon: typeof IconCopy;
-  label: string;
-  onPress: () => void;
-}) {
-  return (
-    <Button onPress={onPress} size="sm" variant="secondary">
-      <Icon aria-hidden="true" size={ICON_SIZE.button} stroke={ICON_STROKE} />
-      {label}
-    </Button>
+    <div className="flex flex-wrap items-center gap-2">
+      {action.isPending && (
+        <Spinner aria-label="Running file action" size="sm" />
+      )}
+      {ACTIONS.map((item) => (
+        <Button
+          key={item.action}
+          onPress={() => void run(item.action)}
+          size="sm"
+          variant="secondary"
+        >
+          <item.icon
+            aria-hidden="true"
+            size={ICON_SIZE.button}
+            stroke={ICON_STROKE}
+          />
+          {item.label}
+        </Button>
+      ))}
+    </div>
   );
 }

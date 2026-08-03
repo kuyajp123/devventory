@@ -1,25 +1,16 @@
-import { Alert, Card, Chip, Skeleton } from '@heroui/react';
-import {
-  IconArrowLeft,
-  IconFileDescription,
-  IconHeartFilled,
-} from '@tabler/icons-react';
-import { Link, useParams } from 'react-router';
 import { formatFileSize } from '@/features/file-inventory';
 import { ICON_SIZE, ICON_STROKE } from '@/shared/constants/icon.constants';
+import { Alert, Card, Chip, Skeleton } from '@heroui/react';
+import { IconArrowLeft, IconHeartFilled } from '@tabler/icons-react';
+import { Link, useParams } from 'react-router';
 import { AssetMetadataForm } from '../components/AssetMetadataForm';
 import { AssetQuickActions } from '../components/AssetQuickActions';
-import { useAssetQuery, useAssetsQuery } from '../hooks/use-assets';
+import { AssetVariantManager } from '../components/AssetVariantManager';
+import { useAssetQuery } from '../hooks/use-assets';
 
 export function AssetDetailsPage() {
   const { assetId = '', projectId = '' } = useParams();
   const asset = useAssetQuery(projectId, assetId);
-  const candidates = useAssetsQuery(projectId, {
-    page: 1,
-    pageSize: 100,
-    sortBy: 'relativePath',
-    sortDirection: 'ascending',
-  });
 
   if (asset.isPending) {
     return (
@@ -63,12 +54,6 @@ export function AssetDetailsPage() {
           Back to asset library
         </Link>
         <div className="flex items-start gap-3">
-          <IconFileDescription
-            aria-hidden="true"
-            className="mt-1 shrink-0 text-accent"
-            size={ICON_SIZE.emptyState}
-            stroke={ICON_STROKE}
-          />
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-2">
               <Chip size="sm" variant="soft">
@@ -93,10 +78,13 @@ export function AssetDetailsPage() {
       </header>
 
       <Card>
-        <Card.Header>
-          <Card.Title>Indexed file metadata</Card.Title>
+        <Card.Header className="border-b pb-4 border-default">
+          <div className="flex w-full flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <Card.Title>Indexed file metadata</Card.Title>
+            <AssetQuickActions assetId={data.id} projectId={projectId} />
+          </div>
         </Card.Header>
-        <Card.Content>
+        <Card.Content className="pt-5">
           <dl className="grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
             <Metadata label="Category" value={data.category} />
             <Metadata label="Size" value={formatFileSize(data.sizeBytes)} />
@@ -117,13 +105,8 @@ export function AssetDetailsPage() {
         </Card.Content>
       </Card>
 
-      <AssetMetadataForm
-        asset={data}
-        candidates={(candidates.data?.items ?? []).filter(
-          (candidate) => candidate.id !== data.id,
-        )}
-      />
-      <AssetQuickActions assetId={data.id} projectId={projectId} />
+      <AssetMetadataForm asset={data} />
+      <AssetVariantManager asset={data} />
     </section>
   );
 }

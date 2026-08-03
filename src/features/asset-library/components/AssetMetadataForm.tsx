@@ -1,4 +1,5 @@
-import { zodResolver } from '@hookform/resolvers/zod';
+import { ICON_SIZE, ICON_STROKE } from '@/shared/constants/icon.constants';
+import { TauriCommandError } from '@/shared/infrastructure/tauri/tauri-error';
 import {
   Button,
   Card,
@@ -6,18 +7,20 @@ import {
   Form,
   Input,
   Label,
-  ListBox,
-  Select,
   Spinner,
   Switch,
   TextArea,
   TextField,
   toast,
 } from '@heroui/react';
-import { IconDeviceFloppy } from '@tabler/icons-react';
+import { zodResolver } from '@hookform/resolvers/zod';
+import {
+  IconDeviceFloppy,
+  IconHash,
+  IconHeart,
+  IconNote,
+} from '@tabler/icons-react';
 import { Controller, useForm } from 'react-hook-form';
-import { ICON_SIZE, ICON_STROKE } from '@/shared/constants/icon.constants';
-import { TauriCommandError } from '@/shared/infrastructure/tauri/tauri-error';
 import { useUpdateAssetMetadataMutation } from '../hooks/use-assets';
 import {
   assetMetadataFormSchema,
@@ -26,13 +29,7 @@ import {
   type AssetMetadataFormValues,
 } from '../models/asset';
 
-export function AssetMetadataForm({
-  asset,
-  candidates,
-}: {
-  asset: Asset;
-  candidates: Asset[];
-}) {
+export function AssetMetadataForm({ asset }: { asset: Asset }) {
   const update = useUpdateAssetMetadataMutation(asset.projectId);
   const {
     control,
@@ -44,7 +41,6 @@ export function AssetMetadataForm({
       favorite: asset.favorite,
       note: asset.note ?? '',
       tagsText: asset.tags.join(', '),
-      variantIds: asset.variantIds,
     },
     resolver: zodResolver(assetMetadataFormSchema),
   });
@@ -56,7 +52,7 @@ export function AssetMetadataForm({
         favorite: values.favorite,
         note: values.note || undefined,
         tags: parseTags(values.tagsText),
-        variantIds: values.variantIds,
+        variantIds: asset.variantIds,
       });
       toast.success('Asset metadata saved');
     } catch (error) {
@@ -72,95 +68,88 @@ export function AssetMetadataForm({
     <Card>
       <Card.Header>
         <Card.Title>Managed metadata</Card.Title>
-        <Card.Description>
-          Tags are reusable within this project. Variant relationships stay
-          project-local.
-        </Card.Description>
-      </Card.Header>
-      <Card.Content>
-        <Form
-          className="grid gap-5 sm:grid-cols-2"
-          onSubmit={(event) => event.preventDefault()}
-          validationBehavior="aria"
-        >
-          <TextField
-            fullWidth
-            isInvalid={Boolean(errors.tagsText)}
-            variant="secondary"
-          >
-            <Label>Tags (comma separated)</Label>
-            <Input placeholder="brand, approved" {...register('tagsText')} />
-            <FieldError>{errors.tagsText?.message}</FieldError>
-          </TextField>
-
-          <Controller
-            control={control}
-            name="variantIds"
-            render={({ field, fieldState }) => (
-              <Select
-                fullWidth
-                isInvalid={Boolean(fieldState.error)}
-                onBlur={field.onBlur}
-                onChange={(value) => field.onChange(value ?? [])}
-                placeholder="Select related variants"
-                selectionMode="multiple"
-                value={field.value}
-                variant="secondary"
-              >
-                <Label>Asset variants</Label>
-                <Select.Trigger>
-                  <Select.Value />
-                  <Select.Indicator />
-                </Select.Trigger>
-                <FieldError>{fieldState.error?.message}</FieldError>
-                <Select.Popover>
-                  <ListBox>
-                    {candidates.map((candidate) => (
-                      <ListBox.Item
-                        id={candidate.id}
-                        key={candidate.id}
-                        textValue={candidate.relativePath}
-                      >
-                        <Label>{candidate.name}</Label>
-                        <span className="block truncate font-mono text-xs text-muted">
-                          {candidate.relativePath}
-                        </span>
-                        <ListBox.ItemIndicator />
-                      </ListBox.Item>
-                    ))}
-                  </ListBox>
-                </Select.Popover>
-              </Select>
-            )}
-          />
-
-          <TextField
-            className="sm:col-span-2"
-            fullWidth
-            isInvalid={Boolean(errors.note)}
-            variant="secondary"
-          >
-            <Label>Note</Label>
-            <TextArea rows={5} {...register('note')} />
-            <FieldError>{errors.note?.message}</FieldError>
-          </TextField>
-
+        <Card.Description className="flex flex-row items-center justify-between">
+          <p>
+            Tags are reusable within this project. Variant relationships stay
+            project-local.
+          </p>
           <Controller
             control={control}
             name="favorite"
             render={({ field }) => (
               <Switch isSelected={field.value} onChange={field.onChange}>
                 <Switch.Content>
+                  <span className="flex items-center gap-1.5">
+                    <IconHeart
+                      aria-hidden="true"
+                      className={field.value ? 'text-danger' : 'text-muted'}
+                      size={ICON_SIZE.small}
+                      stroke={ICON_STROKE}
+                    />
+                    Favorite asset
+                  </span>
                   <Switch.Control>
                     <Switch.Thumb />
                   </Switch.Control>
-                  Favorite asset
                 </Switch.Content>
               </Switch>
             )}
           />
+        </Card.Description>
+      </Card.Header>
+      <Card.Content>
+        <Form
+          className="space-y-5"
+          onSubmit={(event) => event.preventDefault()}
+          validationBehavior="aria"
+        >
+          {/* Tags field with icon cue */}
+          <TextField
+            fullWidth
+            isInvalid={Boolean(errors.tagsText)}
+            variant="secondary"
+          >
+            <Label className="flex items-center gap-1.5">
+              <IconHash
+                aria-hidden="true"
+                className="text-muted"
+                size={ICON_SIZE.small}
+                stroke={ICON_STROKE}
+              />
+              Tags
+            </Label>
+            <Input
+              placeholder="brand, approved, v2 — separate with commas"
+              {...register('tagsText')}
+            />
+            <FieldError>{errors.tagsText?.message}</FieldError>
+          </TextField>
 
-          <div className="flex justify-end sm:col-span-2">
+          {/* Note field with icon cue */}
+          <TextField
+            fullWidth
+            isInvalid={Boolean(errors.note)}
+            variant="secondary"
+          >
+            <Label className="flex items-center gap-1.5">
+              <IconNote
+                aria-hidden="true"
+                className="text-muted"
+                size={ICON_SIZE.small}
+                stroke={ICON_STROKE}
+              />
+              Note
+            </Label>
+            <TextArea
+              placeholder="Add internal notes, usage context, or review comments..."
+              rows={4}
+              {...register('note')}
+            />
+            <FieldError>{errors.note?.message}</FieldError>
+          </TextField>
+
+          {/* Favorite + Save row */}
+          <div className="flex flex-wrap items-center justify-end gap-4 border-t p-4">
             <Button
               isDisabled={update.isPending}
               onPress={() => void submit()}

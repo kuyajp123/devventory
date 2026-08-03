@@ -121,6 +121,73 @@ export interface UpdateAssetMetadataInput {
   variantIds: string[];
 }
 
+export const variantCandidateScopeSchema = z.enum([
+  'suggested',
+  'same_folder',
+  'asset_root',
+  'managed',
+  'all',
+]);
+export type VariantCandidateScope = z.infer<typeof variantCandidateScopeSchema>;
+
+export const variantCandidateSchema = z.object({
+  category: fileCategorySchema,
+  extension: z.string().nullable(),
+  id: z.string().uuid(),
+  name: z.string().min(1),
+  origin: assetOriginSchema,
+  reasons: z.object({
+    compatibleType: z.boolean(),
+    matchingMetadata: z.boolean(),
+    sameAssetRoot: z.boolean(),
+    sameFolder: z.boolean(),
+    similarName: z.boolean(),
+  }),
+  relativePath: z.string().min(1),
+  status: z.enum(['active', 'missing']),
+});
+export type VariantCandidate = z.infer<typeof variantCandidateSchema>;
+
+export const variantCandidatePageSchema = z.object({
+  assetRoot: z.string().min(1),
+  currentFolder: z.string().min(1),
+  hasMore: z.boolean(),
+  items: z.array(variantCandidateSchema),
+  page: z.number().int().positive(),
+  pageSize: z.number().int().min(1).max(50),
+  totalItems: z.number().int().nonnegative(),
+  totalPages: z.number().int().nonnegative(),
+});
+export type VariantCandidatePage = z.infer<typeof variantCandidatePageSchema>;
+
+export interface VariantCandidateFilters {
+  excludedIds: string[];
+  page: number;
+  pageSize: number;
+  scope: VariantCandidateScope;
+  search?: string;
+}
+
+export interface UpdateAssetVariantsInput {
+  assetId: string;
+  projectId: string;
+  variantIds: string[];
+}
+
+export const variantPathSchema = z
+  .string()
+  .trim()
+  .min(1, 'Enter a project-relative file path.')
+  .max(1_024, 'Use a path with 1,024 characters or fewer.')
+  .refine(
+    (value) => !/^(?:[a-zA-Z]:[\\/]|[\\/])/.test(value),
+    'Use a path relative to this project, not an absolute path.',
+  )
+  .refine(
+    (value) => !value.split(/[\\/]/).includes('..'),
+    'The path cannot leave the project root.',
+  );
+
 export const assetImportFormSchema = z
   .object({
     collision: collisionChoiceSchema,
@@ -155,7 +222,6 @@ export const assetMetadataFormSchema = z
     favorite: z.boolean(),
     note: z.string().trim().max(10_000, 'Use 10,000 characters or fewer.'),
     tagsText: z.string().max(839, 'Use no more than 20 short tags.'),
-    variantIds: z.array(z.string().uuid()).max(20),
   })
   .superRefine((values, context) => {
     const tags = parseTags(values.tagsText);

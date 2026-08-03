@@ -12,8 +12,9 @@ use crate::features::file_inventory::FileCategory;
 
 use super::error::AssetError;
 use super::model::{
-    Asset, AssetMetadataUpdate, AssetOrigin, AssetPage, AssetQuery, AssetSortField, HashCandidate,
-    ImportedFileRecord, SortDirection,
+    Asset, AssetMetadataUpdate, AssetOrigin, AssetPage, AssetQuery, AssetSortField,
+    AssetVariantsUpdate, HashCandidate, ImportedFileRecord, SortDirection, VariantCandidateQuery,
+    VariantCandidateRecord, VariantCandidateRecordsPage, VariantCandidateScope,
 };
 
 const LIST_SELECT: &str = "SELECT
@@ -30,6 +31,14 @@ const LIST_SELECT: &str = "SELECT
       WHERE r.project_id = f.project_id
         AND (r.primary_file_id = f.id OR r.variant_file_id = f.id)), '') AS variant_ids
     FROM indexed_files f LEFT JOIN file_notes n ON n.indexed_file_id = f.id WHERE f.project_id = ";
+
+const VARIANT_SELECT: &str = "SELECT
+    f.id, f.relative_path, f.name, f.extension, f.category, f.managed, f.status,
+    COALESCE((SELECT group_concat(ordered_tags.name, char(31)) FROM (
+      SELECT t.name FROM file_tags ft JOIN asset_tags t ON t.id = ft.tag_id
+      WHERE ft.indexed_file_id = f.id ORDER BY t.normalized_name
+    ) ordered_tags), '') AS tags
+    FROM indexed_files f WHERE f.project_id = ";
 
 #[allow(async_fn_in_trait)]
 pub(super) trait AssetRepository: Send + Sync {
@@ -49,6 +58,34 @@ pub(super) trait AssetRepository: Send + Sync {
     ) -> Result<(), AssetError>;
     async fn persist_import(&self, record: ImportedFileRecord) -> Result<Asset, AssetError>;
     async fn update_metadata(&self, update: AssetMetadataUpdate) -> Result<Asset, AssetError>;
+    async fn variant_candidates(
+        &self,
+        query: &VariantCandidateQuery,
+        current: &Asset,
+        asset_root: &str,
+        current_folder: &str,
+    ) -> Result<VariantCandidateRecordsPage, AssetError>;
+    async fn variant_by_relative_path(
+        &self,
+        project_id: Uuid,
+        relative_path: &str,
+    ) -> Result<Option<VariantCandidateRecord>, AssetError>;
+    async fn variants_for_asset(
+        &self,
+        project_id: Uuid,
+        asset_id: Uuid,
+    ) -> Result<Vec<VariantCandidateRecord>, AssetError>;
+    async fn variant_records_by_ids(
+        &self,
+        project_id: Uuid,
+        ids: &[Uuid],
+    ) -> Result<Vec<VariantCandidateRecord>, AssetError>;
+    async fn relation_edges_excluding(
+        &self,
+        project_id: Uuid,
+        asset_id: Uuid,
+    ) -> Result<Vec<(Uuid, Uuid)>, AssetError>;
+    async fn update_variants(&self, update: AssetVariantsUpdate) -> Result<Asset, AssetError>;
 }
 
 #[derive(Debug, Clone)]
@@ -287,6 +324,166 @@ impl AssetRepository for SqliteAssetRepository {
             .await?
             .ok_or(AssetError::InvalidPersistedData)
     }
+
+    async fn variant_candidates(
+        &self,
+        query: &VariantCandidateQuery,
+        current: &Asset,
+        asset_root: &str,
+        current_folder: &str,
+    ) -> Result<VariantCandidateRecordsPage, AssetError> {
+        let mut count = QueryBuilder::<Sqlite>::new(
+            "SELECT COUNT(*) FROM indexed_files f WHERE f.project_id = ",
+        );
+        push_variant_filters(&mut count, query, asset_root, current_folder);
+        let total_items = from_i64(
+            count
+                .build_query_scalar::<i64>()
+                .fetch_one(&self.pool)
+                .await?,
+        )?;
+
+        let mut items = QueryBuilder::<Sqlite>::new(VARIANT_SELECT);
+        push_variant_filters(&mut items, query, asset_root, current_folder);
+        push_variant_rank(&mut items, current, asset_root, current_folder);
+        items.push(" LIMIT ").push_bind(i64::from(query.page_size));
+        let offset = u64::from(query.page.saturating_sub(1)) * u64::from(query.page_size);
+        items.push(" OFFSET ").push_bind(to_i64(offset)?);
+        let items = items
+            .build_query_as::<VariantCandidateRow>()
+            .fetch_all(&self.pool)
+            .await?
+            .into_iter()
+            .map(TryInto::try_into)
+            .collect::<Result<_, _>>()?;
+        Ok(VariantCandidateRecordsPage { items, total_items })
+    }
+
+    async fn variant_by_relative_path(
+        &self,
+        project_id: Uuid,
+        relative_path: &str,
+    ) -> Result<Option<VariantCandidateRecord>, AssetError> {
+        let mut query = QueryBuilder::<Sqlite>::new(VARIANT_SELECT);
+        query.push_bind(project_id.to_string());
+        query
+            .push(" AND f.relative_path = ")
+            .push_bind(relative_path);
+        query
+            .build_query_as::<VariantCandidateRow>()
+            .fetch_optional(&self.pool)
+            .await?
+            .map(TryInto::try_into)
+            .transpose()
+    }
+
+    async fn variants_for_asset(
+        &self,
+        project_id: Uuid,
+        asset_id: Uuid,
+    ) -> Result<Vec<VariantCandidateRecord>, AssetError> {
+        let mut query = QueryBuilder::<Sqlite>::new(VARIANT_SELECT);
+        query.push_bind(project_id.to_string());
+        query.push(
+            " AND EXISTS (
+                SELECT 1 FROM asset_relations r
+                WHERE r.project_id = f.project_id
+                  AND ((r.primary_file_id = ",
+        );
+        query.push_bind(asset_id.to_string());
+        query.push(" AND r.variant_file_id = f.id) OR (r.variant_file_id = ");
+        query.push_bind(asset_id.to_string());
+        query.push(" AND r.primary_file_id = f.id))) ORDER BY lower(f.relative_path), f.id");
+        query
+            .build_query_as::<VariantCandidateRow>()
+            .fetch_all(&self.pool)
+            .await?
+            .into_iter()
+            .map(TryInto::try_into)
+            .collect()
+    }
+
+    async fn variant_records_by_ids(
+        &self,
+        project_id: Uuid,
+        ids: &[Uuid],
+    ) -> Result<Vec<VariantCandidateRecord>, AssetError> {
+        if ids.is_empty() {
+            return Ok(Vec::new());
+        }
+        let mut query = QueryBuilder::<Sqlite>::new(VARIANT_SELECT);
+        query.push_bind(project_id.to_string());
+        query.push(" AND f.id IN (");
+        let mut separated = query.separated(", ");
+        for id in ids {
+            separated.push_bind(id.to_string());
+        }
+        separated.push_unseparated(") ORDER BY lower(f.relative_path), f.id");
+        query
+            .build_query_as::<VariantCandidateRow>()
+            .fetch_all(&self.pool)
+            .await?
+            .into_iter()
+            .map(TryInto::try_into)
+            .collect()
+    }
+
+    async fn relation_edges_excluding(
+        &self,
+        project_id: Uuid,
+        asset_id: Uuid,
+    ) -> Result<Vec<(Uuid, Uuid)>, AssetError> {
+        let rows = sqlx::query_as::<_, RelationEdgeRow>(
+            "SELECT primary_file_id, variant_file_id FROM asset_relations
+             WHERE project_id = ? AND primary_file_id <> ? AND variant_file_id <> ?",
+        )
+        .bind(project_id.to_string())
+        .bind(asset_id.to_string())
+        .bind(asset_id.to_string())
+        .fetch_all(&self.pool)
+        .await?;
+        rows.into_iter()
+            .map(|row| {
+                Ok((
+                    parse_uuid(&row.primary_file_id)?,
+                    parse_uuid(&row.variant_file_id)?,
+                ))
+            })
+            .collect()
+    }
+
+    async fn update_variants(&self, update: AssetVariantsUpdate) -> Result<Asset, AssetError> {
+        let mut transaction = self.pool.begin_with("BEGIN IMMEDIATE").await?;
+        let exists: bool = sqlx::query_scalar(
+            "SELECT EXISTS(SELECT 1 FROM indexed_files WHERE id = ? AND project_id = ?)",
+        )
+        .bind(update.asset_id.to_string())
+        .bind(update.project_id.to_string())
+        .fetch_one(&mut *transaction)
+        .await?;
+        if !exists {
+            return Err(AssetError::NotFound);
+        }
+        write_relations(
+            &mut transaction,
+            update.project_id,
+            update.asset_id,
+            &update.variant_ids,
+        )
+        .await?;
+        sqlx::query(
+            "UPDATE indexed_files SET updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
+             WHERE id = ? AND project_id = ?",
+        )
+        .bind(update.asset_id.to_string())
+        .bind(update.project_id.to_string())
+        .execute(&mut *transaction)
+        .await?;
+        transaction.commit().await?;
+        self.one(update.project_id, update.asset_id)
+            .await?
+            .ok_or(AssetError::InvalidPersistedData)
+    }
 }
 
 async fn write_metadata(
@@ -354,15 +551,15 @@ async fn write_metadata(
         }
     }
 
-    sqlx::query(
-        "DELETE FROM asset_relations
-         WHERE project_id = ? AND (primary_file_id = ? OR variant_file_id = ?)",
-    )
-    .bind(project_id.to_string())
-    .bind(asset_id.to_string())
-    .bind(asset_id.to_string())
-    .execute(&mut **transaction)
-    .await?;
+    write_relations(transaction, project_id, asset_id, variant_ids).await
+}
+
+async fn write_relations(
+    transaction: &mut Transaction<'_, Sqlite>,
+    project_id: Uuid,
+    asset_id: Uuid,
+    variant_ids: &[Uuid],
+) -> Result<(), AssetError> {
     if !variant_ids.is_empty() {
         let unique = variant_ids.iter().copied().collect::<HashSet<_>>();
         let mut check =
@@ -381,23 +578,32 @@ async fn write_metadata(
         if usize::try_from(found).ok() != Some(unique.len()) || unique.contains(&asset_id) {
             return Err(AssetError::InvalidMetadata);
         }
-        for variant_id in unique {
-            let (primary_id, variant_id) = if asset_id.as_bytes() < variant_id.as_bytes() {
-                (asset_id, variant_id)
-            } else {
-                (variant_id, asset_id)
-            };
-            sqlx::query(
-                "INSERT INTO asset_relations (id, project_id, primary_file_id, variant_file_id)
-                 VALUES (?, ?, ?, ?)",
-            )
-            .bind(Uuid::new_v4().to_string())
-            .bind(project_id.to_string())
-            .bind(primary_id.to_string())
-            .bind(variant_id.to_string())
-            .execute(&mut **transaction)
-            .await?;
-        }
+    }
+    sqlx::query(
+        "DELETE FROM asset_relations
+         WHERE project_id = ? AND (primary_file_id = ? OR variant_file_id = ?)",
+    )
+    .bind(project_id.to_string())
+    .bind(asset_id.to_string())
+    .bind(asset_id.to_string())
+    .execute(&mut **transaction)
+    .await?;
+    for variant_id in variant_ids.iter().copied().collect::<HashSet<_>>() {
+        let (primary_id, variant_id) = if asset_id.as_bytes() < variant_id.as_bytes() {
+            (asset_id, variant_id)
+        } else {
+            (variant_id, asset_id)
+        };
+        sqlx::query(
+            "INSERT INTO asset_relations (id, project_id, primary_file_id, variant_file_id)
+             VALUES (?, ?, ?, ?)",
+        )
+        .bind(Uuid::new_v4().to_string())
+        .bind(project_id.to_string())
+        .bind(primary_id.to_string())
+        .bind(variant_id.to_string())
+        .execute(&mut **transaction)
+        .await?;
     }
     Ok(())
 }
@@ -434,6 +640,120 @@ fn push_filters(builder: &mut QueryBuilder<Sqlite>, query: &AssetQuery) {
         builder.push(" AND EXISTS (SELECT 1 FROM file_tags ft JOIN asset_tags t ON t.id = ft.tag_id WHERE ft.indexed_file_id = f.id AND t.normalized_name = ");
         builder.push_bind(tag);
         builder.push(")");
+    }
+}
+
+fn push_variant_filters(
+    builder: &mut QueryBuilder<Sqlite>,
+    query: &VariantCandidateQuery,
+    asset_root: &str,
+    current_folder: &str,
+) {
+    builder.push_bind(query.project_id.to_string());
+    builder.push(" AND f.status = 'active' AND f.id <> ");
+    builder.push_bind(query.asset_id.to_string());
+    if !query.excluded_ids.is_empty() {
+        builder.push(" AND f.id NOT IN (");
+        let mut separated = builder.separated(", ");
+        for id in &query.excluded_ids {
+            separated.push_bind(id.to_string());
+        }
+        separated.push_unseparated(")");
+    }
+    if let Some(search) = &query.search {
+        let pattern = format!("%{}%", escape_like(search));
+        builder
+            .push(" AND (lower(f.name) LIKE lower(")
+            .push_bind(pattern.clone());
+        builder
+            .push(") ESCAPE '\\' OR lower(f.relative_path) LIKE lower(")
+            .push_bind(pattern);
+        builder.push(") ESCAPE '\\')");
+    }
+    match query.scope {
+        VariantCandidateScope::Suggested => {
+            push_asset_root_filter(builder, asset_root);
+            builder.push(" AND f.category NOT IN ('source', 'configuration')");
+        }
+        VariantCandidateScope::SameFolder => push_same_folder_filter(builder, current_folder),
+        VariantCandidateScope::AssetRoot => push_asset_root_filter(builder, asset_root),
+        VariantCandidateScope::Managed => {
+            builder.push(" AND f.managed = 1");
+        }
+        VariantCandidateScope::All => {}
+    }
+}
+
+fn push_variant_rank(
+    builder: &mut QueryBuilder<Sqlite>,
+    current: &Asset,
+    asset_root: &str,
+    current_folder: &str,
+) {
+    builder.push(" ORDER BY CASE WHEN ");
+    push_same_folder_predicate(builder, current_folder);
+    builder.push(" THEN 1 ELSE 0 END DESC, CASE WHEN ");
+    push_asset_root_predicate(builder, asset_root);
+    let stem = current
+        .name
+        .rsplit_once('.')
+        .map_or(current.name.as_str(), |(stem, _)| stem);
+    let similar_pattern = format!("%{}%", escape_like(&stem.to_lowercase()));
+    builder
+        .push(" THEN 1 ELSE 0 END DESC, CASE WHEN lower(f.name) LIKE ")
+        .push_bind(similar_pattern);
+    builder
+        .push(" ESCAPE '\\' THEN 1 ELSE 0 END DESC, CASE WHEN f.category = ")
+        .push_bind(current.category.as_str());
+    builder.push(
+        " THEN 1 ELSE 0 END DESC, CASE WHEN EXISTS (
+            SELECT 1 FROM file_tags candidate_tag
+            JOIN file_tags current_tag ON current_tag.tag_id = candidate_tag.tag_id
+            WHERE candidate_tag.indexed_file_id = f.id
+              AND current_tag.indexed_file_id = ",
+    );
+    builder.push_bind(current.id.to_string());
+    builder.push(") THEN 1 ELSE 0 END DESC, f.managed DESC, lower(f.relative_path) ASC, f.id ASC");
+}
+
+fn push_same_folder_filter(builder: &mut QueryBuilder<Sqlite>, folder: &str) {
+    builder.push(" AND ");
+    push_same_folder_predicate(builder, folder);
+}
+
+fn push_same_folder_predicate(builder: &mut QueryBuilder<Sqlite>, folder: &str) {
+    if folder == "." {
+        builder.push("instr(f.relative_path, '/') = 0");
+    } else {
+        let prefix = format!("{}/", escape_like(folder));
+        builder
+            .push("(f.relative_path LIKE ")
+            .push_bind(format!("{prefix}%"));
+        builder
+            .push(" ESCAPE '\\' AND f.relative_path NOT LIKE ")
+            .push_bind(format!("{prefix}%/%"));
+        builder.push(" ESCAPE '\\')");
+    }
+}
+
+fn push_asset_root_filter(builder: &mut QueryBuilder<Sqlite>, asset_root: &str) {
+    if asset_root != "." {
+        builder.push(" AND ");
+        push_asset_root_predicate(builder, asset_root);
+    }
+}
+
+fn push_asset_root_predicate(builder: &mut QueryBuilder<Sqlite>, asset_root: &str) {
+    if asset_root == "." {
+        builder.push("1 = 1");
+    } else {
+        builder
+            .push("(f.relative_path = ")
+            .push_bind(asset_root.to_owned());
+        builder
+            .push(" OR f.relative_path LIKE ")
+            .push_bind(format!("{}/%", escape_like(asset_root)));
+        builder.push(" ESCAPE '\\')");
     }
 }
 
@@ -519,6 +839,49 @@ struct HashCandidateRow {
     content_hash: Option<String>,
     hashed_size_bytes: Option<i64>,
     hashed_modified_at_ms: Option<i64>,
+}
+
+#[derive(Debug, FromRow)]
+struct VariantCandidateRow {
+    id: String,
+    relative_path: String,
+    name: String,
+    extension: Option<String>,
+    category: String,
+    managed: bool,
+    status: String,
+    tags: String,
+}
+
+impl TryFrom<VariantCandidateRow> for VariantCandidateRecord {
+    type Error = AssetError;
+
+    fn try_from(row: VariantCandidateRow) -> Result<Self, Self::Error> {
+        if !matches!(row.status.as_str(), "active" | "missing") {
+            return Err(AssetError::InvalidPersistedData);
+        }
+        Ok(Self {
+            id: parse_uuid(&row.id)?,
+            relative_path: row.relative_path,
+            name: row.name,
+            extension: row.extension,
+            category: FileCategory::try_from(row.category.as_str())
+                .map_err(|_| AssetError::InvalidPersistedData)?,
+            origin: if row.managed {
+                AssetOrigin::Managed
+            } else {
+                AssetOrigin::Discovered
+            },
+            status: row.status,
+            tags: split_group(&row.tags),
+        })
+    }
+}
+
+#[derive(Debug, FromRow)]
+struct RelationEdgeRow {
+    primary_file_id: String,
+    variant_file_id: String,
 }
 
 impl TryFrom<HashCandidateRow> for HashCandidate {

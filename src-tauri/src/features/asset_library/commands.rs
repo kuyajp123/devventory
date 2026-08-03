@@ -7,9 +7,12 @@ use crate::shared::errors::command::CommandError;
 use super::actions;
 use super::dto::{
     AssetActionInput, AssetIdInput, AssetQueryInput, ImportAssetInput, PreviewAssetInput,
-    UpdateAssetMetadataInput,
+    ResolveVariantPathInput, UpdateAssetMetadataInput, UpdateAssetVariantsInput,
+    VariantCandidateQueryInput,
 };
-use super::model::{Asset, AssetPage, AssetPreview, ImportResult};
+use super::model::{
+    Asset, AssetPage, AssetPreview, ImportResult, VariantCandidate, VariantCandidatePage,
+};
 
 #[tauri::command]
 pub(crate) async fn list_assets(
@@ -70,6 +73,55 @@ pub(crate) async fn update_asset_metadata(
     state
         .asset_service()
         .update_metadata(input.try_into().map_err(CommandError::from)?)
+        .await
+        .map_err(Into::into)
+}
+
+#[tauri::command]
+pub(crate) async fn list_asset_variant_candidates(
+    state: State<'_, AppState>,
+    input: VariantCandidateQueryInput,
+) -> Result<VariantCandidatePage, CommandError> {
+    state
+        .asset_service()
+        .variant_candidates(input.try_into().map_err(CommandError::from)?)
+        .await
+        .map_err(Into::into)
+}
+
+#[tauri::command]
+pub(crate) async fn list_asset_variants(
+    state: State<'_, AppState>,
+    input: AssetIdInput,
+) -> Result<Vec<VariantCandidate>, CommandError> {
+    let (project_id, asset_id) = input.parse().map_err(CommandError::from)?;
+    state
+        .asset_service()
+        .variants(project_id, asset_id)
+        .await
+        .map_err(Into::into)
+}
+
+#[tauri::command]
+pub(crate) async fn resolve_asset_variant_path(
+    state: State<'_, AppState>,
+    input: ResolveVariantPathInput,
+) -> Result<VariantCandidate, CommandError> {
+    state
+        .asset_service()
+        .resolve_variant_path(input.try_into().map_err(CommandError::from)?)
+        .await
+        .map_err(Into::into)
+}
+
+#[tauri::command]
+pub(crate) async fn update_asset_variants(
+    state: State<'_, AppState>,
+    input: UpdateAssetVariantsInput,
+) -> Result<Asset, CommandError> {
+    state
+        .asset_service()
+        .update_variants(input.try_into().map_err(CommandError::from)?)
         .await
         .map_err(Into::into)
 }

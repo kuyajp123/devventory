@@ -141,6 +141,96 @@ pub(crate) struct AssetMetadataUpdate {
     pub(crate) variant_ids: Vec<Uuid>,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub(crate) enum VariantCandidateScope {
+    Suggested,
+    SameFolder,
+    AssetRoot,
+    Managed,
+    All,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct VariantCandidateQuery {
+    pub(crate) project_id: Uuid,
+    pub(crate) asset_id: Uuid,
+    pub(crate) scope: VariantCandidateScope,
+    pub(crate) search: Option<String>,
+    pub(crate) excluded_ids: Vec<Uuid>,
+    pub(crate) page: u32,
+    pub(crate) page_size: u32,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct VariantMatchReasons {
+    pub(crate) same_folder: bool,
+    pub(crate) same_asset_root: bool,
+    pub(crate) similar_name: bool,
+    pub(crate) compatible_type: bool,
+    pub(crate) matching_metadata: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct VariantCandidate {
+    pub(crate) id: Uuid,
+    pub(crate) relative_path: String,
+    pub(crate) name: String,
+    pub(crate) extension: Option<String>,
+    pub(crate) category: FileCategory,
+    pub(crate) origin: AssetOrigin,
+    pub(crate) status: String,
+    pub(crate) reasons: VariantMatchReasons,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct VariantCandidatePage {
+    pub(crate) items: Vec<VariantCandidate>,
+    pub(crate) total_items: u64,
+    pub(crate) page: u32,
+    pub(crate) page_size: u32,
+    pub(crate) total_pages: u32,
+    pub(crate) has_more: bool,
+    pub(crate) asset_root: String,
+    pub(crate) current_folder: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct VariantPathInput {
+    pub(crate) project_id: Uuid,
+    pub(crate) asset_id: Uuid,
+    pub(crate) relative_path: String,
+    pub(crate) selected_variant_ids: Vec<Uuid>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct AssetVariantsUpdate {
+    pub(crate) project_id: Uuid,
+    pub(crate) asset_id: Uuid,
+    pub(crate) variant_ids: Vec<Uuid>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(super) struct VariantCandidateRecord {
+    pub(super) id: Uuid,
+    pub(super) relative_path: String,
+    pub(super) name: String,
+    pub(super) extension: Option<String>,
+    pub(super) category: FileCategory,
+    pub(super) origin: AssetOrigin,
+    pub(super) status: String,
+    pub(super) tags: Vec<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(super) struct VariantCandidateRecordsPage {
+    pub(super) items: Vec<VariantCandidateRecord>,
+    pub(super) total_items: u64,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub(crate) enum ImportStatus {

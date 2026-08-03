@@ -14,6 +14,23 @@ export function installTauriBrowserMocks() {
   const projects: Project[] = [];
   const inventoryScans: Record<string, Array<Record<string, unknown>>> = {};
   const managedAssets: Array<Record<string, unknown>> = [];
+  const variantIdsByAsset = new Map<string, string[]>();
+  const suggestedVariant = {
+    category: 'image',
+    extension: 'png',
+    id: 'cc1ab2f3-91af-4190-b87a-2212d09ff66c',
+    name: 'logo-dark.png',
+    origin: 'discovered',
+    reasons: {
+      compatibleType: true,
+      matchingMetadata: false,
+      sameAssetRoot: true,
+      sameFolder: true,
+      similarName: true,
+    },
+    relativePath: 'assets/branding/logo-dark.png',
+    status: 'active',
+  };
 
   mockIPC((command, args) => {
     if (command === 'health_check') {
@@ -157,6 +174,52 @@ export function installTauriBrowserMocks() {
         totalItems: items.length,
         totalPages: 1,
       };
+    }
+    if (command === 'get_asset') {
+      const input = commandArguments(args).input as { assetId: string };
+      return managedAssets.find((asset) => asset.id === input.assetId);
+    }
+    if (command === 'list_asset_variants') {
+      const input = commandArguments(args).input as { assetId: string };
+      return (variantIdsByAsset.get(input.assetId) ?? []).includes(
+        suggestedVariant.id,
+      )
+        ? [suggestedVariant]
+        : [];
+    }
+    if (command === 'list_asset_variant_candidates') {
+      const input = commandArguments(args).input as {
+        excludedIds: string[];
+        page: number;
+        pageSize: number;
+      };
+      const items = input.excludedIds.includes(suggestedVariant.id)
+        ? []
+        : [suggestedVariant];
+      return {
+        assetRoot: 'assets',
+        currentFolder: 'assets/branding',
+        hasMore: false,
+        items,
+        page: input.page,
+        pageSize: input.pageSize,
+        totalItems: items.length,
+        totalPages: items.length ? 1 : 0,
+      };
+    }
+    if (command === 'resolve_asset_variant_path') {
+      return suggestedVariant;
+    }
+    if (command === 'update_asset_variants') {
+      const input = commandArguments(args).input as {
+        assetId: string;
+        variantIds: string[];
+      };
+      variantIdsByAsset.set(input.assetId, input.variantIds);
+      const asset = managedAssets.find((item) => item.id === input.assetId);
+      if (!asset) throw new Error('Missing managed asset in E2E mock');
+      asset.variantIds = input.variantIds;
+      return asset;
     }
     if (command === 'preview_asset_import') {
       return {

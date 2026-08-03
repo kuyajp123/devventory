@@ -305,7 +305,7 @@ fn normalize_relative_directory(value: &str) -> Result<String, AssetError> {
     normalize_relative(value, true)
 }
 
-fn normalize_relative_file(value: &str) -> Result<String, AssetError> {
+pub(super) fn normalize_relative_file(value: &str) -> Result<String, AssetError> {
     normalize_relative(value, false)
 }
 

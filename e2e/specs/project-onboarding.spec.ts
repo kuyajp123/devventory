@@ -60,5 +60,22 @@ test('onboards a local project and shows its saved details', async ({
   await page.getByRole('button', { name: 'Choose source file' }).click();
   await expect(page.getByText('Safe metadata preview')).toBeVisible();
   await page.getByRole('button', { name: 'Import and index' }).click();
-  await expect(page.getByRole('link', { name: 'logo.png' })).toBeVisible();
+  const importedAsset = page.getByRole('link', { name: 'logo.png' });
+  await expect(importedAsset).toBeVisible();
+  await importedAsset.click();
+  await expect(
+    page.getByRole('heading', { name: 'Manage variants' }),
+  ).toBeVisible();
+  await page
+    .getByRole('button', { name: 'Add assets/branding/logo-dark.png' })
+    .click();
+  await expect(
+    page.getByRole('button', {
+      name: 'Remove assets/branding/logo-dark.png',
+    }),
+  ).toBeVisible();
+  await page.getByRole('button', { name: 'Save variants' }).click();
+  await expect(
+    page.getByRole('alertdialog', { name: 'Asset variants saved' }),
+  ).toBeVisible();
 });

@@ -8,9 +8,9 @@ mod service;
 
 pub(crate) use error::ProjectError;
 pub(crate) use filesystem::LocalProjectFilesystem;
-pub(crate) use model::ResolvedProjectScanTarget;
 #[cfg(test)]
 pub(crate) use model::{CreateProject, ProjectType, ResolvedWatchedLocation};
+pub(crate) use model::{ResolvedProjectScanTarget, WatchedLocationScanTarget};
 pub(crate) use repository::SqliteProjectRepository;
 pub(crate) use service::ProjectService;
 

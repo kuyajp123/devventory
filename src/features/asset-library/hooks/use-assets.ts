@@ -1,10 +1,17 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import {
+  keepPreviousData,
+  useMutation,
+  useQuery,
+  useQueryClient,
+} from '@tanstack/react-query';
 import { fileInventoryKeys } from '@/features/file-inventory';
 import type {
   AssetFilters,
   ImportAssetInput,
   QuickAction,
   UpdateAssetMetadataInput,
+  UpdateAssetVariantsInput,
+  VariantCandidateFilters,
 } from '../models/asset';
 import { assetLibraryGateway } from '../services/asset-library.gateway';
 
@@ -15,6 +22,21 @@ export const assetKeys = {
     ['asset-library', projectId, filters] as const,
   detail: (projectId: string, assetId: string) =>
     ['asset-library', projectId, 'detail', assetId] as const,
+  variants: (projectId: string, assetId: string) =>
+    ['asset-library', projectId, 'detail', assetId, 'variants'] as const,
+  variantCandidates: (
+    projectId: string,
+    assetId: string,
+    filters: VariantCandidateFilters,
+  ) =>
+    [
+      'asset-library',
+      projectId,
+      'detail',
+      assetId,
+      'variant-candidates',
+      filters,
+    ] as const,
 };
 
 export function useAssetsQuery(projectId: string, filters: AssetFilters) {
@@ -30,6 +52,29 @@ export function useAssetQuery(projectId: string, assetId: string) {
     enabled: Boolean(projectId && assetId),
     queryKey: assetKeys.detail(projectId, assetId),
     queryFn: () => assetLibraryGateway.get(projectId, assetId),
+  });
+}
+
+export function useAssetVariantsQuery(projectId: string, assetId: string) {
+  return useQuery({
+    enabled: Boolean(projectId && assetId),
+    queryKey: assetKeys.variants(projectId, assetId),
+    queryFn: () => assetLibraryGateway.listVariants(projectId, assetId),
+  });
+}
+
+export function useVariantCandidatesQuery(
+  projectId: string,
+  assetId: string,
+  filters: VariantCandidateFilters,
+  enabled = true,
+) {
+  return useQuery({
+    enabled: enabled && Boolean(projectId && assetId),
+    placeholderData: keepPreviousData,
+    queryKey: assetKeys.variantCandidates(projectId, assetId, filters),
+    queryFn: () =>
+      assetLibraryGateway.listVariantCandidates(projectId, assetId, filters),
   });
 }
 
@@ -73,6 +118,41 @@ export function useUpdateAssetMetadataMutation(projectId: string) {
   return useMutation({
     mutationFn: (input: Omit<UpdateAssetMetadataInput, 'projectId'>) =>
       assetLibraryGateway.updateMetadata({ ...input, projectId }),
+    onSuccess: async (asset) => {
+      queryClient.setQueryData(assetKeys.detail(projectId, asset.id), asset);
+      await queryClient.invalidateQueries({
+        queryKey: assetKeys.project(projectId),
+      });
+    },
+  });
+}
+
+export function useResolveVariantPathMutation(
+  projectId: string,
+  assetId: string,
+) {
+  return useMutation({
+    mutationFn: ({
+      relativePath,
+      selectedVariantIds,
+    }: {
+      relativePath: string;
+      selectedVariantIds: string[];
+    }) =>
+      assetLibraryGateway.resolveVariantPath(
+        projectId,
+        assetId,
+        relativePath,
+        selectedVariantIds,
+      ),
+  });
+}
+
+export function useUpdateAssetVariantsMutation(projectId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (input: Omit<UpdateAssetVariantsInput, 'projectId'>) =>
+      assetLibraryGateway.updateVariants({ ...input, projectId }),
     onSuccess: async (asset) => {
       queryClient.setQueryData(assetKeys.detail(projectId, asset.id), asset);
       await queryClient.invalidateQueries({

@@ -117,4 +117,129 @@ describe('assetLibraryGateway', () => {
       assetLibraryGateway.runAction(projectId, assetId, 'copy_relative_path'),
     ).resolves.toBe('assets/logo.png');
   });
+
+  it('requests a bounded server-paginated variant candidate page', async () => {
+    const projectId = '30af17bd-2dd6-4b89-a5e7-8517191815a7';
+    const assetId = '5d6c9c89-0c1d-45a7-ad97-72c7a3ca03dc';
+    mockIPC((command, args) => {
+      expect(command).toBe('list_asset_variant_candidates');
+      expect(args).toEqual({
+        input: {
+          assetId,
+          excludedIds: [],
+          page: 2,
+          pageSize: 25,
+          projectId,
+          scope: 'asset_root',
+          search: 'branding/logo',
+        },
+      });
+      return {
+        assetRoot: 'assets',
+        currentFolder: 'assets/branding',
+        hasMore: true,
+        items: [],
+        page: 2,
+        pageSize: 25,
+        totalItems: 143,
+        totalPages: 6,
+      };
+    });
+
+    await expect(
+      assetLibraryGateway.listVariantCandidates(projectId, assetId, {
+        excludedIds: [],
+        page: 2,
+        pageSize: 25,
+        scope: 'asset_root',
+        search: 'branding/logo',
+      }),
+    ).resolves.toMatchObject({ hasMore: true, totalItems: 143 });
+  });
+
+  it('resolves an exact manual path and saves only variant relationships', async () => {
+    const projectId = '30af17bd-2dd6-4b89-a5e7-8517191815a7';
+    const assetId = '5d6c9c89-0c1d-45a7-ad97-72c7a3ca03dc';
+    const variantId = '02140f34-e3ff-4adf-9609-26f64e4ea316';
+    const commands: string[] = [];
+    mockIPC((command, args) => {
+      commands.push(command);
+      if (command === 'resolve_asset_variant_path') {
+        expect(args).toEqual({
+          input: {
+            assetId,
+            projectId,
+            relativePath: 'assets/branding/logo-dark.png',
+            selectedVariantIds: [],
+          },
+        });
+        return variantCandidate(variantId, 'assets/branding/logo-dark.png');
+      }
+      expect(command).toBe('update_asset_variants');
+      expect(args).toEqual({
+        input: { assetId, projectId, variantIds: [variantId] },
+      });
+      return assetResponse(assetId, projectId, [variantId]);
+    });
+
+    await assetLibraryGateway.resolveVariantPath(
+      projectId,
+      assetId,
+      'assets/branding/logo-dark.png',
+      [],
+    );
+    await assetLibraryGateway.updateVariants({
+      assetId,
+      projectId,
+      variantIds: [variantId],
+    });
+    expect(commands).toEqual([
+      'resolve_asset_variant_path',
+      'update_asset_variants',
+    ]);
+  });
 });
+
+function variantCandidate(id: string, relativePath: string) {
+  return {
+    category: 'image',
+    extension: 'png',
+    id,
+    name: relativePath.split('/').slice(-1)[0],
+    origin: 'discovered',
+    reasons: {
+      compatibleType: true,
+      matchingMetadata: false,
+      sameAssetRoot: true,
+      sameFolder: true,
+      similarName: true,
+    },
+    relativePath,
+    status: 'active',
+  };
+}
+
+function assetResponse(
+  assetId: string,
+  projectId: string,
+  variantIds: string[],
+) {
+  return {
+    category: 'image',
+    extension: 'png',
+    favorite: false,
+    id: assetId,
+    mimeType: 'image/png',
+    modifiedAtMs: null,
+    name: 'logo.png',
+    note: null,
+    origin: 'discovered',
+    projectId,
+    relativePath: 'assets/branding/logo.png',
+    sizeBytes: 1,
+    status: 'active',
+    tags: [],
+    updatedAt: '2026-08-02T00:00:00.000Z',
+    variantIds,
+  };
+}

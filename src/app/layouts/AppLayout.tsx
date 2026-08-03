@@ -6,6 +6,8 @@ import {
   IconHome,
   IconLayoutSidebarLeftCollapse,
   IconLayoutSidebarLeftExpand,
+  IconMoon,
+  IconSun,
 } from '@tabler/icons-react';
 import { NavLink, Outlet } from 'react-router';
 import { ICON_SIZE, ICON_STROKE } from '@/shared/constants/icon.constants';
@@ -17,7 +19,11 @@ const navigationItems = [
   { icon: IconActivityHeartbeat, label: 'Diagnostics', to: '/diagnostics' },
 ];
 
-const themeOptions = ['light', 'dark', 'system'] as const;
+const themeOptions = [
+  { icon: IconDeviceDesktop, label: 'system', value: 'system' },
+  { icon: IconSun, label: 'light', value: 'light' },
+  { icon: IconMoon, label: 'dark', value: 'dark' },
+] as const;
 
 interface ThemeSelectorProps {
   onThemeChange: (theme: string) => void;
@@ -26,19 +32,36 @@ interface ThemeSelectorProps {
 
 function ThemeSelector({ onThemeChange, theme }: ThemeSelectorProps) {
   return (
-    <div aria-label="Color theme" className="flex flex-wrap gap-1" role="group">
-      {themeOptions.map((option) => (
-        <Button
-          key={option}
-          aria-pressed={theme === option}
-          className="capitalize"
-          onPress={() => onThemeChange(option)}
-          size="sm"
-          variant={theme === option ? 'secondary' : 'ghost'}
-        >
-          {option}
-        </Button>
-      ))}
+    <div
+      aria-label="Color theme"
+      className="inline-flex w-full items-center justify-between rounded-full border border-divider bg-surface p-1 shadow-xs"
+      role="group"
+    >
+      {themeOptions.map((option) => {
+        const isActive = theme === option.value;
+        return (
+          <Button
+            key={option.value}
+            aria-label={`${option.label} theme`}
+            aria-pressed={isActive}
+            className={`flex-1 rounded-full py-1.5 transition-colors ${
+              isActive
+                ? 'bg-accent-soft text-accent-soft-foreground shadow-xs'
+                : 'text-muted hover:bg-surface-secondary hover:text-foreground'
+            }`}
+            isIconOnly
+            onPress={() => onThemeChange(option.value)}
+            size="sm"
+            variant="ghost"
+          >
+            <option.icon
+              aria-hidden="true"
+              size={ICON_SIZE.button}
+              stroke={ICON_STROKE}
+            />
+          </Button>
+        );
+      })}
     </div>
   );
 }
@@ -91,9 +114,9 @@ export function AppLayout() {
     >
       <aside
         aria-label="Primary navigation"
-        className="hidden border-r border-divider bg-surface px-3 py-5 transition-[width] lg:flex lg:flex-col"
+        className="sticky top-0 hidden h-screen max-h-screen flex-col border-r border-divider bg-surface px-3 py-5 transition-[width] lg:flex"
       >
-        <div className="flex min-h-11 items-center justify-between gap-2 px-2">
+        <div className="flex min-h-11 shrink-0 items-center justify-between gap-2 px-2">
           <span
             className={
               isNavigationCollapsed ? 'sr-only' : 'font-semibold tracking-tight'
@@ -128,7 +151,7 @@ export function AppLayout() {
           </Button>
         </div>
 
-        <nav className="mt-6 space-y-1">
+        <nav className="mt-6 flex-1 space-y-1 overflow-y-auto">
           {navigationItems.map((item) => (
             <NavigationLink
               isCollapsed={isNavigationCollapsed}
@@ -141,26 +164,48 @@ export function AppLayout() {
         <div
           className={
             isNavigationCollapsed
-              ? 'mt-auto flex justify-center'
-              : 'mt-auto px-1'
+              ? 'mt-auto flex shrink-0 justify-center pt-4'
+              : 'mt-auto shrink-0 px-1 pt-4'
           }
         >
           {isNavigationCollapsed ? (
             <Button
-              aria-label="Use system theme"
+              aria-label={`Current theme: ${theme}. Click to change theme.`}
               isIconOnly
-              onPress={() => setTheme('system')}
+              onPress={() => {
+                const nextTheme =
+                  theme === 'light'
+                    ? 'dark'
+                    : theme === 'dark'
+                      ? 'system'
+                      : 'light';
+                setTheme(nextTheme);
+              }}
               size="sm"
               variant="ghost"
             >
-              <IconDeviceDesktop
-                aria-hidden="true"
-                size={ICON_SIZE.button}
-                stroke={ICON_STROKE}
-              />
+              {theme === 'light' ? (
+                <IconSun
+                  aria-hidden="true"
+                  size={ICON_SIZE.button}
+                  stroke={ICON_STROKE}
+                />
+              ) : theme === 'dark' ? (
+                <IconMoon
+                  aria-hidden="true"
+                  size={ICON_SIZE.button}
+                  stroke={ICON_STROKE}
+                />
+              ) : (
+                <IconDeviceDesktop
+                  aria-hidden="true"
+                  size={ICON_SIZE.button}
+                  stroke={ICON_STROKE}
+                />
+              )}
             </Button>
           ) : (
-            <ThemeSelector onThemeChange={setTheme} theme={theme} />
+            <ThemeSelector onThemeChange={setTheme} theme={theme ?? 'system'} />
           )}
         </div>
       </aside>
@@ -169,7 +214,7 @@ export function AppLayout() {
         <header className="border-b border-divider bg-surface px-4 py-3 lg:hidden">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <span className="font-semibold tracking-tight">Devventory</span>
-            <ThemeSelector onThemeChange={setTheme} theme={theme} />
+            <ThemeSelector onThemeChange={setTheme} theme={theme ?? 'system'} />
           </div>
           <nav aria-label="Primary navigation" className="mt-3 flex gap-2">
             {navigationItems.map((item) => (

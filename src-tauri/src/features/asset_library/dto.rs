@@ -5,12 +5,16 @@ use crate::features::file_inventory::FileCategory;
 
 use super::error::AssetError;
 use super::model::{
-    AssetMetadataUpdate, AssetOrigin, AssetQuery, AssetSortField, CollisionChoice, ImportAsset,
-    QuickAction, SortDirection,
+    AssetMetadataUpdate, AssetOrigin, AssetQuery, AssetSortField, AssetVariantsUpdate,
+    CollisionChoice, ImportAsset, QuickAction, SortDirection, VariantCandidateQuery,
+    VariantCandidateScope, VariantPathInput,
 };
 
 const MAX_PAGE_SIZE: u32 = 100;
 const MAX_SEARCH_LENGTH: usize = 128;
+const MAX_VARIANT_PAGE_SIZE: u32 = 50;
+const MAX_VARIANTS: usize = 20;
+const MAX_RELATIVE_PATH_LENGTH: usize = 1_024;
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -129,6 +133,110 @@ impl TryFrom<UpdateAssetMetadataInput> for AssetMetadataUpdate {
             tags: input.tags,
             note: input.note,
             favorite: input.favorite,
+            variant_ids: input
+                .variant_ids
+                .iter()
+                .map(|value| parse_uuid(value))
+                .collect::<Result<_, _>>()?,
+        })
+    }
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub(crate) struct VariantCandidateQueryInput {
+    project_id: String,
+    asset_id: String,
+    scope: Option<VariantCandidateScope>,
+    search: Option<String>,
+    #[serde(default)]
+    excluded_ids: Vec<String>,
+    page: u32,
+    page_size: u32,
+}
+
+impl TryFrom<VariantCandidateQueryInput> for VariantCandidateQuery {
+    type Error = AssetError;
+
+    fn try_from(input: VariantCandidateQueryInput) -> Result<Self, Self::Error> {
+        let search = normalize_optional(input.search);
+        if input.page == 0
+            || input.page_size == 0
+            || input.page_size > MAX_VARIANT_PAGE_SIZE
+            || input.excluded_ids.len() > MAX_VARIANTS
+            || search
+                .as_ref()
+                .is_some_and(|value| value.chars().count() > MAX_SEARCH_LENGTH)
+        {
+            return Err(AssetError::InvalidFilter);
+        }
+        Ok(Self {
+            project_id: parse_uuid(&input.project_id)?,
+            asset_id: parse_uuid(&input.asset_id)?,
+            scope: input.scope.unwrap_or(VariantCandidateScope::Suggested),
+            search,
+            excluded_ids: input
+                .excluded_ids
+                .iter()
+                .map(|value| parse_uuid(value))
+                .collect::<Result<_, _>>()?,
+            page: input.page,
+            page_size: input.page_size,
+        })
+    }
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub(crate) struct ResolveVariantPathInput {
+    project_id: String,
+    asset_id: String,
+    relative_path: String,
+    #[serde(default)]
+    selected_variant_ids: Vec<String>,
+}
+
+impl TryFrom<ResolveVariantPathInput> for VariantPathInput {
+    type Error = AssetError;
+
+    fn try_from(input: ResolveVariantPathInput) -> Result<Self, Self::Error> {
+        if input.relative_path.chars().count() > MAX_RELATIVE_PATH_LENGTH
+            || input.selected_variant_ids.len() > MAX_VARIANTS
+        {
+            return Err(AssetError::InvalidMetadata);
+        }
+        Ok(Self {
+            project_id: parse_uuid(&input.project_id)?,
+            asset_id: parse_uuid(&input.asset_id)?,
+            relative_path: input.relative_path,
+            selected_variant_ids: input
+                .selected_variant_ids
+                .iter()
+                .map(|value| parse_uuid(value))
+                .collect::<Result<_, _>>()?,
+        })
+    }
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub(crate) struct UpdateAssetVariantsInput {
+    project_id: String,
+    asset_id: String,
+    #[serde(default)]
+    variant_ids: Vec<String>,
+}
+
+impl TryFrom<UpdateAssetVariantsInput> for AssetVariantsUpdate {
+    type Error = AssetError;
+
+    fn try_from(input: UpdateAssetVariantsInput) -> Result<Self, Self::Error> {
+        if input.variant_ids.len() > MAX_VARIANTS {
+            return Err(AssetError::InvalidMetadata);
+        }
+        Ok(Self {
+            project_id: parse_uuid(&input.project_id)?,
+            asset_id: parse_uuid(&input.asset_id)?,
             variant_ids: input
                 .variant_ids
                 .iter()

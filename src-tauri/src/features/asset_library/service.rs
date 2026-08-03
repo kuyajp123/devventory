@@ -1,4 +1,4 @@
-use std::collections::{HashMap, HashSet};
+use std::collections::{HashMap, HashSet, VecDeque};
 use std::sync::{Arc, Mutex};
 use std::time::Instant;
 
@@ -8,10 +8,12 @@ use crate::features::file_inventory::{categorize_path, path_extension, path_mime
 use crate::features::projects::ProjectService;
 
 use super::error::AssetError;
-use super::filesystem::{portable_path, LocalAssetFilesystem};
+use super::filesystem::{normalize_relative_file, portable_path, LocalAssetFilesystem};
 use super::model::{
-    ActionTarget, Asset, AssetMetadataUpdate, AssetPage, AssetPreview, AssetQuery, CollisionChoice,
-    DuplicateMatch, ImportAsset, ImportResult, ImportStatus, ImportedFileRecord, SourceFile,
+    ActionTarget, Asset, AssetMetadataUpdate, AssetPage, AssetPreview, AssetQuery,
+    AssetVariantsUpdate, CollisionChoice, DuplicateMatch, ImportAsset, ImportResult, ImportStatus,
+    ImportedFileRecord, SourceFile, VariantCandidate, VariantCandidatePage, VariantCandidateQuery,
+    VariantCandidateRecord, VariantMatchReasons, VariantPathInput,
 };
 use super::repository::{AssetRepository, SqliteAssetRepository};
 
@@ -52,6 +54,109 @@ impl AssetService {
             .find(project_id, asset_id)
             .await?
             .ok_or(AssetError::NotFound)
+    }
+
+    pub(crate) async fn variant_candidates(
+        &self,
+        query: VariantCandidateQuery,
+    ) -> Result<VariantCandidatePage, AssetError> {
+        let current = self.get(query.project_id, query.asset_id).await?;
+        let target = self.project_service.scan_target(query.project_id).await?;
+        let current_folder = parent_path(&current.relative_path);
+        let asset_root = effective_asset_root(&current.relative_path, &target.watched_locations);
+        let records = self
+            .repository
+            .variant_candidates(&query, &current, &asset_root, &current_folder)
+            .await?;
+        let total_pages = u32::try_from(records.total_items.div_ceil(u64::from(query.page_size)))
+            .map_err(|_| AssetError::InvalidPersistedData)?;
+        let items = records
+            .items
+            .into_iter()
+            .map(|record| candidate_from_record(record, &current, &asset_root, &current_folder))
+            .collect();
+        Ok(VariantCandidatePage {
+            items,
+            total_items: records.total_items,
+            page: query.page,
+            page_size: query.page_size,
+            total_pages,
+            has_more: query.page < total_pages,
+            asset_root,
+            current_folder,
+        })
+    }
+
+    pub(crate) async fn variants(
+        &self,
+        project_id: Uuid,
+        asset_id: Uuid,
+    ) -> Result<Vec<VariantCandidate>, AssetError> {
+        let current = self.get(project_id, asset_id).await?;
+        let target = self.project_service.scan_target(project_id).await?;
+        let current_folder = parent_path(&current.relative_path);
+        let asset_root = effective_asset_root(&current.relative_path, &target.watched_locations);
+        Ok(self
+            .repository
+            .variants_for_asset(project_id, asset_id)
+            .await?
+            .into_iter()
+            .map(|record| candidate_from_record(record, &current, &asset_root, &current_folder))
+            .collect())
+    }
+
+    pub(crate) async fn resolve_variant_path(
+        &self,
+        input: VariantPathInput,
+    ) -> Result<VariantCandidate, AssetError> {
+        let relative_path = normalize_relative_file(&input.relative_path).map_err(|error| {
+            if matches!(error, AssetError::DestinationOutsideRoot) {
+                AssetError::VariantPathOutsideRoot
+            } else {
+                AssetError::VariantNotIndexed
+            }
+        })?;
+        let current = self.get(input.project_id, input.asset_id).await?;
+        let record = self
+            .repository
+            .variant_by_relative_path(input.project_id, &relative_path)
+            .await?
+            .ok_or(AssetError::VariantNotIndexed)?;
+        if record.id == input.asset_id {
+            return Err(AssetError::VariantSelfReference);
+        }
+        if input.selected_variant_ids.contains(&record.id) {
+            return Err(AssetError::VariantAlreadySelected);
+        }
+        if record.status != "active" {
+            return Err(AssetError::VariantMissing);
+        }
+        let target = self.project_service.scan_target(input.project_id).await?;
+        let resolved = self
+            .project_service
+            .resolve_scan_target(&target, None)?
+            .ok_or(AssetError::VariantMissing)?;
+        let filesystem = self.filesystem;
+        let root = resolved.root_path;
+        let relative_for_worker = relative_path.clone();
+        tokio::task::spawn_blocking(move || {
+            filesystem.validate_action_path(&root, &relative_for_worker)
+        })
+        .await
+        .map_err(|_| AssetError::VariantMissing)?
+        .map_err(|_| AssetError::VariantMissing)?;
+
+        let mut proposed = input.selected_variant_ids;
+        proposed.push(record.id);
+        self.validate_variant_selection(&current, &proposed).await?;
+        let current_folder = parent_path(&current.relative_path);
+        let asset_root = effective_asset_root(&current.relative_path, &target.watched_locations);
+        Ok(candidate_from_record(
+            record,
+            &current,
+            &asset_root,
+            &current_folder,
+        ))
     }
 
     pub(crate) async fn preview(
@@ -208,17 +313,26 @@ impl AssetService {
         &self,
         mut update: AssetMetadataUpdate,
     ) -> Result<Asset, AssetError> {
+        let project_lock = self.project_lock(update.project_id)?;
+        let _guard = project_lock.lock().await;
         update.tags = normalize_tags(update.tags)?;
         update.note = normalize_note(update.note)?;
-        if update.variant_ids.len() > MAX_VARIANTS || update.variant_ids.contains(&update.asset_id)
-        {
-            return Err(AssetError::InvalidMetadata);
-        }
-        let unique = update.variant_ids.iter().copied().collect::<HashSet<_>>();
-        if unique.len() != update.variant_ids.len() {
-            return Err(AssetError::InvalidMetadata);
-        }
+        let current = self.get(update.project_id, update.asset_id).await?;
+        self.validate_variant_selection(&current, &update.variant_ids)
+            .await?;
         self.repository.update_metadata(update).await
+    }
+
+    pub(crate) async fn update_variants(
+        &self,
+        update: AssetVariantsUpdate,
+    ) -> Result<Asset, AssetError> {
+        let project_lock = self.project_lock(update.project_id)?;
+        let _guard = project_lock.lock().await;
+        let current = self.get(update.project_id, update.asset_id).await?;
+        self.validate_variant_selection(&current, &update.variant_ids)
+            .await?;
+        self.repository.update_variants(update).await
     }
 
     pub(crate) async fn action_target(
@@ -357,6 +471,163 @@ impl AssetService {
         }
         Ok(None)
     }
+
+    async fn validate_variant_selection(
+        &self,
+        current: &Asset,
+        variant_ids: &[Uuid],
+    ) -> Result<(), AssetError> {
+        if variant_ids.len() > MAX_VARIANTS {
+            return Err(AssetError::InvalidMetadata);
+        }
+        if variant_ids.contains(&current.id) {
+            return Err(AssetError::VariantSelfReference);
+        }
+        let unique = variant_ids.iter().copied().collect::<HashSet<_>>();
+        if unique.len() != variant_ids.len() {
+            return Err(AssetError::VariantAlreadySelected);
+        }
+        let records = self
+            .repository
+            .variant_records_by_ids(current.project_id, variant_ids)
+            .await?;
+        if records.len() != unique.len() {
+            return Err(AssetError::VariantNotIndexed);
+        }
+        let existing = current.variant_ids.iter().copied().collect::<HashSet<_>>();
+        if records
+            .iter()
+            .any(|record| record.status != "active" && !existing.contains(&record.id))
+        {
+            return Err(AssetError::VariantMissing);
+        }
+
+        let mut graph = adjacency_map(
+            self.repository
+                .relation_edges_excluding(current.project_id, current.id)
+                .await?,
+        );
+        for id in variant_ids.iter().filter(|id| existing.contains(id)) {
+            add_edge(&mut graph, current.id, *id);
+        }
+        for id in variant_ids.iter().filter(|id| !existing.contains(id)) {
+            if is_reachable(&graph, current.id, *id) {
+                return Err(AssetError::VariantCircular);
+            }
+            add_edge(&mut graph, current.id, *id);
+        }
+        Ok(())
+    }
+}
+
+fn effective_asset_root(
+    relative_path: &str,
+    watched_locations: &[crate::features::projects::WatchedLocationScanTarget],
+) -> String {
+    watched_locations
+        .iter()
+        .map(|location| location.relative_path.as_str())
+        .filter(|location| *location != "." && path_is_within(relative_path, location))
+        .max_by_key(|location| location.split('/').count())
+        .map(ToOwned::to_owned)
+        .or_else(|| {
+            relative_path
+                .split_once('/')
+                .map(|(root, _)| root.to_owned())
+        })
+        .unwrap_or_else(|| ".".to_owned())
+}
+
+fn parent_path(relative_path: &str) -> String {
+    relative_path
+        .rsplit_once('/')
+        .map_or_else(|| ".".to_owned(), |(parent, _)| parent.to_owned())
+}
+
+fn path_is_within(relative_path: &str, root: &str) -> bool {
+    root == "."
+        || relative_path == root
+        || relative_path
+            .strip_prefix(root)
+            .is_some_and(|suffix| suffix.starts_with('/'))
+}
+
+fn candidate_from_record(
+    record: VariantCandidateRecord,
+    current: &Asset,
+    asset_root: &str,
+    current_folder: &str,
+) -> VariantCandidate {
+    let current_stem = file_stem(&current.name);
+    let candidate_stem = file_stem(&record.name);
+    let current_tags = current
+        .tags
+        .iter()
+        .map(|tag| tag.to_lowercase())
+        .collect::<HashSet<_>>();
+    let reasons = VariantMatchReasons {
+        same_folder: parent_path(&record.relative_path) == current_folder,
+        same_asset_root: path_is_within(&record.relative_path, asset_root),
+        similar_name: current_stem.len() >= 2
+            && candidate_stem.len() >= 2
+            && (current_stem.contains(&candidate_stem) || candidate_stem.contains(&current_stem)),
+        compatible_type: record.category == current.category
+            || record.extension.as_deref() == current.extension.as_deref(),
+        matching_metadata: record
+            .tags
+            .iter()
+            .any(|tag| current_tags.contains(&tag.to_lowercase())),
+    };
+    VariantCandidate {
+        id: record.id,
+        relative_path: record.relative_path,
+        name: record.name,
+        extension: record.extension,
+        category: record.category,
+        origin: record.origin,
+        status: record.status,
+        reasons,
+    }
+}
+
+fn file_stem(name: &str) -> String {
+    name.rsplit_once('.')
+        .map_or(name, |(stem, _)| stem)
+        .to_lowercase()
+}
+
+fn adjacency_map(edges: Vec<(Uuid, Uuid)>) -> HashMap<Uuid, HashSet<Uuid>> {
+    let mut graph = HashMap::new();
+    for (left, right) in edges {
+        add_edge(&mut graph, left, right);
+    }
+    graph
+}
+
+fn add_edge(graph: &mut HashMap<Uuid, HashSet<Uuid>>, left: Uuid, right: Uuid) {
+    graph.entry(left).or_default().insert(right);
+    graph.entry(right).or_default().insert(left);
+}
+
+fn is_reachable(graph: &HashMap<Uuid, HashSet<Uuid>>, start: Uuid, target: Uuid) -> bool {
+    if start == target {
+        return true;
+    }
+    let mut queue = VecDeque::from([start]);
+    let mut visited = HashSet::from([start]);
+    while let Some(node) = queue.pop_front() {
+        if let Some(neighbors) = graph.get(&node) {
+            for neighbor in neighbors {
+                if *neighbor == target {
+                    return true;
+                }
+                if visited.insert(*neighbor) {
+                    queue.push_back(*neighbor);
+                }
+            }
+        }
+    }
+    false
 }
 
 fn normalize_tags(tags: Vec<String>) -> Result<Vec<String>, AssetError> {
