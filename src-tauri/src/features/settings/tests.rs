@@ -1,4 +1,4 @@
-use sqlx::query;
+use sqlx::{query, query_scalar};
 use tempfile::TempDir;
 use uuid::Uuid;
 
@@ -70,6 +70,41 @@ async fn treats_query_shaped_setting_keys_as_data() {
     assert_eq!(found.id, id);
     assert_eq!(found.key, key);
     assert_eq!(found.value, "preserved");
+
+    initialization.database.close().await;
+}
+
+#[tokio::test]
+async fn upserts_a_setting_without_creating_duplicates() {
+    let temp = TempDir::new().expect("temporary directory should be created");
+    let initialization = initialize_database(&DatabasePaths::new(temp.path()))
+        .await
+        .expect("database initialization should succeed");
+    let repository = SqliteSettingsRepository::new(initialization.database.pool().clone());
+    let key = "workspace.last_opened_project_id";
+    let first = Uuid::new_v4().to_string();
+    let second = Uuid::new_v4().to_string();
+
+    let inserted = repository
+        .upsert(key, &first)
+        .await
+        .expect("setting insert should succeed");
+    let updated = repository
+        .upsert(key, &second)
+        .await
+        .expect("setting update should succeed");
+
+    let row_count: i64 = query_scalar(
+        "SELECT COUNT(*) FROM application_settings WHERE setting_key = ?",
+    )
+    .bind(key)
+    .fetch_one(initialization.database.pool())
+    .await
+    .expect("setting count should be readable");
+
+    assert_eq!(inserted.id, updated.id);
+    assert_eq!(updated.value, second);
+    assert_eq!(row_count, 1);
 
     initialization.database.close().await;
 }
