@@ -1,12 +1,7 @@
 name: Phase 6 bootstrap
 
 on:
-  push:
-    branches:
-      - agent/phase-6-environment-tracker
-  pull_request:
-    branches:
-      - main
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -15,31 +10,4 @@ jobs:
   bootstrap:
     runs-on: ubuntu-latest
     steps:
-      - name: Check out repository
-        uses: actions/checkout@v7
-        with:
-          fetch-depth: 0
-
-      - name: Set up Node.js
-        uses: actions/setup-node@v6
-        with:
-          node-version: 24
-          cache: npm
-
-      - name: Generate dnd-kit lockfile
-        run: npm install --package-lock-only --ignore-scripts @dnd-kit/core@6.3.1 @dnd-kit/sortable@10.0.0 @dnd-kit/utilities@3.2.2
-
-      - name: Export clean main archive and tree
-        run: |
-          git archive --format=zip --output=devventory-main.zip origin/main
-          git rev-parse 'origin/main^{tree}' > base-tree-sha.txt
-
-      - name: Upload implementation workspace
-        uses: actions/upload-artifact@v4
-        with:
-          name: phase6-bootstrap
-          path: |
-            devventory-main.zip
-            base-tree-sha.txt
-            package.json
-            package-lock.json
+      - run: echo "Waiting for the implementation payload."
