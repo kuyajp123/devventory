@@ -6,6 +6,7 @@ use crate::features::asset_library::{AssetService, LocalAssetFilesystem, SqliteA
 use crate::features::backups::repository::{
     BackupRecordDraft, BackupRepository, SqliteBackupRepository,
 };
+use crate::features::environment_tracker::{EnvironmentService, SqliteEnvironmentRepository};
 use crate::features::file_inventory::{
     FileInventoryService, InventoryRuntime, SqliteFileInventoryRepository,
 };
@@ -17,6 +18,7 @@ use crate::shared::errors::AppError;
 #[derive(Debug)]
 pub(crate) struct AppState {
     database: Database,
+    environment_service: EnvironmentService,
     file_inventory_service: FileInventoryService,
     asset_service: AssetService,
     inventory_runtime: InventoryRuntime,
@@ -61,6 +63,13 @@ impl AppState {
             SqliteFileInventoryRepository::new(database.pool().clone()),
             project_service,
         );
+        let environment_service = EnvironmentService::new(
+            SqliteEnvironmentRepository::new(database.pool().clone()),
+            ProjectService::new(
+                SqliteProjectRepository::new(database.pool().clone()),
+                LocalProjectFilesystem,
+            ),
+        );
         let asset_service = AssetService::new(
             SqliteAssetRepository::new(database.pool().clone()),
             ProjectService::new(
@@ -72,6 +81,7 @@ impl AppState {
 
         Ok(Self {
             database,
+            environment_service,
             asset_service,
             file_inventory_service,
             inventory_runtime: InventoryRuntime::new(),
@@ -98,6 +108,10 @@ impl AppState {
         SqliteSettingsRepository::new(self.database.pool().clone())
     }
 
+    pub(crate) fn environment_service(&self) -> EnvironmentService {
+        self.environment_service.clone()
+    }
+
     pub(crate) fn file_inventory_service(&self) -> FileInventoryService {
         self.file_inventory_service.clone()
     }
@@ -112,7 +126,11 @@ impl AppState {
     ) -> Result<(), crate::features::file_inventory::FileInventoryError> {
         self.refresh_inventory_watchers().await?;
         self.inventory_runtime
-            .start(app, self.file_inventory_service())
+            .start(
+                app,
+                self.file_inventory_service(),
+                self.environment_service(),
+            )
             .await
     }
 

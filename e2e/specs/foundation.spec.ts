@@ -22,6 +22,9 @@ test('navigates through the project-aware application shell', async ({
   await expect(
     sidebar.getByText('File Inventory', { exact: true }),
   ).toBeVisible();
+  await expect(
+    sidebar.getByText('Environment Tracker', { exact: true }),
+  ).toBeVisible();
 
   await page.getByRole('link', { name: 'Diagnostics' }).click();
 

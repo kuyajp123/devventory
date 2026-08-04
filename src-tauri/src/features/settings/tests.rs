@@ -94,13 +94,12 @@ async fn upserts_a_setting_without_creating_duplicates() {
         .await
         .expect("setting update should succeed");
 
-    let row_count: i64 = query_scalar(
-        "SELECT COUNT(*) FROM application_settings WHERE setting_key = ?",
-    )
-    .bind(key)
-    .fetch_one(initialization.database.pool())
-    .await
-    .expect("setting count should be readable");
+    let row_count: i64 =
+        query_scalar("SELECT COUNT(*) FROM application_settings WHERE setting_key = ?")
+            .bind(key)
+            .fetch_one(initialization.database.pool())
+            .await
+            .expect("setting count should be readable");
 
     assert_eq!(inserted.id, updated.id);
     assert_eq!(updated.value, second);

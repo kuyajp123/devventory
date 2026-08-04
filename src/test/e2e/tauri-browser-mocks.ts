@@ -5,6 +5,7 @@ const MOCK_DATABASE_KEY = 'devventory.e2e.database';
 const LAST_OPENED_PROJECT_KEY = 'workspace.last_opened_project_id';
 
 interface MockDatabase {
+  environments: Record<string, Array<Record<string, unknown>>>;
   inventoryScans: Record<string, Array<Record<string, unknown>>>;
   managedAssets: Array<Record<string, unknown>>;
   projects: Project[];
@@ -107,6 +108,203 @@ export function installTauriBrowserMocks() {
       return projects.find(
         (project) => project.id === commandArguments(args).projectId,
       );
+    }
+    if (command === 'list_environments') {
+      const input = commandArguments(args).input as { projectId: string };
+      return database.environments[input.projectId] ?? [];
+    }
+    if (command === 'create_environment') {
+      const input = commandArguments(args).input as {
+        description?: string;
+        name: string;
+        projectId: string;
+      };
+      const items = database.environments[input.projectId] ?? [];
+      const environment = {
+        createdAt: '2026-08-04T00:00:00.000Z',
+        description: input.description || null,
+        id: crypto.randomUUID(),
+        name: input.name,
+        projectId: input.projectId,
+        sortOrder: items.length,
+        sources: [],
+        updatedAt: '2026-08-04T00:00:00.000Z',
+      };
+      items.push(environment);
+      database.environments[input.projectId] = items;
+      persist();
+      return environment;
+    }
+    if (command === 'update_environment') {
+      const input = commandArguments(args).input as {
+        description?: string;
+        environmentId: string;
+        name: string;
+        projectId: string;
+      };
+      const environment = (database.environments[input.projectId] ?? []).find(
+        (item) => item.id === input.environmentId,
+      );
+      if (!environment) throw new Error('Missing environment in E2E mock');
+      environment.name = input.name;
+      environment.description = input.description || null;
+      environment.updatedAt = '2026-08-04T00:00:00.000Z';
+      persist();
+      return environment;
+    }
+    if (command === 'delete_environment') {
+      const input = commandArguments(args).input as {
+        environmentId: string;
+        projectId: string;
+      };
+      database.environments[input.projectId] = (
+        database.environments[input.projectId] ?? []
+      )
+        .filter((item) => item.id !== input.environmentId)
+        .map((item, index) => ({ ...item, sortOrder: index }));
+      persist();
+      return null;
+    }
+    if (command === 'reorder_environments') {
+      const input = commandArguments(args).input as {
+        orderedIds: string[];
+        projectId: string;
+      };
+      const byId = new Map(
+        (database.environments[input.projectId] ?? []).map((item) => [
+          item.id as string,
+          item,
+        ]),
+      );
+      const items = input.orderedIds.map((id, index) => ({
+        ...byId.get(id),
+        sortOrder: index,
+      }));
+      database.environments[input.projectId] = items;
+      persist();
+      return items;
+    }
+    if (command === 'list_environment_source_candidates') {
+      const input = commandArguments(args).input as {
+        page: number;
+        pageSize: number;
+        projectId: string;
+      };
+      return {
+        items: [
+          {
+            id: '7b1cf05b-e89e-485b-846d-0cb0df7d0c19',
+            name: '.env',
+            relativePath: '.env',
+            status: 'active',
+          },
+        ],
+        page: input.page,
+        pageSize: input.pageSize,
+        totalItems: 1,
+        totalPages: 1,
+      };
+    }
+    if (command === 'add_environment_source') {
+      const input = commandArguments(args).input as {
+        environmentId: string;
+        projectId: string;
+        relativePath: string;
+      };
+      const environment = (database.environments[input.projectId] ?? []).find(
+        (item) => item.id === input.environmentId,
+      );
+      if (!environment) throw new Error('Missing environment in E2E mock');
+      const sources = environment.sources as Array<Record<string, unknown>>;
+      const source = {
+        createdAt: '2026-08-04T00:00:00.000Z',
+        environmentId: input.environmentId,
+        id: crypto.randomUUID(),
+        issueCount: 0,
+        lastParsedAt: '2026-08-04T00:00:00.000Z',
+        modifiedAtMs: 1_775_257_200_000,
+        parseStatus: 'parsed',
+        priority: sources.length,
+        projectId: input.projectId,
+        relativePath: input.relativePath,
+        sizeBytes: 128,
+        status: 'ready',
+        updatedAt: '2026-08-04T00:00:00.000Z',
+      };
+      sources.push(source);
+      persist();
+      return source;
+    }
+    if (command === 'remove_environment_source') {
+      const input = commandArguments(args).input as {
+        projectId: string;
+        sourceId: string;
+      };
+      for (const environment of database.environments[input.projectId] ?? []) {
+        const sources = environment.sources as Array<Record<string, unknown>>;
+        environment.sources = sources
+          .filter((source) => source.id !== input.sourceId)
+          .map((source, index) => ({ ...source, priority: index }));
+      }
+      persist();
+      return null;
+    }
+    if (command === 'reorder_environment_sources') {
+      const input = commandArguments(args).input as {
+        environmentId: string;
+        orderedIds: string[];
+        projectId: string;
+      };
+      const environment = (database.environments[input.projectId] ?? []).find(
+        (item) => item.id === input.environmentId,
+      );
+      if (!environment) throw new Error('Missing environment in E2E mock');
+      const byId = new Map(
+        (environment.sources as Array<Record<string, unknown>>).map(
+          (source) => [source.id as string, source],
+        ),
+      );
+      environment.sources = input.orderedIds.map((id, index) => ({
+        ...byId.get(id),
+        priority: index,
+      }));
+      persist();
+      return environment.sources;
+    }
+    if (command === 'get_environment_matrix') {
+      const input = commandArguments(args).input as {
+        page: number;
+        pageSize: number;
+        projectId: string;
+      };
+      const columns = (database.environments[input.projectId] ?? []).map(
+        (environment) => ({
+          environmentId: environment.id,
+          name: environment.name,
+          sortOrder: environment.sortOrder,
+        }),
+      );
+      return {
+        columns,
+        page: input.page,
+        pageSize: input.pageSize,
+        rows: [],
+        totalItems: 0,
+        totalPages: 0,
+      };
+    }
+    if (
+      command === 'refresh_all_environments' ||
+      command === 'refresh_environment' ||
+      command === 'refresh_environment_source'
+    ) {
+      return {
+        issuesFound: 0,
+        keysFound: 0,
+        sourcesParsed: 0,
+        sourcesRequested: 0,
+        sourcesUnavailable: 0,
+      };
     }
     if (command === 'list_project_files') {
       const input = commandArguments(args).input as {
@@ -310,6 +508,7 @@ export function installTauriBrowserMocks() {
 
 function loadDatabase(): MockDatabase {
   const empty: MockDatabase = {
+    environments: {},
     inventoryScans: {},
     managedAssets: [],
     projects: [],
@@ -322,6 +521,7 @@ function loadDatabase(): MockDatabase {
   try {
     const parsed = JSON.parse(stored) as Partial<MockDatabase>;
     return {
+      environments: parsed.environments ?? {},
       inventoryScans: parsed.inventoryScans ?? {},
       managedAssets: parsed.managedAssets ?? [],
       projects: parsed.projects ?? [],
