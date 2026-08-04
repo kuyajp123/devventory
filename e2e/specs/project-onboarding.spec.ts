@@ -52,6 +52,23 @@ test('adds a project through the selector and restores it after reload', async (
   await page.getByRole('button', { name: 'Rescan project' }).click();
   await expect(page.getByText(/Completed: 1 files found/)).toBeVisible();
 
+  await sidebar.getByRole('link', { name: 'Environment Tracker' }).click();
+  await expect(page).toHaveURL('/environments');
+  await expect(
+    page.getByRole('heading', { name: 'Environment Tracker' }),
+  ).toBeVisible();
+  await expect(
+    page
+      .getByRole('main')
+      .getByRole('button', { name: 'Select active project' }),
+  ).toHaveCount(0);
+  await page.getByRole('button', { name: 'Add environment' }).first().click();
+  await page.getByLabel('Environment name').fill('Development');
+  await page.getByRole('button', { name: 'Save environment' }).click();
+  await expect(
+    page.getByText('Development', { exact: true }).first(),
+  ).toBeVisible();
+
   await sidebar.getByRole('link', { name: 'Asset Library' }).click();
   await expect(page).toHaveURL('/assets');
   await expect(

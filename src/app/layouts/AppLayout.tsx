@@ -1,6 +1,7 @@
 import { Button, useTheme } from '@heroui/react';
 import {
   IconActivityHeartbeat,
+  IconBraces,
   IconDeviceDesktop,
   IconFiles,
   IconLayoutDashboard,
@@ -33,6 +34,12 @@ const navigationItems = [
     label: 'File Inventory',
     requiresProject: true,
     to: '/files',
+  },
+  {
+    icon: IconBraces,
+    label: 'Environment Tracker',
+    requiresProject: true,
+    to: '/environments',
   },
   {
     icon: IconActivityHeartbeat,

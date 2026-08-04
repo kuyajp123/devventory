@@ -1,5 +1,6 @@
 import { Navigate, type RouteObject } from 'react-router';
 import { AppHealthPage } from '@/features/app-health';
+import { EnvironmentTrackerPage } from '@/features/environment-tracker';
 import { FileInventoryPage } from '@/features/file-inventory';
 import {
   DashboardPage,
@@ -23,6 +24,7 @@ export const appRoutes: RouteObject[] = [
         element: <ProjectRequiredRoute />,
         children: [
           { path: 'files', Component: FileInventoryPage },
+          { path: 'environments', Component: EnvironmentTrackerPage },
           { path: 'assets', Component: LazyAssetLibraryPage },
           { path: 'assets/:assetId', Component: LazyAssetDetailsPage },
         ],

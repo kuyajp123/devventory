@@ -11,15 +11,19 @@ use features::asset_library::commands::{
     preview_asset_import, resolve_asset_variant_path, run_asset_action, update_asset_metadata,
     update_asset_variants,
 };
+use features::environment_tracker::commands::{
+    add_environment_source, create_environment, delete_environment, get_environment_matrix,
+    list_environment_source_candidates, list_environments, refresh_all_environments,
+    refresh_environment, refresh_environment_source, remove_environment_source,
+    reorder_environment_sources, reorder_environments, update_environment,
+};
 use features::file_inventory::commands::{
     list_project_files, rescan_project, rescan_watched_location,
 };
 use features::projects::commands::{
     create_project, get_project, list_projects, scan_project_root, validate_project_root,
 };
-use features::settings::commands::{
-    get_last_opened_project_id, save_last_opened_project_id,
-};
+use features::settings::commands::{get_last_opened_project_id, save_last_opened_project_id};
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -49,6 +53,19 @@ pub fn run() {
             get_project,
             get_last_opened_project_id,
             save_last_opened_project_id,
+            list_environments,
+            create_environment,
+            update_environment,
+            delete_environment,
+            reorder_environments,
+            list_environment_source_candidates,
+            add_environment_source,
+            remove_environment_source,
+            reorder_environment_sources,
+            refresh_environment_source,
+            refresh_environment,
+            refresh_all_environments,
+            get_environment_matrix,
             list_project_files,
             rescan_project,
             rescan_watched_location,
