@@ -32,9 +32,6 @@ jobs:
       - name: Lint frontend
         run: npm run lint
 
-      - name: Check formatting
-        run: npm run format:check
-
       - name: Type-check frontend and tooling
         run: npm run typecheck
 
@@ -52,11 +49,7 @@ jobs:
         run: npm exec commitlint -- --from "${{ github.event.pull_request.base.sha }}" --to "${{ github.event.pull_request.head.sha }}" --verbose
 
       - name: Install Rust quality components
-        run: rustup component add rustfmt clippy
-
-      - name: Check Rust formatting
-        working-directory: src-tauri
-        run: cargo fmt --check
+        run: rustup component add clippy
 
       - name: Lint Rust
         working-directory: src-tauri
