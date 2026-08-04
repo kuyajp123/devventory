@@ -12,6 +12,7 @@ use tokio::sync::mpsc;
 use tokio::time::{sleep_until, Instant};
 use uuid::Uuid;
 
+use crate::features::environment_tracker::EnvironmentService;
 use crate::features::projects::ResolvedProjectScanTarget;
 
 use super::error::FileInventoryError;
@@ -19,6 +20,7 @@ use super::model::{ScanRun, ScanType};
 use super::service::FileInventoryService;
 
 pub(crate) const INVENTORY_CHANGED_EVENT: &str = "inventory://changed";
+pub(crate) const ENVIRONMENT_CHANGED_EVENT: &str = "environment://changed";
 const WATCH_CHANNEL_CAPACITY: usize = 512;
 const WATCH_DEBOUNCE: Duration = Duration::from_millis(350);
 
@@ -98,6 +100,21 @@ impl EventCoalescer {
         ids
     }
 
+    fn changed_paths(&self, project_id: Uuid) -> Vec<PathBuf> {
+        let mut paths = self
+            .changes
+            .keys()
+            .filter(|(candidate, _)| *candidate == project_id)
+            .map(|(_, path)| path.clone())
+            .collect::<Vec<_>>();
+        if paths.iter().any(|path| path.as_os_str().is_empty()) {
+            return Vec::new();
+        }
+        paths.sort();
+        paths.dedup();
+        paths
+    }
+
     fn change_count(&self) -> usize {
         self.changes.len()
     }
@@ -114,6 +131,13 @@ fn merge_kind(existing: LogicalEventKind, incoming: LogicalEventKind) -> Logical
         (Remove, _) | (_, Remove) => Remove,
         _ => Modify,
     }
+}
+
+#[derive(Debug, Clone, Copy, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct EnvironmentChangedPayload {
+    project_id: Uuid,
+    sources_refreshed: u32,
 }
 
 pub(crate) struct InventoryRuntime {
@@ -158,6 +182,7 @@ impl InventoryRuntime {
         &self,
         app: AppHandle,
         service: FileInventoryService,
+        environment_service: EnvironmentService,
     ) -> Result<(), FileInventoryError> {
         let mut receiver_guard = self.receiver.lock().await;
         let mut receiver = receiver_guard
@@ -168,6 +193,7 @@ impl InventoryRuntime {
         let overflowed_projects = Arc::clone(&self.overflowed_projects);
         let worker_app = app.clone();
         let worker_service = service.clone();
+        let worker_environment_service = environment_service.clone();
         let worker = tauri::async_runtime::spawn(async move {
             while let Some(first) = receiver.recv().await {
                 let mut coalescer = EventCoalescer::default();
@@ -196,6 +222,7 @@ impl InventoryRuntime {
                 let change_count = coalescer.change_count();
 
                 for project_id in coalescer.project_ids() {
+                    let changed_paths = coalescer.changed_paths(project_id);
                     match worker_service
                         .reconcile_project(project_id, ScanType::Watcher)
                         .await
@@ -205,6 +232,28 @@ impl InventoryRuntime {
                             project_id = %project_id,
                             error = %error,
                             "watcher reconciliation failed"
+                        ),
+                    }
+                    match worker_environment_service
+                        .refresh_changed_paths(project_id, changed_paths)
+                        .await
+                    {
+                        Ok(Some(summary)) => {
+                            if let Err(error) = worker_app.emit(
+                                ENVIRONMENT_CHANGED_EVENT,
+                                EnvironmentChangedPayload {
+                                    project_id,
+                                    sources_refreshed: summary.sources_requested,
+                                },
+                            ) {
+                                tracing::warn!(project_id = %project_id, error = %error, "environment change event emission failed");
+                            }
+                        }
+                        Ok(None) => {}
+                        Err(error) => tracing::warn!(
+                            project_id = %project_id,
+                            error = %error,
+                            "configured environment source refresh failed"
                         ),
                     }
                 }
