@@ -27,6 +27,7 @@ jobs:
       - name: Apply source payload
         shell: bash
         run: |
+          set -o pipefail
           cat .phase6-source/part-* | base64 --decode > /tmp/phase6.tar.xz
           echo '2a3004a1171e60d7c7ed7e90cddda53138e22f5a6c7e18c448994303aab226ff  /tmp/phase6.tar.xz' | sha256sum --check
           tar -xJf /tmp/phase6.tar.xz
@@ -40,49 +41,49 @@ jobs:
           cache: npm
 
       - name: Generate dependency lockfile
-        run: npm install --package-lock-only --ignore-scripts
+        run: set -o pipefail; npm install --package-lock-only --ignore-scripts 2>&1 | tee /tmp/phase6-lockfile.log
 
       - name: Install frontend dependencies
-        run: npm ci
+        run: set -o pipefail; npm ci 2>&1 | tee /tmp/phase6-npm-ci.log
 
       - name: Format frontend
-        run: npm run format
+        run: set -o pipefail; npm run format 2>&1 | tee /tmp/phase6-format.log
 
       - name: Lint frontend
-        run: npm run lint
+        run: set -o pipefail; npm run lint 2>&1 | tee /tmp/phase6-lint.log
 
       - name: Check formatting
-        run: npm run format:check
+        run: set -o pipefail; npm run format:check 2>&1 | tee /tmp/phase6-format-check.log
 
       - name: Type-check frontend and tooling
-        run: npm run typecheck
+        run: set -o pipefail; npm run typecheck 2>&1 | tee /tmp/phase6-typecheck.log
 
       - name: Run unit tests
-        run: npm run test:unit
+        run: set -o pipefail; npm run test:unit 2>&1 | tee /tmp/phase6-unit.log
 
       - name: Install Playwright Chromium
-        run: npm exec playwright install --with-deps chromium
+        run: set -o pipefail; npm exec playwright install --with-deps chromium 2>&1 | tee /tmp/phase6-playwright-install.log
 
       - name: Run browser tests
-        run: npm run test:e2e
+        run: set -o pipefail; npm run test:e2e 2>&1 | tee /tmp/phase6-e2e.log
 
       - name: Build frontend
-        run: npm run build
+        run: set -o pipefail; npm run build 2>&1 | tee /tmp/phase6-build.log
 
       - name: Install Rust formatting component
-        run: rustup component add rustfmt
+        run: set -o pipefail; rustup component add rustfmt 2>&1 | tee /tmp/phase6-rustfmt-install.log
 
       - name: Format Rust
         working-directory: src-tauri
-        run: cargo fmt
+        run: set -o pipefail; cargo fmt 2>&1 | tee /tmp/phase6-rustfmt.log
 
       - name: Check Rust compilation
         working-directory: src-tauri
-        run: cargo check
+        run: set -o pipefail; cargo check 2>&1 | tee /tmp/phase6-cargo-check.log
 
       - name: Test Rust
         working-directory: src-tauri
-        run: cargo test
+        run: set -o pipefail; cargo test 2>&1 | tee /tmp/phase6-cargo-test.log
 
       - name: Publish one implementation commit
         shell: bash
@@ -93,3 +94,24 @@ jobs:
           git reset --soft origin/main
           git commit -m "feat: implement environment tracker"
           git push --force-with-lease origin HEAD:agent/phase-6-environment-tracker
+
+      - name: Report apply failure
+        if: failure()
+        shell: bash
+        run: |
+          {
+            echo 'Phase 6 apply workflow failed.'
+            echo
+            for log in /tmp/phase6-*.log; do
+              if [ -f "$log" ]; then
+                echo "===== $(basename "$log") ====="
+                tail -n 400 "$log"
+                echo
+              fi
+            done
+          } > .phase6-failure.log
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add .phase6-failure.log
+          git commit -m "chore: report phase 6 apply failure" || true
+          git push origin HEAD:agent/phase-6-environment-tracker
