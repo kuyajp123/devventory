@@ -4,9 +4,7 @@ test.beforeEach(async ({ page }) => {
   await page.goto('/');
 });
 
-test('navigates through the project-aware application shell', async ({
-  page,
-}) => {
+test('navigates through the project-aware application shell', async ({ page }) => {
   await expect(page).toHaveURL('/dashboard');
   await expect(
     page.getByRole('heading', { name: 'Add your first project' }),
