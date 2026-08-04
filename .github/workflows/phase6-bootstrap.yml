@@ -64,31 +64,21 @@ jobs:
 
           page = Path('src/features/environment-tracker/pages/EnvironmentTrackerPage.tsx')
           content = page.read_text()
-          old = """  useEffect(() => {
-            setSearch('');
-            setPage(1);
-            setEditingEnvironment(null);
-            setEnvironmentFormOpen(false);
-            setDeletingEnvironment(null);
-            setSourceEnvironment(null);
-            setBusyEnvironmentId(null);
-            setBusySourceId(null);
-          }, [activeProjectId]);"""
-          new = """  useEffect(() => {
-            queueMicrotask(() => {
-              setSearch('');
-              setPage(1);
-              setEditingEnvironment(null);
-              setEnvironmentFormOpen(false);
-              setDeletingEnvironment(null);
-              setSourceEnvironment(null);
-              setBusyEnvironmentId(null);
-              setBusySourceId(null);
-            });
-          }, [activeProjectId]);"""
-          if old not in content:
-              raise SystemExit('Expected active-project reset block was not found.')
-          page.write_text(content.replace(old, new))
+          effect_start = "  useEffect(() => {\n    setSearch('');"
+          effect_end = "    setBusySourceId(null);\n  }, [activeProjectId]);"
+          if effect_start not in content or effect_end not in content:
+              raise SystemExit('Expected active-project reset statements were not found.')
+          content = content.replace(
+              effect_start,
+              "  useEffect(() => {\n    queueMicrotask(() => {\n      setSearch('');",
+              1,
+          )
+          content = content.replace(
+              effect_end,
+              "      setBusySourceId(null);\n    });\n  }, [activeProjectId]);",
+              1,
+          )
+          page.write_text(content)
           PY
           rm -rf .phase6-source .phase6-payload .phase6-repair
           rm .github/workflows/phase6-bootstrap.yml
