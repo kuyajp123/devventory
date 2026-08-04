@@ -22,7 +22,7 @@ import {
   type InitialScanSummary,
   type ProjectOnboardingValues,
 } from '../models/project';
-import { useActiveProject } from '../providers/ActiveProjectProvider';
+import { useActiveProject } from '../hooks/use-active-project';
 
 export function ProjectOnboardingPage() {
   const navigate = useNavigate();

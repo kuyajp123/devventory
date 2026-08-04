@@ -1,6 +1,6 @@
 import { Skeleton } from '@heroui/react';
 import { Navigate, Outlet } from 'react-router';
-import { useActiveProject } from '../providers/ActiveProjectProvider';
+import { useActiveProject } from '../hooks/use-active-project';
 
 export function ProjectRequiredRoute() {
   const { activeProject, isHydrating } = useActiveProject();

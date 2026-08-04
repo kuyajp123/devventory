@@ -3,7 +3,7 @@ import { IconChevronDown, IconFolder, IconPlus } from '@tabler/icons-react';
 import { useEffect, useRef, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router';
 import { ICON_SIZE, ICON_STROKE } from '@/shared/constants/icon.constants';
-import { useActiveProject } from '../providers/ActiveProjectProvider';
+import { useActiveProject } from '../hooks/use-active-project';
 
 interface ProjectSelectorProps {
   compact?: boolean;

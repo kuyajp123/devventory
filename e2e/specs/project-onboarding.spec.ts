@@ -78,6 +78,9 @@ test('adds a project through the selector and restores it after reload', async (
       name: 'Remove assets/branding/logo-dark.png',
     }),
   ).toBeVisible();
+  await page
+    .getByRole('button', { name: /^Selected variants, \d+ files$/ })
+    .click();
   await page.getByRole('button', { name: 'Save variants' }).click();
   await expect(
     page.getByRole('alertdialog', { name: 'Asset variants saved' }),

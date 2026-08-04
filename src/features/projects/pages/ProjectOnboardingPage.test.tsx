@@ -12,7 +12,7 @@ const activeProjectMocks = vi.hoisted(() => ({
   selectProject: vi.fn(async () => undefined),
 }));
 
-vi.mock('../providers/ActiveProjectProvider', () => ({
+vi.mock('../hooks/use-active-project', () => ({
   useActiveProject: () => ({ selectProject: activeProjectMocks.selectProject }),
 }));
 vi.mock('../services/folder-picker.gateway', () => ({

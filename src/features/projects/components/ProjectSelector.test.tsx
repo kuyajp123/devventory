@@ -29,7 +29,7 @@ const selectorMocks = vi.hoisted(() => {
   return { longName, projects };
 });
 
-vi.mock('../providers/ActiveProjectProvider', () => ({
+vi.mock('../hooks/use-active-project', () => ({
   useActiveProject: () => ({
     activeProject: selectorMocks.projects[0],
     activeProjectId: selectorMocks.projects[0].id,

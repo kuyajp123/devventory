@@ -1,50 +1,24 @@
 import { toast } from '@heroui/react';
 import { useQuery } from '@tanstack/react-query';
 import {
-  createContext,
   type PropsWithChildren,
   useCallback,
-  useContext,
   useEffect,
   useMemo,
   useRef,
   useState,
 } from 'react';
 import { useProjectsQuery } from '../hooks/use-projects';
-import type { Project } from '../models/project';
+import {
+  ActiveProjectContext,
+  type ActiveProjectContextValue,
+} from './active-project.context';
 import { projectSelectionGateway } from '../services/project-selection.gateway';
+import { resolveInitialProjectId } from './resolve-initial-project-id';
 
 const projectSelectionKeys = {
   lastOpened: ['project-selection', 'last-opened'] as const,
 };
-
-interface ActiveProjectContextValue {
-  activeProject: Project | null;
-  activeProjectId: string | null;
-  hasProjects: boolean;
-  isHydrating: boolean;
-  projectLoadFailed: boolean;
-  projects: Project[];
-  selectProject: (projectId: string) => Promise<void>;
-}
-
-const ActiveProjectContext = createContext<ActiveProjectContextValue | null>(
-  null,
-);
-
-export function resolveInitialProjectId(
-  projects: Project[],
-  storedProjectId: string | null,
-): string | null {
-  if (
-    storedProjectId &&
-    projects.some((project) => project.id === storedProjectId)
-  ) {
-    return storedProjectId;
-  }
-
-  return projects[0]?.id ?? null;
-}
 
 export function ActiveProjectProvider({ children }: PropsWithChildren) {
   const projectsQuery = useProjectsQuery();
@@ -172,14 +146,4 @@ export function ActiveProjectProvider({ children }: PropsWithChildren) {
       {children}
     </ActiveProjectContext.Provider>
   );
-}
-
-export function useActiveProject(): ActiveProjectContextValue {
-  const context = useContext(ActiveProjectContext);
-  if (!context) {
-    throw new Error(
-      'useActiveProject must be used inside ActiveProjectProvider.',
-    );
-  }
-  return context;
 }

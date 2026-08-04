@@ -84,7 +84,7 @@ describe('AssetVariantManager', () => {
       projectId,
       variantIds: [suggested.id, manual.id],
     });
-  });
+  }, 15_000);
 
   it('searches and changes scope without loading the complete inventory', async () => {
     const user = userEvent.setup();

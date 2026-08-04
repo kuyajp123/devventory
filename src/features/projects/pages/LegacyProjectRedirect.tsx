@@ -1,7 +1,7 @@
 import { Skeleton } from '@heroui/react';
 import { useEffect, useRef } from 'react';
 import { useLocation, useNavigate, useParams } from 'react-router';
-import { useActiveProject } from '../providers/ActiveProjectProvider';
+import { useActiveProject } from '../hooks/use-active-project';
 
 type LegacyDestination = 'assets' | 'asset-details' | 'dashboard' | 'files';
 

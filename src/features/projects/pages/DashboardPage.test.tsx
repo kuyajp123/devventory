@@ -26,7 +26,7 @@ const dashboardMocks = vi.hoisted(() => ({
   },
 }));
 
-vi.mock('../providers/ActiveProjectProvider', () => ({
+vi.mock('../hooks/use-active-project', () => ({
   useActiveProject: () => ({
     activeProject: dashboardMocks.project,
     activeProjectId: dashboardMocks.project.id,

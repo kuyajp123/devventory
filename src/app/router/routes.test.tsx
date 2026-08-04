@@ -28,20 +28,9 @@ vi.mock('@/features/projects', async (importOriginal) => {
   };
 });
 
-vi.mock(
-  '@/features/projects/providers/ActiveProjectProvider',
-  async (importOriginal) => {
-    const actual =
-      await importOriginal<
-        typeof import('@/features/projects/providers/ActiveProjectProvider')
-      >();
-
-    return {
-      ...actual,
-      useActiveProject: createActiveProjectContext,
-    };
-  },
-);
+vi.mock('@/features/projects/hooks/use-active-project', () => ({
+  useActiveProject: createActiveProjectContext,
+}));
 
 describe('application routes', () => {
   it('redirects the root dashboard and navigates to diagnostics', async () => {

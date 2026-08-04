@@ -10,7 +10,7 @@ import { IconFolder, IconPlus } from '@tabler/icons-react';
 import { Link } from 'react-router';
 import { ICON_SIZE, ICON_STROKE } from '@/shared/constants/icon.constants';
 import { ScanSummaryCard } from '../components/ScanSummaryCard';
-import { useActiveProject } from '../providers/ActiveProjectProvider';
+import { useActiveProject } from '../hooks/use-active-project';
 
 export function DashboardPage() {
   const { activeProject, isHydrating, projectLoadFailed } = useActiveProject();

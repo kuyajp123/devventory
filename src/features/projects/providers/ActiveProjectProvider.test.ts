@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { Project } from '../models/project';
-import { resolveInitialProjectId } from './ActiveProjectProvider';
+import { resolveInitialProjectId } from './resolve-initial-project-id';
 
 const firstProject = project(
   '30af17bd-2dd6-4b89-a5e7-8517191815a7',
