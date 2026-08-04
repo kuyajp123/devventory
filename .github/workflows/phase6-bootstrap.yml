@@ -41,6 +41,7 @@ jobs:
           } | base64 --decode > /tmp/phase6.tar.xz
           echo '2a3004a1171e60d7c7ed7e90cddda53138e22f5a6c7e18c448994303aab226ff  /tmp/phase6.tar.xz' | sha256sum --check
           tar -xJf /tmp/phase6.tar.xz
+          sed -i 's/async fn keeps_environment_names_and_order isolated_per_project()/async fn keeps_environment_names_and_order_isolated_per_project()/' src-tauri/src/features/environment_tracker/tests.rs
           rm -rf .phase6-source .phase6-payload .phase6-repair
           rm .github/workflows/phase6-bootstrap.yml
 
