@@ -22,9 +22,11 @@ import {
   type InitialScanSummary,
   type ProjectOnboardingValues,
 } from '../models/project';
+import { useActiveProject } from '../hooks/use-active-project';
 
 export function ProjectOnboardingPage() {
   const navigate = useNavigate();
+  const { selectProject } = useActiveProject();
   const folderPicker = useFolderPickerMutation();
   const validateRoot = useValidateProjectRootMutation();
   const scanProject = useScanProjectMutation();
@@ -119,8 +121,9 @@ export function ProjectOnboardingPage() {
         name: values.name,
         projectType: values.projectType,
       });
+      await selectProject(project.id);
       toast.success('Project saved to this device');
-      await navigate(`/projects/${project.id}`);
+      await navigate('/dashboard');
     } catch (error) {
       setOperationError(errorMessage(error));
     }
@@ -131,9 +134,9 @@ export function ProjectOnboardingPage() {
       <header className="space-y-3">
         <Link
           className="text-sm font-medium text-accent hover:underline"
-          to="/projects"
+          to="/dashboard"
         >
-          Back to projects
+          Back to dashboard
         </Link>
         <div>
           <p className="text-sm font-medium text-muted">Project onboarding</p>

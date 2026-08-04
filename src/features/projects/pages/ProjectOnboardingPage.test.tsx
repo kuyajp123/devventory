@@ -8,10 +8,16 @@ import { folderPickerGateway } from '../services/folder-picker.gateway';
 import { projectsGateway } from '../services/projects.gateway';
 import { ProjectOnboardingPage } from './ProjectOnboardingPage';
 
+const activeProjectMocks = vi.hoisted(() => ({
+  selectProject: vi.fn(async () => undefined),
+}));
+
+vi.mock('../hooks/use-active-project', () => ({
+  useActiveProject: () => ({ selectProject: activeProjectMocks.selectProject }),
+}));
 vi.mock('../services/folder-picker.gateway', () => ({
   folderPickerGateway: { selectProjectRoot: vi.fn() },
 }));
-
 vi.mock('../services/projects.gateway', () => ({
   projectsGateway: {
     create: vi.fn(),
@@ -22,6 +28,7 @@ vi.mock('../services/projects.gateway', () => ({
   },
 }));
 
+const projectId = 'd2949d63-3df0-4ced-9460-5a821174f280';
 const scanSummary = {
   completed: true,
   directoriesVisited: 8,
@@ -33,6 +40,7 @@ const scanSummary = {
 
 describe('ProjectOnboardingPage', () => {
   beforeEach(() => {
+    activeProjectMocks.selectProject.mockClear();
     vi.mocked(folderPickerGateway.selectProjectRoot).mockResolvedValue(
       'C:\\workspace\\devventory',
     );
@@ -44,7 +52,7 @@ describe('ProjectOnboardingPage', () => {
       createdAt: '2026-08-01T00:00:00.000Z',
       description: 'Offline inventory',
       exclusions: ['node_modules/'],
-      id: 'd2949d63-3df0-4ced-9460-5a821174f280',
+      id: projectId,
       initialScan: scanSummary,
       name: 'Devventory',
       projectType: 'desktop',
@@ -54,13 +62,13 @@ describe('ProjectOnboardingPage', () => {
     });
   });
 
-  it('selects and validates a folder, reviews a scan, and saves the project', async () => {
+  it('selects and validates a folder, reviews a scan, and activates the project', async () => {
     const user = userEvent.setup();
     renderWithProviders(
       <MemoryRouter initialEntries={['/projects/new']}>
         <Routes>
           <Route path="/projects/new" element={<ProjectOnboardingPage />} />
-          <Route path="/projects/:projectId" element={<h1>Project saved</h1>} />
+          <Route path="/dashboard" element={<h1>Project saved</h1>} />
         </Routes>
       </MemoryRouter>,
     );
@@ -96,6 +104,7 @@ describe('ProjectOnboardingPage', () => {
     expect(
       await screen.findByRole('heading', { name: 'Project saved' }),
     ).toBeVisible();
+    expect(activeProjectMocks.selectProject).toHaveBeenCalledWith(projectId);
     expect(projectsGateway.create).toHaveBeenCalledWith(
       expect.objectContaining({
         name: 'Devventory',

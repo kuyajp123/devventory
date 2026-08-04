@@ -14,7 +14,6 @@ interface AssetTableProps {
   assets: Asset[];
   hasFilters: boolean;
   onSortChange: (sortBy: AssetSortField, direction: SortDirection) => void;
-  projectId: string;
   sortBy: AssetSortField;
   sortDirection: SortDirection;
 }
@@ -23,7 +22,6 @@ export function AssetTable({
   assets,
   hasFilters,
   onSortChange,
-  projectId,
   sortBy,
   sortDirection,
 }: AssetTableProps) {
@@ -84,7 +82,7 @@ export function AssetTable({
                     <div className="min-w-0">
                       <Link
                         className="block truncate font-medium text-accent hover:underline"
-                        to={`/projects/${projectId}/assets/${asset.id}`}
+                        to={`/assets/${asset.id}`}
                       >
                         {asset.name}
                       </Link>

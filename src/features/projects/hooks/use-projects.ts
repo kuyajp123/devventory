@@ -1,4 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import type { Project } from '../models/project';
 import { folderPickerGateway } from '../services/folder-picker.gateway';
 import { projectsGateway } from '../services/projects.gateway';
 
@@ -46,6 +47,10 @@ export function useCreateProjectMutation() {
       projectsGateway.create(input),
     onSuccess: async (project) => {
       queryClient.setQueryData(projectKeys.detail(project.id), project);
+      queryClient.setQueryData<Project[]>(projectKeys.all, (current = []) => [
+        project,
+        ...current.filter((item) => item.id !== project.id),
+      ]);
       await queryClient.invalidateQueries({ queryKey: projectKeys.all });
     },
   });

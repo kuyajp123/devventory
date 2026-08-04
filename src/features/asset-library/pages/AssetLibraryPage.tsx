@@ -1,8 +1,8 @@
 import { Alert, Button, Spinner, toast } from '@heroui/react';
-import { IconArrowLeft, IconLibrary, IconPlus } from '@tabler/icons-react';
-import { useCallback, useMemo, useState } from 'react';
-import { Link, useParams, useSearchParams } from 'react-router';
-import { useProjectQuery } from '@/features/projects';
+import { IconLibrary, IconPlus } from '@tabler/icons-react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useSearchParams } from 'react-router';
+import { useActiveProject } from '@/features/projects';
 import { ICON_SIZE, ICON_STROKE } from '@/shared/constants/icon.constants';
 import { AppPagination } from '@/shared/ui/AppPagination';
 import { AssetDropZone } from '../components/AssetDropZone';
@@ -29,14 +29,25 @@ import {
 } from '../models/asset-filter-params';
 
 export function AssetLibraryPage() {
-  const { projectId = '' } = useParams();
+  const {
+    activeProject,
+    activeProjectId: projectId,
+    isHydrating,
+  } = useActiveProject();
   const [searchParams, setSearchParams] = useSearchParams();
   const filters = useMemo(() => readAssetFilters(searchParams), [searchParams]);
-  const project = useProjectQuery(projectId);
-  const assets = useAssetsQuery(projectId, filters);
+  const assets = useAssetsQuery(projectId ?? '', filters);
   const picker = useSelectAssetSourceMutation();
   const [isImportOpen, setImportOpen] = useState(false);
   const [sourcePath, setSourcePath] = useState<string | null>(null);
+  const previousProjectId = useRef(projectId);
+
+  useEffect(() => {
+    if (previousProjectId.current === projectId) return;
+    previousProjectId.current = projectId;
+    setImportOpen(false);
+    setSourcePath(null);
+  }, [projectId]);
 
   const openDroppedFile = useCallback((path: string) => {
     setSourcePath(path);
@@ -75,27 +86,12 @@ export function AssetLibraryPage() {
     );
   }
 
-  if (project.isPending) {
-    return <AssetLibrarySkeleton />;
-  }
-  if (project.isError || !project.data) {
-    return <AssetProjectUnavailable />;
-  }
+  if (isHydrating) return <AssetLibrarySkeleton />;
+  if (!activeProject || !projectId) return <AssetProjectUnavailable />;
 
   return (
     <section className="mx-auto w-full max-w-7xl space-y-6">
       <header className="space-y-4">
-        <Link
-          className="inline-flex items-center gap-2 text-sm font-medium text-accent hover:underline"
-          to={`/projects/${projectId}`}
-        >
-          <IconArrowLeft
-            aria-hidden="true"
-            size={ICON_SIZE.small}
-            stroke={ICON_STROKE}
-          />
-          Back to project details
-        </Link>
         <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
           <div className="flex items-start gap-3">
             <IconLibrary
@@ -106,7 +102,7 @@ export function AssetLibraryPage() {
             />
             <div>
               <p className="text-sm font-medium text-muted">
-                {project.data.name}
+                {activeProject.name}
               </p>
               <h1 className="text-3xl font-semibold tracking-tight sm:text-4xl">
                 Asset library
@@ -173,7 +169,6 @@ export function AssetLibraryPage() {
             assets={assets.data.items}
             hasFilters={hasAssetFilters(filters)}
             onSortChange={changeSort}
-            projectId={projectId}
             sortBy={filters.sortBy}
             sortDirection={filters.sortDirection}
           />
@@ -194,7 +189,7 @@ export function AssetLibraryPage() {
           isOpen
           onOpenChange={changeImportOpen}
           projectId={projectId}
-          watchedLocations={project.data.watchedLocations}
+          watchedLocations={activeProject.watchedLocations}
         />
       )}
     </section>

@@ -1,19 +1,45 @@
-import { RouterProvider } from 'react-router/dom';
-import { createMemoryRouter } from 'react-router';
 import { screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { describe, expect, it } from 'vitest';
+import { createMemoryRouter } from 'react-router';
+import { RouterProvider } from 'react-router/dom';
+import { describe, expect, it, vi } from 'vitest';
 import { renderWithProviders } from '@/test/render';
 import { appRoutes } from './routes';
 
+function createActiveProjectContext() {
+  return {
+    activeProject: null,
+    activeProjectId: null,
+    hasProjects: false,
+    isHydrating: false,
+    projectLoadFailed: false,
+    projects: [],
+    selectProject: vi.fn(),
+  };
+}
+
+vi.mock('@/features/projects', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/features/projects')>();
+
+  return {
+    ...actual,
+    ProjectSelector: () => null,
+    useActiveProject: createActiveProjectContext,
+  };
+});
+
+vi.mock('@/features/projects/hooks/use-active-project', () => ({
+  useActiveProject: createActiveProjectContext,
+}));
+
 describe('application routes', () => {
-  it('navigates from the foundation page to diagnostics', async () => {
+  it('redirects the root dashboard and navigates to diagnostics', async () => {
     const router = createMemoryRouter(appRoutes, { initialEntries: ['/'] });
     const user = userEvent.setup();
 
     renderWithProviders(<RouterProvider router={router} />);
     expect(
-      screen.getByRole('heading', { name: 'Project foundation' }),
+      await screen.findByRole('heading', { name: 'Add your first project' }),
     ).toBeVisible();
 
     await user.click(screen.getAllByRole('link', { name: 'Diagnostics' })[0]);
