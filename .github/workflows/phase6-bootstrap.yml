@@ -115,3 +115,5 @@ jobs:
           git add .phase6-failure.log
           git commit -m "chore: report phase 6 apply failure" || true
           git push origin HEAD:agent/phase-6-environment-tracker
+
+# Triggered after all source parts were uploaded.
