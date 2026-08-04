@@ -42,6 +42,54 @@ jobs:
           echo '2a3004a1171e60d7c7ed7e90cddda53138e22f5a6c7e18c448994303aab226ff  /tmp/phase6.tar.xz' | sha256sum --check
           tar -xJf /tmp/phase6.tar.xz
           sed -i 's/async fn keeps_environment_names_and_order isolated_per_project()/async fn keeps_environment_names_and_order_isolated_per_project()/' src-tauri/src/features/environment_tracker/tests.rs
+          python - <<'PY'
+          from pathlib import Path
+
+          source_modal = Path('src/features/environment-tracker/components/SourceFormModal.tsx')
+          content = source_modal.read_text()
+          content = content.replace(
+              "import { useForm } from 'react-hook-form';",
+              "import { useForm, useWatch } from 'react-hook-form';",
+          )
+          content = content.replace(
+              "  const {\n    formState:",
+              "  const {\n    control,\n    formState:",
+          )
+          content = content.replace("    setValue,\n    watch,\n", "    setValue,\n")
+          content = content.replace(
+              "  const selectedPath = watch('relativePath');",
+              "  const selectedPath = useWatch({ control, name: 'relativePath' });",
+          )
+          source_modal.write_text(content)
+
+          page = Path('src/features/environment-tracker/pages/EnvironmentTrackerPage.tsx')
+          content = page.read_text()
+          old = """  useEffect(() => {
+            setSearch('');
+            setPage(1);
+            setEditingEnvironment(null);
+            setEnvironmentFormOpen(false);
+            setDeletingEnvironment(null);
+            setSourceEnvironment(null);
+            setBusyEnvironmentId(null);
+            setBusySourceId(null);
+          }, [activeProjectId]);"""
+          new = """  useEffect(() => {
+            queueMicrotask(() => {
+              setSearch('');
+              setPage(1);
+              setEditingEnvironment(null);
+              setEnvironmentFormOpen(false);
+              setDeletingEnvironment(null);
+              setSourceEnvironment(null);
+              setBusyEnvironmentId(null);
+              setBusySourceId(null);
+            });
+          }, [activeProjectId]);"""
+          if old not in content:
+              raise SystemExit('Expected active-project reset block was not found.')
+          page.write_text(content.replace(old, new))
+          PY
           rm -rf .phase6-source .phase6-payload .phase6-repair
           rm .github/workflows/phase6-bootstrap.yml
 
