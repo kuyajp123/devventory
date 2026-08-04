@@ -32,10 +32,16 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          cat .phase6-source/part-* | base64 --decode > /tmp/phase6.tar.xz
+          {
+            cat .phase6-source/part-00
+            cat .phase6-source/part-01
+            cat .phase6-repair/part-*
+            cat .phase6-source/part-03
+            cat .phase6-source/part-04
+          } | base64 --decode > /tmp/phase6.tar.xz
           echo '2a3004a1171e60d7c7ed7e90cddda53138e22f5a6c7e18c448994303aab226ff  /tmp/phase6.tar.xz' | sha256sum --check
           tar -xJf /tmp/phase6.tar.xz
-          rm -rf .phase6-source .phase6-payload
+          rm -rf .phase6-source .phase6-payload .phase6-repair
           rm .github/workflows/phase6-bootstrap.yml
 
       - name: Set up Node.js
