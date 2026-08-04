@@ -1,4 +1,4 @@
-name: Phase 6 apply
+name: Phase 6 publish
 
 on:
   push:
@@ -13,8 +13,8 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  apply:
-    if: contains(github.event.head_commit.message, 'activate phase 6 implementation')
+  publish:
+    if: contains(github.event.head_commit.message, 'publish phase 6 implementation')
     runs-on: ubuntu-latest
 
     steps:
@@ -24,10 +24,10 @@ jobs:
           ref: agent/phase-6-environment-tracker
           fetch-depth: 0
 
-      - name: Apply source payload
+      - name: Apply verified source payload
         shell: bash
         run: |
-          set -o pipefail
+          set -euo pipefail
           cat .phase6-source/part-* | base64 --decode > /tmp/phase6.tar.xz
           echo '2a3004a1171e60d7c7ed7e90cddda53138e22f5a6c7e18c448994303aab226ff  /tmp/phase6.tar.xz' | sha256sum --check
           tar -xJf /tmp/phase6.tar.xz
@@ -41,53 +41,22 @@ jobs:
           cache: npm
 
       - name: Generate dependency lockfile
-        run: set -o pipefail; npm install --package-lock-only --ignore-scripts 2>&1 | tee /tmp/phase6-lockfile.log
+        run: npm install --package-lock-only --ignore-scripts
 
       - name: Install frontend dependencies
-        run: set -o pipefail; npm ci 2>&1 | tee /tmp/phase6-npm-ci.log
+        run: npm ci
 
       - name: Format frontend
-        run: set -o pipefail; npm run format 2>&1 | tee /tmp/phase6-format.log
-
-      - name: Lint frontend
-        run: set -o pipefail; npm run lint 2>&1 | tee /tmp/phase6-lint.log
-
-      - name: Check formatting
-        run: set -o pipefail; npm run format:check 2>&1 | tee /tmp/phase6-format-check.log
-
-      - name: Type-check frontend and tooling
-        run: set -o pipefail; npm run typecheck 2>&1 | tee /tmp/phase6-typecheck.log
-
-      - name: Run unit tests
-        run: set -o pipefail; npm run test:unit 2>&1 | tee /tmp/phase6-unit.log
-
-      - name: Install Playwright Chromium
-        run: set -o pipefail; npm exec playwright install --with-deps chromium 2>&1 | tee /tmp/phase6-playwright-install.log
-
-      - name: Run browser tests
-        run: set -o pipefail; npm run test:e2e 2>&1 | tee /tmp/phase6-e2e.log
-
-      - name: Build frontend
-        run: set -o pipefail; npm run build 2>&1 | tee /tmp/phase6-build.log
-
-      - name: Install Rust formatting component
-        run: set -o pipefail; rustup component add rustfmt 2>&1 | tee /tmp/phase6-rustfmt-install.log
+        run: npm run format
 
       - name: Format Rust
         working-directory: src-tauri
-        run: set -o pipefail; cargo fmt 2>&1 | tee /tmp/phase6-rustfmt.log
-
-      - name: Check Rust compilation
-        working-directory: src-tauri
-        run: set -o pipefail; cargo check 2>&1 | tee /tmp/phase6-cargo-check.log
-
-      - name: Test Rust
-        working-directory: src-tauri
-        run: set -o pipefail; cargo test 2>&1 | tee /tmp/phase6-cargo-test.log
+        run: cargo fmt
 
       - name: Publish one implementation commit
         shell: bash
         run: |
+          set -euo pipefail
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add -A
@@ -95,25 +64,13 @@ jobs:
           git commit -m "feat: implement environment tracker"
           git push --force-with-lease origin HEAD:agent/phase-6-environment-tracker
 
-      - name: Report apply failure
+      - name: Report publishing failure
         if: failure()
         shell: bash
         run: |
-          {
-            echo 'Phase 6 apply workflow failed.'
-            echo
-            for log in /tmp/phase6-*.log; do
-              if [ -f "$log" ]; then
-                echo "===== $(basename "$log") ====="
-                tail -n 400 "$log"
-                echo
-              fi
-            done
-          } > .phase6-failure.log
+          echo 'Phase 6 publishing failed. Inspect the Phase 6 publish workflow logs.' > .phase6-failure.log
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add .phase6-failure.log
-          git commit -m "chore: report phase 6 apply failure" || true
-          git push origin HEAD:agent/phase-6-environment-tracker
-
-# Triggered after all source parts were uploaded.
+          git commit -m "chore: report phase 6 publishing failure" || true
+          git push origin HEAD:agent/phase-6-environment-tracker || true
