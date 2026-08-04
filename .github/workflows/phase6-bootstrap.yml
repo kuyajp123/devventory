@@ -1,24 +1,28 @@
 name: Phase 6 publish
 
 on:
-  push:
+  pull_request:
     branches:
-      - agent/phase-6-environment-tracker
+      - main
+    types:
+      - opened
+      - synchronize
+      - reopened
 
 permissions:
   contents: write
 
 concurrency:
-  group: phase6-apply
+  group: phase6-publish-${{ github.event.pull_request.number }}
   cancel-in-progress: true
 
 jobs:
   publish:
-    if: contains(github.event.head_commit.message, 'publish phase 6 implementation')
+    if: github.head_ref == 'agent/phase-6-environment-tracker'
     runs-on: ubuntu-latest
 
     steps:
-      - name: Check out repository
+      - name: Check out implementation branch
         uses: actions/checkout@v7
         with:
           ref: agent/phase-6-environment-tracker
@@ -63,14 +67,3 @@ jobs:
           git reset --soft origin/main
           git commit -m "feat: implement environment tracker"
           git push --force-with-lease origin HEAD:agent/phase-6-environment-tracker
-
-      - name: Report publishing failure
-        if: failure()
-        shell: bash
-        run: |
-          echo 'Phase 6 publishing failed. Inspect the Phase 6 publish workflow logs.' > .phase6-failure.log
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add .phase6-failure.log
-          git commit -m "chore: report phase 6 publishing failure" || true
-          git push origin HEAD:agent/phase-6-environment-tracker || true
