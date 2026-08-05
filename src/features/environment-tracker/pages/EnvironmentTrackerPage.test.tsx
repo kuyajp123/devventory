@@ -100,6 +100,81 @@ describe('EnvironmentTrackerPage', () => {
     );
   });
 
+  it('moves environment controls into the matrix header action menu', async () => {
+    const user = userEvent.setup();
+    const environment = environmentResponse();
+    vi.mocked(environmentTrackerGateway.list).mockResolvedValue([environment]);
+    vi.mocked(environmentTrackerGateway.listSources).mockResolvedValue([
+      sourceResponse('.env.local', 0),
+    ]);
+    vi.mocked(environmentTrackerGateway.matrix).mockResolvedValue({
+      environments: [environment],
+      page: 1,
+      pageSize: 50,
+      rows: [
+        {
+          keyName: 'APP_BASE_URL',
+          cells: [
+            {
+              state: 'present',
+              sourceDetails: [
+                {
+                  isCommented: false,
+                  lineNumber: 1,
+                  relativePath: '.env.local',
+                },
+              ],
+            },
+          ],
+        },
+      ],
+      totalItems: 1,
+      totalPages: 1,
+    });
+
+    renderWithProviders(<EnvironmentTrackerPage />);
+
+    expect(
+      await screen.findByRole('button', { name: 'Reorder Development' }),
+    ).toBeVisible();
+    expect(await screen.findByText('1 source')).toBeVisible();
+    expect(
+      screen.queryByLabelText('Environment summaries'),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: /view development/i }),
+    ).not.toBeInTheDocument();
+
+    await user.click(
+      screen.getByRole('button', {
+        name: 'Open actions for Development',
+      }),
+    );
+
+    expect(
+      await screen.findByRole('menuitem', { name: 'Manage sources' }),
+    ).toBeVisible();
+    expect(
+      screen.getByRole('menuitem', { name: 'Refresh environment' }),
+    ).toBeVisible();
+    expect(
+      screen.getByRole('menuitem', { name: 'Edit environment' }),
+    ).toBeVisible();
+    expect(
+      screen.getByRole('menuitem', { name: 'Delete environment' }),
+    ).toBeVisible();
+    expect(
+      screen.queryByRole('menuitem', { name: /view/i }),
+    ).not.toBeInTheDocument();
+
+    await user.click(
+      screen.getByRole('menuitem', { name: 'Edit environment' }),
+    );
+    expect(
+      await screen.findByRole('heading', { name: 'Edit environment' }),
+    ).toBeVisible();
+  });
+
   it('switches to a source-file breakdown and explains active definitions per file', async () => {
     const user = userEvent.setup();
     const environment = environmentResponse();
