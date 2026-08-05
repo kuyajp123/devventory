@@ -106,7 +106,9 @@ test('adds a project through the selector and restores it after reload', async (
     .click();
   await page.getByLabel('Environment name').fill('Development');
   await page.getByRole('button', { name: 'Create environment' }).last().click();
-  await expect(page.getByText('Development', { exact: true })).toBeVisible();
+  await expect(
+    page.getByRole('heading', { level: 3, name: 'Development' }),
+  ).toBeVisible();
   await page
     .getByRole('button', { name: 'Manage Development sources' })
     .click();
