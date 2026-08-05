@@ -6,6 +6,7 @@ import { environmentTrackerGateway } from '../services/environment-tracker.gatew
 import { EnvironmentTrackerPage } from './EnvironmentTrackerPage';
 
 const projectId = '30af17bd-2dd6-4b89-a5e7-8517191815a7';
+const environmentId = 'd63f9ad6-0817-4b8b-ad88-ec19881295b8';
 
 vi.mock('@/features/projects', () => ({
   useActiveProject: () => ({
@@ -54,7 +55,9 @@ vi.mock('../services/environment-tracker.gateway', () => ({
 
 describe('EnvironmentTrackerPage', () => {
   beforeEach(() => {
+    vi.clearAllMocks();
     vi.mocked(environmentTrackerGateway.list).mockResolvedValue([]);
+    vi.mocked(environmentTrackerGateway.listSources).mockResolvedValue([]);
     vi.mocked(environmentTrackerGateway.matrix).mockResolvedValue({
       environments: [],
       page: 1,
@@ -96,16 +99,103 @@ describe('EnvironmentTrackerPage', () => {
       }),
     );
   });
+
+  it('switches to a source-file breakdown and explains active definitions per file', async () => {
+    const user = userEvent.setup();
+    const environment = environmentResponse();
+    vi.mocked(environmentTrackerGateway.list).mockResolvedValue([environment]);
+    vi.mocked(environmentTrackerGateway.listSources).mockResolvedValue([
+      sourceResponse('.env.local', 0),
+      sourceResponse('.env.security-test.local', 1),
+    ]);
+    vi.mocked(environmentTrackerGateway.matrix).mockResolvedValue({
+      environments: [environment],
+      page: 1,
+      pageSize: 100,
+      rows: [
+        {
+          keyName: 'SUPABASE_SERVICE_ROLE_KEY',
+          cells: [
+            {
+              state: 'duplicate',
+              sourceDetails: [
+                {
+                  isCommented: false,
+                  lineNumber: 4,
+                  relativePath: '.env.local',
+                },
+                {
+                  isCommented: false,
+                  lineNumber: 17,
+                  relativePath: '.env.security-test.local',
+                },
+              ],
+            },
+          ],
+        },
+      ],
+      totalItems: 1,
+      totalPages: 1,
+    });
+
+    renderWithProviders(<EnvironmentTrackerPage />);
+    await user.click(
+      await screen.findByRole('button', { name: 'Inspect environment' }),
+    );
+
+    expect(
+      await screen.findByText('Comparing source files inside Development'),
+    ).toBeVisible();
+    expect(screen.getAllByText('.env.local').length).toBeGreaterThan(0);
+    expect(
+      screen.getByText('2 active definitions across this environment'),
+    ).toBeVisible();
+
+    await user.click(
+      screen.getByRole('button', {
+        name: 'SUPABASE_SERVICE_ROLE_KEY in .env.local: Active',
+      }),
+    );
+
+    expect(
+      screen.getByText('Definitions in this environment'),
+    ).toBeVisible();
+    expect(screen.getByText('Line 4')).toBeVisible();
+    expect(screen.getByText('Line 17')).toBeVisible();
+  });
 });
 
 function environmentResponse() {
   return {
     createdAt: '2026-08-05T00:00:00.000Z',
     description: 'Local configuration',
-    id: 'd63f9ad6-0817-4b8b-ad88-ec19881295b8',
+    id: environmentId,
     name: 'Development',
     projectId,
     sortOrder: 0,
+    updatedAt: '2026-08-05T00:00:00.000Z',
+  };
+}
+
+function sourceResponse(relativePath: string, sortOrder: number) {
+  return {
+    createdAt: '2026-08-05T00:00:00.000Z',
+    environmentId,
+    id:
+      sortOrder === 0
+        ? '4b2cc20c-9360-44b8-85d3-d5f089582d6e'
+        : '56794b0d-d130-4be4-8479-607f3aad826c',
+    lastIssueCode: null,
+    lastIssueLine: null,
+    lastIssueMessage: null,
+    lastObservedModifiedAtMs: null,
+    lastObservedSizeBytes: null,
+    lastParsedAt: '2026-08-05T00:00:00.000Z',
+    lastSuccessfulParseAt: '2026-08-05T00:00:00.000Z',
+    parseStatus: 'parsed' as const,
+    projectId,
+    relativePath,
+    sortOrder,
     updatedAt: '2026-08-05T00:00:00.000Z',
   };
 }
