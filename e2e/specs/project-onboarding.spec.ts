@@ -110,7 +110,10 @@ test('adds a project through the selector and restores it after reload', async (
     page.getByRole('heading', { level: 3, name: 'Development' }),
   ).toBeVisible();
   await page
-    .getByRole('button', { name: 'Manage Development sources' })
+    .getByRole('button', {
+      name: 'Manage Development sources',
+      exact: true,
+    })
     .click();
   await page.getByRole('button', { name: 'Add' }).click();
   await expect(
