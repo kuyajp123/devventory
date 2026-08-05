@@ -71,6 +71,29 @@ async fn initializes_the_foundation_schema_without_a_first_run_backup() {
     assert!(table_exists(initialization.database.pool(), "file_tags").await);
     assert!(table_exists(initialization.database.pool(), "file_notes").await);
     assert!(table_exists(initialization.database.pool(), "asset_relations").await);
+    assert!(table_exists(initialization.database.pool(), "environments").await);
+    assert!(table_exists(initialization.database.pool(), "environment_sources").await);
+    assert!(
+        table_exists(
+            initialization.database.pool(),
+            "environment_key_definitions"
+        )
+        .await
+    );
+    assert!(
+        table_exists(
+            initialization.database.pool(),
+            "environment_key_occurrences"
+        )
+        .await
+    );
+    assert!(
+        index_exists(
+            initialization.database.pool(),
+            "environment_key_occurrences_matrix_idx"
+        )
+        .await
+    );
     assert!(table_exists(initialization.database.pool(), "_sqlx_migrations").await);
 
     let journal_mode: String = query_scalar("PRAGMA journal_mode")
@@ -106,7 +129,7 @@ async fn snapshots_an_existing_database_before_applying_pending_migrations() {
     assert!(snapshot.file_path.starts_with(paths.backups_directory()));
     assert!(snapshot.file_path.is_file());
     assert_eq!(snapshot.from_version, 0);
-    assert_eq!(snapshot.to_version, 5);
+    assert_eq!(snapshot.to_version, 6);
 
     let backup_options = SqliteConnectOptions::new()
         .filename(&snapshot.file_path)
@@ -160,6 +183,22 @@ async fn upgrades_a_database_that_already_applied_the_immutable_asset_migration(
         .execute(initial.database.pool())
         .await
         .expect("later optimization index should be absent from the version 4 fixture");
+    query("DROP TABLE IF EXISTS environment_key_occurrences")
+        .execute(initial.database.pool())
+        .await
+        .expect("environment occurrences should be absent from the version 4 fixture");
+    query("DROP TABLE IF EXISTS environment_key_definitions")
+        .execute(initial.database.pool())
+        .await
+        .expect("environment key definitions should be absent from the version 4 fixture");
+    query("DROP TABLE IF EXISTS environment_sources")
+        .execute(initial.database.pool())
+        .await
+        .expect("environment sources should be absent from the version 4 fixture");
+    query("DROP TABLE IF EXISTS environments")
+        .execute(initial.database.pool())
+        .await
+        .expect("environments should be absent from the version 4 fixture");
     query("DELETE FROM _sqlx_migrations WHERE version >= 5")
         .execute(initial.database.pool())
         .await
@@ -180,17 +219,24 @@ async fn upgrades_a_database_that_already_applied_the_immutable_asset_migration(
     let snapshot = upgraded
         .pre_migration_backup
         .as_ref()
-        .expect("the existing database should be backed up before version 5");
+        .expect("the existing database should be backed up before version 6");
     let latest_applied: i64 = query_scalar("SELECT MAX(version) FROM _sqlx_migrations")
         .fetch_one(upgraded.database.pool())
         .await
         .expect("latest migration version should load");
 
     assert_eq!(snapshot.from_version, 4);
-    assert_eq!(snapshot.to_version, 5);
+    assert_eq!(snapshot.to_version, 6);
     assert!(snapshot.file_path.is_file());
-    assert_eq!(latest_applied, 5);
+    assert_eq!(latest_applied, 6);
     assert!(index_exists(upgraded.database.pool(), "indexed_files_project_size_idx").await);
+    assert!(
+        index_exists(
+            upgraded.database.pool(),
+            "environment_key_occurrences_matrix_idx"
+        )
+        .await
+    );
 
     upgraded.database.close().await;
 }

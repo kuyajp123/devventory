@@ -1,0 +1,252 @@
+import { Button, Chip } from '@heroui/react';
+import {
+  IconAlertTriangle,
+  IconFileCode,
+  IconInfoCircle,
+  IconX,
+} from '@tabler/icons-react';
+import { ICON_SIZE, ICON_STROKE } from '@/shared/constants/icon.constants';
+import type {
+  Environment,
+  EnvironmentMatrixSourceDetail,
+} from '../models/environment';
+
+export interface EnvironmentKeySelection {
+  environment: Environment;
+  keyName: string;
+  selectedSourcePath?: string;
+  sourceDetails: EnvironmentMatrixSourceDetail[];
+}
+
+export function EnvironmentKeyDetails({
+  onClose,
+  selection,
+}: {
+  onClose: () => void;
+  selection: EnvironmentKeySelection | null;
+}) {
+  if (!selection) {
+    return (
+      <aside className="rounded-xl border border-dashed border-divider bg-surface p-5 xl:sticky xl:top-6 xl:h-fit">
+        <div className="flex items-start gap-3">
+          <IconInfoCircle
+            aria-hidden="true"
+            className="mt-0.5 shrink-0 text-muted"
+            size={ICON_SIZE.button}
+            stroke={ICON_STROKE}
+          />
+          <div>
+            <h2 className="font-semibold">Key details</h2>
+            <p className="mt-1 text-sm leading-6 text-muted">
+              Select a matrix cell to see every definition, its source file,
+              line number, and whether it is active or commented.
+            </p>
+          </div>
+        </div>
+      </aside>
+    );
+  }
+
+  const activeDetails = selection.sourceDetails.filter(
+    (detail) => !detail.isCommented,
+  );
+  const commentedDetails = selection.sourceDetails.filter(
+    (detail) => detail.isCommented,
+  );
+  const selectedSourceDetails = selection.selectedSourcePath
+    ? selection.sourceDetails.filter(
+        (detail) => detail.relativePath === selection.selectedSourcePath,
+      )
+    : selection.sourceDetails;
+  const status = selection.selectedSourcePath
+    ? sourceStatus(selectedSourceDetails)
+    : environmentStatus(activeDetails.length, commentedDetails.length);
+
+  return (
+    <aside className="rounded-xl border border-divider bg-surface xl:sticky xl:top-6 xl:h-fit">
+      <header className="flex items-start justify-between gap-3 border-b border-divider p-5">
+        <div className="min-w-0">
+          <p className="truncate font-mono text-sm font-semibold">
+            {selection.keyName}
+          </p>
+          <p className="mt-1 text-sm text-muted">
+            {selection.environment.name}
+            {selection.selectedSourcePath
+              ? ` · ${selection.selectedSourcePath}`
+              : ' environment'}
+          </p>
+        </div>
+        <Button
+          aria-label="Close key details"
+          isIconOnly
+          onPress={onClose}
+          size="sm"
+          variant="ghost"
+        >
+          <IconX
+            aria-hidden="true"
+            size={ICON_SIZE.button}
+            stroke={ICON_STROKE}
+          />
+        </Button>
+      </header>
+
+      <div className="space-y-5 p-5">
+        <section>
+          <p className="text-xs font-medium uppercase tracking-wide text-muted">
+            Status
+          </p>
+          <div className="mt-2 flex items-center gap-2">
+            {activeDetails.length > 1 && !selection.selectedSourcePath ? (
+              <IconAlertTriangle
+                aria-hidden="true"
+                className="text-warning"
+                size={ICON_SIZE.button}
+                stroke={ICON_STROKE}
+              />
+            ) : null}
+            <p className="font-semibold">{status}</p>
+          </div>
+          <p className="mt-2 text-sm leading-6 text-muted">
+            {selection.selectedSourcePath
+              ? sourceExplanation(
+                  selectedSourceDetails,
+                  selection.selectedSourcePath,
+                )
+              : environmentExplanation(
+                  activeDetails.length,
+                  commentedDetails.length,
+                  selection.environment.name,
+                )}
+          </p>
+        </section>
+
+        <section>
+          <div className="flex items-center justify-between gap-2">
+            <h3 className="font-medium">Definitions in this environment</h3>
+            <Chip size="sm" variant="soft">
+              <Chip.Label>{selection.sourceDetails.length}</Chip.Label>
+            </Chip>
+          </div>
+          {selection.sourceDetails.length > 0 ? (
+            <ul className="mt-3 space-y-2">
+              {selection.sourceDetails.map((detail, index) => {
+                const isSelected =
+                  selection.selectedSourcePath === detail.relativePath;
+                return (
+                  <li
+                    className={`rounded-xl border p-3 ${
+                      isSelected
+                        ? 'border-accent bg-accent/5'
+                        : 'border-divider bg-surface-secondary'
+                    }`}
+                    key={`${detail.relativePath}:${detail.lineNumber ?? 'unknown'}:${index}`}
+                  >
+                    <div className="flex items-start gap-3">
+                      <IconFileCode
+                        aria-hidden="true"
+                        className="mt-0.5 shrink-0 text-muted"
+                        size={ICON_SIZE.button}
+                        stroke={ICON_STROKE}
+                      />
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate font-mono text-sm">
+                          {detail.relativePath}
+                        </p>
+                        <p className="mt-1 text-xs text-muted">
+                          {detail.lineNumber
+                            ? `Line ${detail.lineNumber}`
+                            : 'Line unavailable'}
+                        </p>
+                      </div>
+                      <Chip
+                        color={detail.isCommented ? 'default' : 'success'}
+                        size="sm"
+                        variant="soft"
+                      >
+                        <Chip.Label>
+                          {detail.isCommented ? 'Commented' : 'Active'}
+                        </Chip.Label>
+                      </Chip>
+                    </div>
+                  </li>
+                );
+              })}
+            </ul>
+          ) : (
+            <p className="mt-3 rounded-xl border border-dashed border-divider p-4 text-sm text-muted">
+              No definition exists in the selected environment or source file.
+            </p>
+          )}
+        </section>
+
+        <div className="flex gap-3 rounded-xl border border-accent/40 bg-accent/5 p-4 text-sm leading-6 text-muted">
+          <IconInfoCircle
+            aria-hidden="true"
+            className="mt-0.5 shrink-0 text-accent"
+            size={ICON_SIZE.button}
+            stroke={ICON_STROKE}
+          />
+          <p>
+            Status is calculated separately for each environment. Commented
+            definitions are shown for context but do not count as active
+            duplicates.
+          </p>
+        </div>
+      </div>
+    </aside>
+  );
+}
+
+function environmentStatus(active: number, commented: number): string {
+  if (active > 1) return `${active} active definitions`;
+  if (active === 1) return 'Present';
+  if (commented > 0) return 'Commented only';
+  return 'Absent';
+}
+
+function sourceStatus(details: EnvironmentMatrixSourceDetail[]): string {
+  const active = details.filter((detail) => !detail.isCommented).length;
+  const commented = details.length - active;
+  if (active > 1) return `${active} active definitions in this file`;
+  if (active === 1) return 'Active';
+  if (commented > 0) return 'Commented';
+  return 'Absent';
+}
+
+function environmentExplanation(
+  active: number,
+  commented: number,
+  environmentName: string,
+): string {
+  if (active > 1) {
+    return `This key is actively defined more than once inside ${environmentName}. Review whether every listed source belongs to this environment.`;
+  }
+  if (active === 1 && commented > 0) {
+    return `One active definition is used in ${environmentName}. ${commented} commented definition${commented === 1 ? '' : 's'} are retained only for context.`;
+  }
+  if (active === 1) {
+    return `Exactly one active definition exists in ${environmentName}.`;
+  }
+  if (commented > 0) {
+    return `The key appears only in commented lines inside ${environmentName}.`;
+  }
+  return `The key was not found in any readable source configured for ${environmentName}.`;
+}
+
+function sourceExplanation(
+  details: EnvironmentMatrixSourceDetail[],
+  sourcePath: string,
+): string {
+  const active = details.filter((detail) => !detail.isCommented).length;
+  const commented = details.length - active;
+  if (active > 1) {
+    return `${sourcePath} contains ${active} active definitions of this key.`;
+  }
+  if (active === 1 && commented > 0) {
+    return `${sourcePath} contains one active and ${commented} commented definition${commented === 1 ? '' : 's'}.`;
+  }
+  if (active === 1) return `${sourcePath} contains one active definition.`;
+  if (commented > 0) return `${sourcePath} contains only commented definitions.`;
+  return `${sourcePath} does not contain this key.`;
+}

@@ -1,10 +1,13 @@
 use std::collections::HashSet;
 use std::fs::{self, FileType};
 use std::path::{Component, Path, PathBuf};
-use std::time::Instant;
+use std::time::{Instant, UNIX_EPOCH};
 
-use super::error::ProjectError;
-use super::model::{InitialScanSummary, ValidatedProjectConfiguration, ValidatedWatchedLocation};
+use super::error::{ProjectError, ProjectFileError};
+use super::model::{
+    InitialScanSummary, ResolvedProjectFile, ValidatedProjectConfiguration,
+    ValidatedWatchedLocation,
+};
 
 const MAX_EXCLUSIONS: usize = 128;
 const MAX_WATCHED_LOCATIONS: usize = 32;
@@ -14,6 +17,55 @@ const MAX_SCAN_ENTRIES: u64 = 1_000_000;
 pub(crate) struct LocalProjectFilesystem;
 
 impl LocalProjectFilesystem {
+    pub(crate) fn resolve_regular_file(
+        &self,
+        root_path: &str,
+        relative_path: &str,
+    ) -> Result<ResolvedProjectFile, ProjectFileError> {
+        let root = canonicalize_root(Path::new(root_path.trim())).map_err(|error| match error {
+            ProjectError::RootNotFound => ProjectFileError::RootUnavailable,
+            _ => ProjectFileError::RootUnavailable,
+        })?;
+        ensure_readable_directory(&root, true).map_err(|_| ProjectFileError::RootUnavailable)?;
+        let relative_path = normalize_relative_path(relative_path, false)
+            .map_err(|_| ProjectFileError::InvalidRelativePath)?;
+        let requested_path = root.join(&relative_path);
+        if contains_link_or_reparse_component(&root, &requested_path)
+            .map_err(|_| ProjectFileError::Unreadable)?
+        {
+            return Err(ProjectFileError::LinkNotAllowed);
+        }
+        let canonical_path = fs::canonicalize(&requested_path).map_err(|error| {
+            if error.kind() == std::io::ErrorKind::NotFound {
+                ProjectFileError::NotFound
+            } else {
+                ProjectFileError::Unreadable
+            }
+        })?;
+        if canonical_path.strip_prefix(&root).is_err() {
+            return Err(ProjectFileError::InvalidRelativePath);
+        }
+        let metadata = fs::metadata(&canonical_path).map_err(|_| ProjectFileError::Unreadable)?;
+        if !metadata.is_file() {
+            return Err(ProjectFileError::NotRegularFile);
+        }
+        fs::File::open(&canonical_path).map_err(|_| ProjectFileError::Unreadable)?;
+        let modified_at_ms = metadata
+            .modified()
+            .ok()
+            .and_then(|modified| modified.duration_since(UNIX_EPOCH).ok())
+            .and_then(|duration| i64::try_from(duration.as_millis()).ok());
+        let relative_path = relative_from_root(&root, &canonical_path)
+            .map_err(|_| ProjectFileError::InvalidPathEncoding)?;
+
+        Ok(ResolvedProjectFile {
+            relative_path,
+            absolute_path: canonical_path,
+            size_bytes: metadata.len(),
+            modified_at_ms,
+        })
+    }
+
     pub(super) fn validate_root(&self, root_path: &str) -> Result<String, ProjectError> {
         let root_path = root_path.trim();
         let requested = Path::new(root_path);

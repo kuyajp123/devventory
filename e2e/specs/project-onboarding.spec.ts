@@ -95,4 +95,36 @@ test('adds a project through the selector and restores it after reload', async (
   await expect(
     sidebar.getByRole('button', { name: 'Select active project' }),
   ).toContainText('Browser project');
+
+  await sidebar.getByRole('link', { name: 'Environment Tracker' }).click();
+  await expect(
+    page.getByRole('heading', { name: 'Environment tracker' }),
+  ).toBeVisible();
+  await page
+    .getByRole('button', { name: 'Create environment' })
+    .first()
+    .click();
+  await page.getByLabel('Environment name').fill('Development');
+  await page.getByRole('button', { name: 'Create environment' }).last().click();
+  await expect(
+    page.getByRole('button', { name: 'Reorder Development' }),
+  ).toBeVisible();
+  await page
+    .getByRole('button', {
+      name: 'Open actions for Development',
+      exact: true,
+    })
+    .click();
+  await page
+    .getByRole('menuitem', { name: 'Manage sources', exact: true })
+    .click();
+  await page.getByRole('button', { name: 'Add', exact: true }).click();
+  await expect(
+    page.getByRole('button', {
+      name: 'Remove config/local.env',
+      exact: true,
+    }),
+  ).toBeVisible();
+  await page.getByRole('button', { name: 'Done' }).click();
+  await expect(page.getByText('APP_MODE', { exact: true })).toBeVisible();
 });

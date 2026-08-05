@@ -13,12 +13,14 @@ use tokio::time::{sleep_until, Instant};
 use uuid::Uuid;
 
 use crate::features::projects::ResolvedProjectScanTarget;
+use crate::features::environment_tracker::EnvironmentService;
 
 use super::error::FileInventoryError;
 use super::model::{ScanRun, ScanType};
 use super::service::FileInventoryService;
 
 pub(crate) const INVENTORY_CHANGED_EVENT: &str = "inventory://changed";
+pub(crate) const ENVIRONMENT_CHANGED_EVENT: &str = "environment://changed";
 const WATCH_CHANNEL_CAPACITY: usize = 512;
 const WATCH_DEBOUNCE: Duration = Duration::from_millis(350);
 
@@ -158,6 +160,7 @@ impl InventoryRuntime {
         &self,
         app: AppHandle,
         service: FileInventoryService,
+        environment_service: EnvironmentService,
     ) -> Result<(), FileInventoryError> {
         let mut receiver_guard = self.receiver.lock().await;
         let mut receiver = receiver_guard
@@ -168,6 +171,7 @@ impl InventoryRuntime {
         let overflowed_projects = Arc::clone(&self.overflowed_projects);
         let worker_app = app.clone();
         let worker_service = service.clone();
+        let worker_environment_service = environment_service.clone();
         let worker = tauri::async_runtime::spawn(async move {
             while let Some(first) = receiver.recv().await {
                 let mut coalescer = EventCoalescer::default();
@@ -200,7 +204,15 @@ impl InventoryRuntime {
                         .reconcile_project(project_id, ScanType::Watcher)
                         .await
                     {
-                        Ok(scan) => emit_inventory_changed(&worker_app, &scan),
+                        Ok(scan) => {
+                            emit_inventory_changed(&worker_app, &scan);
+                            refresh_environment_sources(
+                                &worker_app,
+                                &worker_environment_service,
+                                project_id,
+                            )
+                            .await;
+                        }
                         Err(error) => tracing::warn!(
                             project_id = %project_id,
                             error = %error,
@@ -223,6 +235,8 @@ impl InventoryRuntime {
         tauri::async_runtime::spawn(async move {
             for scan in service.reconcile_all(ScanType::Startup).await {
                 emit_inventory_changed(&startup_app, &scan);
+                refresh_environment_sources(&startup_app, &environment_service, scan.project_id)
+                    .await;
             }
         });
         Ok(())
@@ -320,6 +334,22 @@ impl InventoryRuntime {
     }
 }
 
+async fn refresh_environment_sources(
+    app: &AppHandle,
+    service: &EnvironmentService,
+    project_id: Uuid,
+) {
+    match service.refresh_project_sources(project_id, false).await {
+        Ok(refreshed) if refreshed > 0 => emit_environment_changed(app, project_id),
+        Ok(_) => {}
+        Err(error) => tracing::warn!(
+            project_id = %project_id,
+            error = %error,
+            "configured environment sources could not be refreshed"
+        ),
+    }
+}
+
 impl Drop for InventoryRuntime {
     fn drop(&mut self) {
         if let Ok(mut worker) = self.worker.lock() {
@@ -364,6 +394,27 @@ fn emit_inventory_changed(app: &AppHandle, scan: &ScanRun) {
             scan_id = %scan.id,
             error = %error,
             "could not notify the frontend about inventory changes"
+        );
+    }
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct EnvironmentChangedPayload {
+    project_id: String,
+}
+
+fn emit_environment_changed(app: &AppHandle, project_id: Uuid) {
+    if let Err(error) = app.emit(
+        ENVIRONMENT_CHANGED_EVENT,
+        EnvironmentChangedPayload {
+            project_id: project_id.to_string(),
+        },
+    ) {
+        tracing::warn!(
+            project_id = %project_id,
+            error = %error,
+            "could not notify the frontend about an environment source refresh"
         );
     }
 }

@@ -17,6 +17,7 @@ export async function invokeCommand<TResponse>(
 const safeMessages: Record<string, string> = {
   ASSET_CONFLICT:
     'A file already exists at that destination. Choose how to continue.',
+  ENVIRONMENT_CONFLICT: 'That environment configuration already exists.',
   FILESYSTEM_UNAVAILABLE:
     'The selected folder cannot be read. Check its permissions and try again.',
   INVALID_INPUT: 'The request contains invalid data.',

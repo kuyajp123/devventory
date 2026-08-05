@@ -1,10 +1,10 @@
 use uuid::Uuid;
 
-use super::error::ProjectError;
+use super::error::{ProjectError, ProjectFileError};
 use super::filesystem::LocalProjectFilesystem;
 use super::model::{
     CreateProject, InitialScanSummary, NewProjectRecord, Project, ProjectScanTarget,
-    ResolvedProjectScanTarget, ResolvedWatchedLocation, ScanConfiguration,
+    ResolvedProjectFile, ResolvedProjectScanTarget, ResolvedWatchedLocation, ScanConfiguration,
 };
 use super::repository::{ProjectRepository, SqliteProjectRepository};
 
@@ -121,6 +121,21 @@ impl ProjectService {
 
     pub(crate) async fn scan_targets(&self) -> Result<Vec<ProjectScanTarget>, ProjectError> {
         self.repository.find_scan_targets().await
+    }
+
+    pub(crate) async fn resolve_regular_project_file(
+        &self,
+        project_id: Uuid,
+        relative_path: &str,
+    ) -> Result<ResolvedProjectFile, ProjectFileError> {
+        let target = self
+            .repository
+            .find_scan_target(project_id)
+            .await
+            .map_err(|_| ProjectFileError::RootUnavailable)?
+            .ok_or(ProjectFileError::ProjectNotFound)?;
+        self.filesystem
+            .resolve_regular_file(&target.root_path, relative_path)
     }
 
     pub(crate) fn resolve_scan_target(

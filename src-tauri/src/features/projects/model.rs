@@ -88,6 +88,14 @@ pub(crate) struct ResolvedProjectScanTarget {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct ResolvedProjectFile {
+    pub(crate) relative_path: String,
+    pub(crate) absolute_path: PathBuf,
+    pub(crate) size_bytes: u64,
+    pub(crate) modified_at_ms: Option<i64>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct ResolvedWatchedLocation {
     pub(crate) id: Uuid,
     pub(crate) relative_path: String,
