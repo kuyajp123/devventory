@@ -25,3 +25,13 @@ test-results
 *.njsproj
 *.sln
 *.sw?
+
+# skills
+.claude
+
+# Ignore everything inside .github
+.github/*
+
+# Keep GitHub Actions workflows
+!.github/workflows/
+!.github/workflows/**
