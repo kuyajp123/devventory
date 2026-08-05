@@ -86,6 +86,7 @@ export function EnvironmentMatrixColumnHeader({
     >
       <Button
         aria-label={`Reorder ${environment.name}`}
+        className="cursor-grab active:cursor-grabbing disabled:cursor-not-allowed"
         isDisabled={isBusy}
         isIconOnly
         ref={setActivatorNodeRef}

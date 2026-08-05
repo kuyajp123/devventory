@@ -251,15 +251,6 @@ export function EnvironmentMatrix({
 
   return (
     <section aria-label="Environment comparison matrix" className="space-y-2">
-      <p className="flex items-center gap-1.5 text-xs text-muted">
-        <IconGripVertical
-          aria-hidden="true"
-          size={ICON_SIZE.small}
-          stroke={ICON_STROKE}
-        />
-        Drag environment headers to reorder table columns.
-      </p>
-
       <DndContext
         collisionDetection={closestCenter}
         modifiers={dragModifiers}
@@ -510,9 +501,7 @@ const MatrixCell = memo(function MatrixCell({
       }`}
       aria-pressed={isSelected}
       className={`flex h-full min-h-16 w-full items-center justify-between gap-3 rounded-lg border border-transparent p-3 text-left transition-colors hover:bg-surface-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent ${
-        isSelected
-          ? 'relative z-10 border-accent bg-accent/15 ring-2 ring-inset ring-accent shadow-sm'
-          : ''
+        isSelected ? 'relative z-10 border-accent bg-accent/15 shadow-sm' : ''
       }`}
       data-cell-id={`${keyName}:${environment.id}`}
       data-selected={isSelected ? 'true' : undefined}

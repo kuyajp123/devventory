@@ -162,9 +162,7 @@ function EnvironmentKeyDetailsContent({
                     <button
                       aria-pressed={isSelected}
                       className={`w-full rounded-xl border p-3 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent ${
-                        isSelected
-                          ? 'relative z-10 border-accent bg-accent/10 ring-2 ring-inset ring-accent shadow-sm'
-                          : 'border-divider bg-surface-secondary'
+                        isSelected ? 'relative z-10 shadow-sm' : ''
                       } ${
                         onDefinitionClick
                           ? 'cursor-pointer hover:border-accent/60 hover:bg-accent/5'

@@ -3,7 +3,6 @@ import { Chip, EmptyState, Table } from '@heroui/react';
 import {
   IconChevronRight,
   IconFileCode,
-  IconInfoCircle,
   IconTableOff,
 } from '@tabler/icons-react';
 import { memo, useMemo } from 'react';
@@ -30,8 +29,7 @@ export function InspectEnvironmentMatrix({
   sources: EnvironmentSource[];
 }) {
   const environmentIndex = useMemo(
-    () =>
-      matrix.environments.findIndex((item) => item.id === environment.id),
+    () => matrix.environments.findIndex((item) => item.id === environment.id),
     [environment.id, matrix.environments],
   );
 
@@ -57,7 +55,7 @@ export function InspectEnvironmentMatrix({
 
   return (
     <div className="space-y-4">
-      <div className="rounded-xl border border-accent/30 bg-accent/5 p-4">
+      {/* <div className="rounded-xl border border-accent/30 bg-accent/5 p-4">
         <div className="flex gap-3">
           <IconInfoCircle
             aria-hidden="true"
@@ -76,7 +74,7 @@ export function InspectEnvironmentMatrix({
             </p>
           </div>
         </div>
-      </div>
+      </div> */}
 
       {/* i intentionally remove the cards here. do not bring the cards back! update the test if its failed */}
 
@@ -227,9 +225,7 @@ const SourceMatrixCell = memo(function SourceMatrixCell({
       aria-label={`${keyName} in ${source.relativePath}: ${status}`}
       aria-pressed={isSelected}
       className={`flex min-h-16 w-full min-w-48 items-center justify-between gap-3 rounded-lg border border-transparent p-3 text-left transition-colors hover:bg-surface-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent ${
-        isSelected
-          ? 'relative z-10 border-accent bg-accent/15 ring-2 ring-inset ring-accent shadow-sm'
-          : ''
+        isSelected ? 'relative z-10 border-accent bg-accent/15 shadow-sm' : ''
       }`}
       data-cell-id={`${keyName}:${source.id}`}
       data-selected={isSelected ? 'true' : undefined}
