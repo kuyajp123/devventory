@@ -98,7 +98,7 @@ export function InspectEnvironmentMatrix({
             <Table.Content
               aria-label={`${environment.name} source-file key matrix`}
             >
-              <Table.Header>
+              <Table.Header className="sticky top-0 z-20 bg-surface">
                 <Table.Column isRowHeader id="key">
                   Configuration key
                 </Table.Column>
@@ -125,7 +125,10 @@ export function InspectEnvironmentMatrix({
                       (detail) => !detail.isCommented,
                     ).length ?? 0;
                   return (
-                    <Table.Row id={row.keyName}>
+                    <Table.Row
+                      className="even:bg-surface-secondary/40"
+                      id={row.keyName}
+                    >
                       <Table.Cell className="sticky left-0 z-10 min-w-64 bg-surface">
                         <p className="font-mono text-sm font-medium">
                           {row.keyName}
@@ -143,20 +146,22 @@ export function InspectEnvironmentMatrix({
                             (detail) =>
                               detail.relativePath === source.relativePath,
                           ) ?? [];
+                        const isCellSelected =
+                          selection?.keyName === row.keyName &&
+                          selection?.environment.id === environment.id &&
+                          (selection?.selectedSourcePath ===
+                            source.relativePath ||
+                            !selection?.selectedSourcePath);
+
                         return (
                           <Table.Cell
-                            className="p-0"
+                            className="p-1"
                             key={`${row.keyName}:${source.id}`}
                           >
                             <SourceMatrixCell
                               allDetails={environmentCell?.sourceDetails ?? []}
                               environment={environment}
-                              isSelected={
-                                selection?.keyName === row.keyName &&
-                                selection?.environment.id === environment.id &&
-                                selection?.selectedSourcePath ===
-                                  source.relativePath
-                              }
+                              isSelected={isCellSelected}
                               keyName={row.keyName}
                               onSelect={onSelect}
                               source={source}
@@ -202,9 +207,10 @@ function SourceMatrixCell({
   return (
     <button
       aria-label={`${keyName} in ${source.relativePath}: ${status}`}
-      className={`flex min-h-16 w-full min-w-48 items-center justify-between gap-3 p-3 text-left transition hover:bg-surface-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent ${
-        isSelected ? 'bg-accent/10 ring-1 ring-inset ring-accent' : ''
+      className={`flex min-h-16 w-full min-w-48 items-center justify-between gap-3 rounded-lg p-3 text-left transition hover:bg-surface-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent ${
+        isSelected ? 'bg-accent/15 border-2 border-accent shadow-sm' : ''
       }`}
+      data-cell-id={`${keyName}:${source.id}`}
       onClick={() =>
         onSelect({
           environment,

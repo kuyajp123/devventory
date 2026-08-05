@@ -360,7 +360,7 @@ const EnvironmentMatrixBody = memo(function EnvironmentMatrixBody({
   return (
     <Table.Body items={rows}>
       {(row) => (
-        <Table.Row id={row.keyName}>
+        <Table.Row className="even:bg-surface-secondary/40" id={row.keyName}>
           <Table.Cell
             className={`${KEY_COLUMN_CLASS} font-mono text-sm font-medium`}
           >
@@ -377,7 +377,7 @@ const EnvironmentMatrixBody = memo(function EnvironmentMatrixBody({
 
             return (
               <Table.Cell
-                className={ENVIRONMENT_COLUMN_CLASS}
+                className={`${ENVIRONMENT_COLUMN_CLASS} p-1`}
                 key={`${row.keyName}-${environment.id}`}
               >
                 <MatrixCell
@@ -385,8 +385,7 @@ const EnvironmentMatrixBody = memo(function EnvironmentMatrixBody({
                   environment={environment}
                   isSelected={
                     selection?.keyName === row.keyName &&
-                    selection.environment.id === environment.id &&
-                    !selection.selectedSourcePath
+                    selection.environment.id === environment.id
                   }
                   keyName={row.keyName}
                   onSelect={onSelect}
@@ -501,9 +500,10 @@ const MatrixCell = memo(function MatrixCell({
       aria-label={`${keyName} in ${environment.name}: ${status}${
         summary ? `. ${summary}` : ''
       }`}
-      className={`flex h-full min-h-16 w-full items-center justify-between gap-3 p-3 text-left transition hover:bg-surface-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent ${
-        isSelected ? 'bg-accent/10 ring-1 ring-inset ring-accent' : ''
+      className={`flex h-full min-h-16 w-full items-center justify-between gap-3 rounded-lg p-3 text-left transition hover:bg-surface-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent ${
+        isSelected ? 'bg-accent/15 border-2 border-accent shadow-sm' : ''
       }`}
+      data-cell-id={`${keyName}:${environment.id}`}
       onClick={() =>
         onSelect({
           environment,

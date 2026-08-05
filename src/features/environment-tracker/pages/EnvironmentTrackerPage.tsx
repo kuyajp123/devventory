@@ -21,7 +21,7 @@ import {
   IconSettings,
   IconWorld,
 } from '@tabler/icons-react';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useActiveProject } from '@/features/projects';
 import { ICON_SIZE, ICON_STROKE } from '@/shared/constants/icon.constants';
 import { TauriCommandError } from '@/shared/infrastructure/tauri/tauri-error';
@@ -71,6 +71,7 @@ export function EnvironmentTrackerPage() {
   const [sourceEnvironment, setSourceEnvironment] =
     useState<Environment | null>(null);
   const previousProjectId = useRef(projectId);
+  const matrixContainerRef = useRef<HTMLDivElement>(null);
 
   const environments = useEnvironmentsQuery(projectId ?? '');
   const environmentItems = environments.data ?? [];
@@ -198,6 +199,51 @@ export function EnvironmentTrackerPage() {
   }
 
   const isSaving = createEnvironment.isPending || updateEnvironment.isPending;
+
+  const handleDefinitionClick = useCallback(
+    (relativePath: string) => {
+      if (!selection) return;
+
+      const container = matrixContainerRef.current;
+      if (!container) return;
+
+      // In inspect mode, find the source whose relativePath matches and build the cell-id
+      // In compare mode, find the environment id from the selection
+      let cellId: string | null = null;
+
+      if (view === 'inspect' && selectedSources.data) {
+        const source = selectedSources.data.find(
+          (s) => s.relativePath === relativePath,
+        );
+        if (source) {
+          cellId = `${selection.keyName}:${source.id}`;
+        }
+      } else {
+        cellId = `${selection.keyName}:${selection.environment.id}`;
+      }
+
+      if (!cellId) return;
+
+      const cell = container.querySelector(
+        `[data-cell-id="${CSS.escape(cellId)}"]`,
+      );
+      if (cell) {
+        cell.scrollIntoView({
+          behavior: 'smooth',
+          block: 'center',
+          inline: 'center',
+        });
+      }
+
+      // Also update the selection to reflect the clicked source
+      if (view === 'inspect') {
+        setSelection((prev) =>
+          prev ? { ...prev, selectedSourcePath: relativePath } : prev,
+        );
+      }
+    },
+    [selection, view, selectedSources.data],
+  );
   const inspectMatrixPage = useMemo(() => {
     if (!inspectMatrix.data) return null;
     const totalPages = Math.ceil(
@@ -380,8 +426,8 @@ export function EnvironmentTrackerPage() {
               className="space-y-4"
               aria-label="Inspect environment controls"
             >
-              <div className="flex flex-col gap-3 rounded-xl border border-divider border-t-2 border-t-accent/40 bg-surface p-4 shadow-sm shadow-black/5 sm:flex-row sm:items-end sm:justify-between">
-                <label className="flex min-w-64 flex-col gap-1.5 text-sm font-medium">
+              <div className="ml-auto w-fit max-w-md space-y-3 rounded-xl border border-divider border-t-2 border-t-accent/40 bg-surface p-4 shadow-sm shadow-black/5">
+                <label className="flex min-w-48 flex-col gap-1.5 text-sm font-medium">
                   <span className="flex items-center gap-1.5">
                     <IconWorld
                       aria-hidden="true"
@@ -454,21 +500,24 @@ export function EnvironmentTrackerPage() {
                 <Label className="sr-only">
                   Search configuration key names
                 </Label>
-                <Input
-                  onChange={(event) => {
-                    setSearch(event.target.value);
-                    setSelection(null);
-                    setPage(1);
-                  }}
-                  placeholder="Search key name"
-                  value={search}
-                />
-                <IconSearch
-                  aria-hidden="true"
-                  className="text-muted"
-                  size={ICON_SIZE.button}
-                  stroke={ICON_STROKE}
-                />
+                <div className="relative">
+                  <IconSearch
+                    aria-hidden="true"
+                    className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted"
+                    size={ICON_SIZE.button}
+                    stroke={ICON_STROKE}
+                  />
+                  <Input
+                    className="pl-10"
+                    onChange={(event) => {
+                      setSearch(event.target.value);
+                      setSelection(null);
+                      setPage(1);
+                    }}
+                    placeholder="Search key name"
+                    value={search}
+                  />
+                </div>
               </TextField>
             </div>
 
@@ -481,8 +530,13 @@ export function EnvironmentTrackerPage() {
                     ? ` found in ${selectedEnvironment.name}`
                     : ''}
                 </p>
-                <div className="grid items-start gap-5 xl:grid-cols-[minmax(0,1fr)_22rem]">
-                  <div className="min-w-0">
+                <div
+                  className={`grid items-start gap-5 ${selection ? 'xl:grid-cols-[minmax(0,1fr)_22rem]' : ''}`}
+                >
+                  <div
+                    ref={matrixContainerRef}
+                    className="min-w-0 max-h-[70vh] overflow-y-auto rounded-xl"
+                  >
                     {view === 'compare' ? (
                       <EnvironmentMatrix
                         isRefreshingId={
@@ -524,10 +578,13 @@ export function EnvironmentTrackerPage() {
                       </Alert>
                     )}
                   </div>
-                  <EnvironmentKeyDetails
-                    onClose={() => setSelection(null)}
-                    selection={selection}
-                  />
+                  {selection ? (
+                    <EnvironmentKeyDetails
+                      onClose={() => setSelection(null)}
+                      onDefinitionClick={handleDefinitionClick}
+                      selection={selection}
+                    />
+                  ) : null}
                 </div>
                 <AppPagination
                   ariaLabel="Environment matrix pages"

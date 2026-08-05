@@ -20,31 +20,15 @@ export interface EnvironmentKeySelection {
 
 export function EnvironmentKeyDetails({
   onClose,
+  onDefinitionClick,
   selection,
 }: {
   onClose: () => void;
+  onDefinitionClick?: (relativePath: string) => void;
   selection: EnvironmentKeySelection | null;
 }) {
   if (!selection) {
-    return (
-      <aside className="rounded-xl border border-dashed border-divider bg-surface p-5 xl:sticky xl:top-6 xl:h-fit">
-        <div className="flex items-start gap-3">
-          <IconInfoCircle
-            aria-hidden="true"
-            className="mt-0.5 shrink-0 text-muted"
-            size={ICON_SIZE.button}
-            stroke={ICON_STROKE}
-          />
-          <div>
-            <h2 className="font-semibold">Key details</h2>
-            <p className="mt-1 text-sm leading-6 text-muted">
-              Select a matrix cell to see every definition, its source file,
-              line number, and whether it is active or commented.
-            </p>
-          </div>
-        </div>
-      </aside>
-    );
+    return null;
   }
 
   const activeDetails = selection.sourceDetails.filter(
@@ -135,12 +119,29 @@ export function EnvironmentKeyDetails({
                   selection.selectedSourcePath === detail.relativePath;
                 return (
                   <li
-                    className={`rounded-xl border p-3 ${
+                    className={`rounded-xl border p-3 transition-colors ${
                       isSelected
                         ? 'border-accent bg-accent/5'
                         : 'border-divider bg-surface-secondary'
-                    }`}
+                    } ${onDefinitionClick ? 'cursor-pointer hover:border-accent/60 hover:bg-accent/5' : ''}`}
                     key={`${detail.relativePath}:${detail.lineNumber ?? 'unknown'}:${index}`}
+                    onClick={
+                      onDefinitionClick
+                        ? () => onDefinitionClick(detail.relativePath)
+                        : undefined
+                    }
+                    onKeyDown={
+                      onDefinitionClick
+                        ? (e) => {
+                            if (e.key === 'Enter' || e.key === ' ') {
+                              e.preventDefault();
+                              onDefinitionClick(detail.relativePath);
+                            }
+                          }
+                        : undefined
+                    }
+                    role={onDefinitionClick ? 'button' : undefined}
+                    tabIndex={onDefinitionClick ? 0 : undefined}
                   >
                     <div className="flex items-start gap-3">
                       <IconFileCode
