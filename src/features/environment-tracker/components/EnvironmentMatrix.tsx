@@ -33,7 +33,7 @@ import {
   IconTableOff,
   IconTrash,
 } from '@tabler/icons-react';
-import { type Key, useEffect, useMemo, useState } from 'react';
+import { type Key, useMemo, useState } from 'react';
 import { ICON_SIZE, ICON_STROKE } from '@/shared/constants/icon.constants';
 import { useEnvironmentSourcesQuery } from '../hooks/use-environments';
 import type {
@@ -78,8 +78,9 @@ export function EnvironmentMatrix({
     () => matrix.environments.map((environment) => environment.id),
     [matrix.environments],
   );
-  const [orderedEnvironmentIds, setOrderedEnvironmentIds] =
-    useState(matrixEnvironmentIds);
+  const [preferredEnvironmentIds, setPreferredEnvironmentIds] = useState<
+    string[]
+  >([]);
   const environmentById = useMemo(
     () =>
       new Map(
@@ -100,6 +101,19 @@ export function EnvironmentMatrix({
       ),
     [matrix.environments],
   );
+  const orderedEnvironmentIds = useMemo(() => {
+    const availableIds = new Set(matrixEnvironmentIds);
+    const preferredIds = preferredEnvironmentIds.filter((environmentId) =>
+      availableIds.has(environmentId),
+    );
+    const preferredIdSet = new Set(preferredIds);
+    return [
+      ...preferredIds,
+      ...matrixEnvironmentIds.filter(
+        (environmentId) => !preferredIdSet.has(environmentId),
+      ),
+    ];
+  }, [matrixEnvironmentIds, preferredEnvironmentIds]);
   const orderedEnvironments = orderedEnvironmentIds
     .map((environmentId) => environmentById.get(environmentId))
     .filter(
@@ -112,25 +126,21 @@ export function EnvironmentMatrix({
     }),
   );
 
-  useEffect(() => {
-    setOrderedEnvironmentIds(matrixEnvironmentIds);
-  }, [matrixEnvironmentIds]);
-
   function handleDragEnd(event: DragEndEvent) {
     const { active, over } = event;
     if (!over || active.id === over.id) return;
 
-    const previousIds = orderedEnvironmentIds;
+    const previousPreference = preferredEnvironmentIds;
     const nextIds = reorderEnvironmentIds(
       orderedEnvironmentIds,
       String(active.id),
       String(over.id),
     );
-    if (nextIds === previousIds) return;
+    if (nextIds === orderedEnvironmentIds) return;
 
-    setOrderedEnvironmentIds(nextIds);
+    setPreferredEnvironmentIds(nextIds);
     void onReorder(nextIds).catch(() => {
-      setOrderedEnvironmentIds(previousIds);
+      setPreferredEnvironmentIds(previousPreference);
     });
   }
 
