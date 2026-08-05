@@ -115,7 +115,7 @@ test('adds a project through the selector and restores it after reload', async (
       exact: true,
     })
     .click();
-  await page.getByRole('button', { name: 'Add' }).click();
+  await page.getByRole('button', { name: 'Add', exact: true }).click();
   await expect(
     page.getByText('config/local.env', { exact: true }),
   ).toBeVisible();
