@@ -202,6 +202,7 @@ function SortableEnvironmentCard({
           </p>
         )}
         <Button
+          aria-label={`Manage ${environment.name} sources`}
           fullWidth
           isDisabled={isBusy}
           onPress={() => onManageSources(environment)}
