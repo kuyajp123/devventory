@@ -22,7 +22,13 @@ import {
   IconGripVertical,
   IconTableOff,
 } from '@tabler/icons-react';
-import { type CSSProperties, useMemo, useRef, useState } from 'react';
+import {
+  memo,
+  type CSSProperties,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 import type {
   Environment,
   EnvironmentMatrixCell,
@@ -56,6 +62,16 @@ interface EnvironmentMatrixProps {
   onSelect: (selection: EnvironmentKeySelection) => void;
   selection: EnvironmentKeySelection | null;
 }
+
+interface EnvironmentMatrixBodyProps {
+  environmentIndexById: Map<string, number>;
+  environments: Environment[];
+  onSelect: (selection: EnvironmentKeySelection) => void;
+  rows: EnvironmentMatrixPage['rows'];
+  selection: EnvironmentKeySelection | null;
+}
+
+type EnvironmentHeaderBounds = ReturnType<typeof getEnvironmentHeaderBounds>;
 
 const ABSENT_CELL: EnvironmentMatrixCell = {
   sourceDetails: [],
@@ -123,11 +139,16 @@ export function EnvironmentMatrix({
     [matrixEnvironmentIds, preferredEnvironmentIds],
   );
 
-  const orderedEnvironments = orderedEnvironmentIds
-    .map((environmentId) => environmentById.get(environmentId))
-    .filter(
-      (environment): environment is Environment => environment !== undefined,
-    );
+  const orderedEnvironments = useMemo(
+    () =>
+      orderedEnvironmentIds
+        .map((environmentId) => environmentById.get(environmentId))
+        .filter(
+          (environment): environment is Environment =>
+            environment !== undefined,
+        ),
+    [environmentById, orderedEnvironmentIds],
+  );
 
   const activeEnvironment = activeEnvironmentId
     ? environmentById.get(activeEnvironmentId)
@@ -135,16 +156,17 @@ export function EnvironmentMatrix({
 
   const tableMinWidth = getMatrixTableMinWidth(orderedEnvironments.length);
 
-  const [environmentHeaderBounds, setEnvironmentHeaderBounds] = useState(() =>
-    getEnvironmentHeaderBounds(null),
+  const dragBounds = useMemo<{ current: EnvironmentHeaderBounds }>(
+    () => ({ current: null }),
+    [],
   );
 
   const dragModifiers = useMemo(
     () => [
       restrictToHorizontalAxis,
-      createRestrictToEnvironmentHeaderBounds(() => environmentHeaderBounds),
+      createRestrictToEnvironmentHeaderBounds(() => dragBounds.current),
     ],
-    [environmentHeaderBounds],
+    [dragBounds],
   );
 
   const sensors = useSensors(
@@ -168,16 +190,23 @@ export function EnvironmentMatrix({
       scrollContainerRef.current?.querySelector('[data-slot="table-header"]') ??
       null;
 
-    setEnvironmentHeaderBounds(getEnvironmentHeaderBounds(tableHeader));
+    dragBounds.current = getEnvironmentHeaderBounds(tableHeader);
     setActiveEnvironmentId(String(event.active.id));
     setOverEnvironmentId(String(event.active.id));
   }
 
   function handleDragOver(event: DragOverEvent) {
-    setOverEnvironmentId(event.over ? String(event.over.id) : null);
+    const nextOverEnvironmentId = event.over ? String(event.over.id) : null;
+
+    setOverEnvironmentId((currentEnvironmentId) =>
+      currentEnvironmentId === nextOverEnvironmentId
+        ? currentEnvironmentId
+        : nextOverEnvironmentId,
+    );
   }
 
   function handleDragCancel() {
+    dragBounds.current = null;
     resetDragState();
   }
 
@@ -188,6 +217,7 @@ export function EnvironmentMatrix({
       event.over?.id ? String(event.over.id) : null,
     );
 
+    dragBounds.current = null;
     resetDragState();
 
     if (!nextIds) {
@@ -294,75 +324,33 @@ export function EnvironmentMatrix({
                   ))}
                 </Table.Header>
 
-                <Table.Body items={matrix.rows}>
-                  {(row) => (
-                    <Table.Row id={row.keyName}>
-                      <Table.Cell
-                        className={`${KEY_COLUMN_CLASS} font-mono text-sm font-medium`}
-                      >
-                        {row.keyName}
-                      </Table.Cell>
-
-                      {orderedEnvironments.map((environment) => {
-                        const cellIndex = environmentIndexById.get(
-                          environment.id,
-                        );
-
-                        const cell =
-                          cellIndex === undefined
-                            ? ABSENT_CELL
-                            : (row.cells[cellIndex] ?? ABSENT_CELL);
-
-                        return (
-                          <Table.Cell
-                            className={`${ENVIRONMENT_COLUMN_CLASS} ${
-                              overEnvironmentId === environment.id &&
-                              activeEnvironmentId !== null &&
-                              activeEnvironmentId !== environment.id
-                                ? 'bg-accent/5 ring-2 ring-inset ring-accent/60'
-                                : ''
-                            }`}
-                            key={`${row.keyName}-${environment.id}`}
-                          >
-                            <MatrixCell
-                              cell={cell}
-                              environment={environment}
-                              isSelected={
-                                selection?.keyName === row.keyName &&
-                                selection.environment.id === environment.id &&
-                                !selection.selectedSourcePath
-                              }
-                              keyName={row.keyName}
-                              onSelect={onSelect}
-                            />
-                          </Table.Cell>
-                        );
-                      })}
-                    </Table.Row>
-                  )}
-                </Table.Body>
+                <EnvironmentMatrixBody
+                  environmentIndexById={environmentIndexById}
+                  environments={orderedEnvironments}
+                  onSelect={onSelect}
+                  rows={matrix.rows}
+                  selection={selection}
+                />
               </Table.Content>
             </Table.ScrollContainer>
           </Table>
         </SortableContext>
 
-        <DragOverlay dropAnimation={null} modifiers={dragModifiers}>
+        <DragOverlay
+          adjustScale={false}
+          dropAnimation={null}
+          modifiers={dragModifiers}
+        >
           {activeEnvironment ? (
             <div
-              className="pointer-events-none"
+              className="pointer-events-none transform-gpu"
               style={{
+                contain: 'layout paint style',
                 width: ENVIRONMENT_COLUMN_WIDTH_PX,
+                willChange: 'transform',
               }}
             >
-              <EnvironmentMatrixColumnHeader
-                environment={activeEnvironment}
-                isBusy={isReordering || isRefreshingId === activeEnvironment.id}
-                isOverlay
-                onDelete={onDelete}
-                onEdit={onEdit}
-                onManageSources={onManageSources}
-                onRefresh={onRefresh}
-              />
+              <EnvironmentColumnDragPreview environment={activeEnvironment} />
             </div>
           ) : null}
         </DragOverlay>
@@ -371,7 +359,57 @@ export function EnvironmentMatrix({
   );
 }
 
-function SortableEnvironmentColumn({
+const EnvironmentMatrixBody = memo(function EnvironmentMatrixBody({
+  environmentIndexById,
+  environments,
+  onSelect,
+  rows,
+  selection,
+}: EnvironmentMatrixBodyProps) {
+  return (
+    <Table.Body items={rows}>
+      {(row) => (
+        <Table.Row id={row.keyName}>
+          <Table.Cell
+            className={`${KEY_COLUMN_CLASS} font-mono text-sm font-medium`}
+          >
+            {row.keyName}
+          </Table.Cell>
+
+          {environments.map((environment) => {
+            const cellIndex = environmentIndexById.get(environment.id);
+
+            const cell =
+              cellIndex === undefined
+                ? ABSENT_CELL
+                : (row.cells[cellIndex] ?? ABSENT_CELL);
+
+            return (
+              <Table.Cell
+                className={ENVIRONMENT_COLUMN_CLASS}
+                key={`${row.keyName}-${environment.id}`}
+              >
+                <MatrixCell
+                  cell={cell}
+                  environment={environment}
+                  isSelected={
+                    selection?.keyName === row.keyName &&
+                    selection.environment.id === environment.id &&
+                    !selection.selectedSourcePath
+                  }
+                  keyName={row.keyName}
+                  onSelect={onSelect}
+                />
+              </Table.Cell>
+            );
+          })}
+        </Table.Row>
+      )}
+    </Table.Body>
+  );
+});
+
+const SortableEnvironmentColumn = memo(function SortableEnvironmentColumn({
   environment,
   isBusy,
   isDropTarget,
@@ -423,9 +461,30 @@ function SortableEnvironmentColumn({
       )}
     </Table.Column>
   );
+});
+
+function EnvironmentColumnDragPreview({
+  environment,
+}: {
+  environment: Environment;
+}) {
+  return (
+    <div className="flex min-h-[3.75rem] items-center gap-2 rounded-lg border border-accent bg-surface px-3 py-2 shadow-lg ring-1 ring-accent/40">
+      <IconGripVertical
+        aria-hidden="true"
+        className="shrink-0 text-muted"
+        size={ICON_SIZE.button}
+        stroke={ICON_STROKE}
+      />
+      <div className="min-w-0">
+        <p className="truncate font-semibold">{environment.name}</p>
+        <p className="truncate text-xs font-normal text-muted">Moving column</p>
+      </div>
+    </div>
+  );
 }
 
-function MatrixCell({
+const MatrixCell = memo(function MatrixCell({
   cell,
   environment,
   isSelected,
@@ -483,7 +542,7 @@ function MatrixCell({
       />
     </button>
   );
-}
+});
 
 function cellLabel(cell: EnvironmentMatrixCell, activeCount: number): string {
   switch (cell.state) {
