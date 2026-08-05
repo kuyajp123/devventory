@@ -22,13 +22,7 @@ import {
   IconGripVertical,
   IconTableOff,
 } from '@tabler/icons-react';
-import {
-  memo,
-  type CSSProperties,
-  useMemo,
-  useRef,
-  useState,
-} from 'react';
+import { memo, type CSSProperties, useMemo, useRef, useState } from 'react';
 import type {
   Environment,
   EnvironmentMatrixCell,
@@ -70,8 +64,6 @@ interface EnvironmentMatrixBodyProps {
   rows: EnvironmentMatrixPage['rows'];
   selection: EnvironmentKeySelection | null;
 }
-
-type EnvironmentHeaderBounds = ReturnType<typeof getEnvironmentHeaderBounds>;
 
 const ABSENT_CELL: EnvironmentMatrixCell = {
   sourceDetails: [],
@@ -156,17 +148,16 @@ export function EnvironmentMatrix({
 
   const tableMinWidth = getMatrixTableMinWidth(orderedEnvironments.length);
 
-  const dragBounds = useMemo<{ current: EnvironmentHeaderBounds }>(
-    () => ({ current: null }),
-    [],
+  const [environmentHeaderBounds, setEnvironmentHeaderBounds] = useState(() =>
+    getEnvironmentHeaderBounds(null),
   );
 
   const dragModifiers = useMemo(
     () => [
       restrictToHorizontalAxis,
-      createRestrictToEnvironmentHeaderBounds(() => dragBounds.current),
+      createRestrictToEnvironmentHeaderBounds(() => environmentHeaderBounds),
     ],
-    [dragBounds],
+    [environmentHeaderBounds],
   );
 
   const sensors = useSensors(
@@ -190,7 +181,7 @@ export function EnvironmentMatrix({
       scrollContainerRef.current?.querySelector('[data-slot="table-header"]') ??
       null;
 
-    dragBounds.current = getEnvironmentHeaderBounds(tableHeader);
+    setEnvironmentHeaderBounds(getEnvironmentHeaderBounds(tableHeader));
     setActiveEnvironmentId(String(event.active.id));
     setOverEnvironmentId(String(event.active.id));
   }
@@ -206,7 +197,7 @@ export function EnvironmentMatrix({
   }
 
   function handleDragCancel() {
-    dragBounds.current = null;
+    setEnvironmentHeaderBounds(null);
     resetDragState();
   }
 
@@ -217,7 +208,7 @@ export function EnvironmentMatrix({
       event.over?.id ? String(event.over.id) : null,
     );
 
-    dragBounds.current = null;
+    setEnvironmentHeaderBounds(null);
     resetDragState();
 
     if (!nextIds) {
