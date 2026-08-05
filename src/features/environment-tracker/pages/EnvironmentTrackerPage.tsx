@@ -25,7 +25,6 @@ import { useActiveProject } from '@/features/projects';
 import { ICON_SIZE, ICON_STROKE } from '@/shared/constants/icon.constants';
 import { TauriCommandError } from '@/shared/infrastructure/tauri/tauri-error';
 import { AppPagination } from '@/shared/ui/AppPagination';
-import { EnvironmentColumns } from '../components/EnvironmentColumns';
 import { EnvironmentFormModal } from '../components/EnvironmentFormModal';
 import {
   EnvironmentKeyDetails,
@@ -177,6 +176,17 @@ export function EnvironmentTrackerPage() {
           `${count} configured source${count === 1 ? '' : 's'} refreshed`,
         ),
     });
+  }
+
+  async function reorderEnvironments(environmentIds: string[]) {
+    try {
+      await reorder.mutateAsync(environmentIds);
+    } catch (error) {
+      toast.danger(
+        errorMessage(error, 'The environment order could not be saved.'),
+      );
+      throw error;
+    }
   }
 
   function changeView(nextView: TrackerView) {
@@ -361,30 +371,6 @@ export function EnvironmentTrackerPage() {
                   inside each environment—not between Local and Staging.
                 </p>
               </div>
-              <EnvironmentColumns
-                environments={environmentItems}
-                isRefreshingId={
-                  refreshEnvironment.isPending
-                    ? refreshEnvironment.variables
-                    : null
-                }
-                isReordering={reorder.isPending}
-                onDelete={removeEnvironment}
-                onEdit={setEditing}
-                onManageSources={setSourceEnvironment}
-                onRefresh={refreshOne}
-                onReorder={(ids) =>
-                  reorder.mutate(ids, {
-                    onError: (error) =>
-                      toast.danger(
-                        errorMessage(
-                          error,
-                          'The environment order could not be saved.',
-                        ),
-                      ),
-                  })
-                }
-              />
             </>
           ) : selectedEnvironment ? (
             <section
@@ -487,7 +473,18 @@ export function EnvironmentTrackerPage() {
                   <div className="min-w-0">
                     {view === 'compare' ? (
                       <EnvironmentMatrix
+                        isRefreshingId={
+                          refreshEnvironment.isPending
+                            ? refreshEnvironment.variables
+                            : null
+                        }
+                        isReordering={reorder.isPending}
                         matrix={matrixData}
+                        onDelete={removeEnvironment}
+                        onEdit={setEditing}
+                        onManageSources={setSourceEnvironment}
+                        onRefresh={refreshOne}
+                        onReorder={reorderEnvironments}
                         onSelect={setSelection}
                         selection={selection}
                       />
