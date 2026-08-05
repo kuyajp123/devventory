@@ -1,3 +1,4 @@
+import { ICON_SIZE, ICON_STROKE } from '@/shared/constants/icon.constants';
 import { Chip, EmptyState, Table } from '@heroui/react';
 import {
   IconChevronRight,
@@ -5,7 +6,6 @@ import {
   IconInfoCircle,
   IconTableOff,
 } from '@tabler/icons-react';
-import { ICON_SIZE, ICON_STROKE } from '@/shared/constants/icon.constants';
 import {
   sourceStatusLabel,
   type Environment,
@@ -41,7 +41,9 @@ export function InspectEnvironmentMatrix({
           size={ICON_SIZE.emptyState}
           stroke={ICON_STROKE}
         />
-        <h2 className="mt-4 text-lg font-semibold">No source files to inspect</h2>
+        <h2 className="mt-4 text-lg font-semibold">
+          No source files to inspect
+        </h2>
         <p className="mt-2 text-sm text-muted">
           Add a configuration source to {environment.name} before opening the
           source breakdown.
@@ -73,45 +75,7 @@ export function InspectEnvironmentMatrix({
         </div>
       </div>
 
-      <div className="grid gap-3 md:grid-cols-2">
-        {sources.map((source) => (
-          <article
-            className="rounded-xl border border-divider bg-surface p-4"
-            key={source.id}
-          >
-            <div className="flex items-start justify-between gap-3">
-              <div className="min-w-0">
-                <div className="flex items-center gap-2">
-                  <IconFileCode
-                    aria-hidden="true"
-                    className="shrink-0 text-muted"
-                    size={ICON_SIZE.button}
-                    stroke={ICON_STROKE}
-                  />
-                  <p className="truncate font-mono text-sm font-medium">
-                    {source.relativePath}
-                  </p>
-                </div>
-                <p className="mt-2 text-xs text-muted">
-                  Display position {source.sortOrder + 1}
-                </p>
-              </div>
-              <Chip
-                color={source.parseStatus === 'parsed' ? 'success' : 'warning'}
-                size="sm"
-                variant="soft"
-              >
-                <Chip.Label>{sourceStatusLabel(source.parseStatus)}</Chip.Label>
-              </Chip>
-            </div>
-            {source.lastIssueMessage ? (
-              <p className="mt-3 text-xs leading-5 text-warning">
-                {source.lastIssueMessage}
-              </p>
-            ) : null}
-          </article>
-        ))}
-      </div>
+      {/* i intentionally remove the cards here. do not bring the cards back! update the test if its failed */}
 
       {matrix.rows.length === 0 ? (
         <EmptyState className="rounded-xl border border-dashed border-divider bg-surface p-8 text-center">
@@ -185,9 +149,7 @@ export function InspectEnvironmentMatrix({
                             key={`${row.keyName}:${source.id}`}
                           >
                             <SourceMatrixCell
-                              allDetails={
-                                environmentCell?.sourceDetails ?? []
-                              }
+                              allDetails={environmentCell?.sourceDetails ?? []}
                               environment={environment}
                               isSelected={
                                 selection?.keyName === row.keyName &&
@@ -286,10 +248,7 @@ function sourceCellStatus(
   if (active === 1) return 'Active';
   if (commented > 0) return 'Commented';
   if (source.parseStatus === 'parse_issue') return 'Parse issue';
-  if (
-    source.parseStatus === 'missing' ||
-    source.parseStatus === 'unreadable'
-  )
+  if (source.parseStatus === 'missing' || source.parseStatus === 'unreadable')
     return 'Source unreadable';
   if (source.parseStatus === 'unsupported_encoding')
     return 'Unsupported encoding';
