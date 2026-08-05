@@ -21,3 +21,21 @@ body {
     'Segoe UI',
     sans-serif;
 }
+
+[data-cell-id][data-selected='true'],
+[data-definition-path][data-selected='true'] {
+  position: relative;
+  isolation: isolate;
+}
+
+[data-cell-id][data-selected='true']::after,
+[data-definition-path][data-selected='true']::after {
+  position: absolute;
+  z-index: 20;
+  inset: 0.25rem;
+  border: 2px solid var(--color-accent, #006fee);
+  border-radius: inherit;
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--color-accent, #006fee) 55%, transparent);
+  pointer-events: none;
+  content: '';
+}
