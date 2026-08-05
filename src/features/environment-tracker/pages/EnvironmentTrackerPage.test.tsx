@@ -232,9 +232,7 @@ describe('EnvironmentTrackerPage', () => {
       }),
     );
 
-    expect(
-      screen.getByText('Definitions in this environment'),
-    ).toBeVisible();
+    expect(screen.getByText('Definitions in this environment')).toBeVisible();
     expect(screen.getAllByText('Line 4').length).toBeGreaterThan(0);
     expect(screen.getAllByText('Line 17').length).toBeGreaterThan(0);
   });

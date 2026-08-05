@@ -84,10 +84,7 @@ export function EnvironmentMatrix({
   const environmentById = useMemo(
     () =>
       new Map(
-        matrix.environments.map((environment) => [
-          environment.id,
-          environment,
-        ]),
+        matrix.environments.map((environment) => [environment.id, environment]),
       ),
     [matrix.environments],
   );
@@ -165,10 +162,7 @@ export function EnvironmentMatrix({
   }
 
   return (
-    <section
-      aria-label="Environment comparison matrix"
-      className="space-y-2"
-    >
+    <section aria-label="Environment comparison matrix" className="space-y-2">
       <p className="flex items-center gap-1.5 text-xs text-muted">
         <IconGripVertical
           aria-hidden="true"
@@ -202,8 +196,7 @@ export function EnvironmentMatrix({
                       <SortableEnvironmentHeader
                         environment={environment}
                         isBusy={
-                          isReordering ||
-                          isRefreshingId === environment.id
+                          isReordering || isRefreshingId === environment.id
                         }
                         onDelete={onDelete}
                         onEdit={onEdit}
@@ -387,10 +380,7 @@ function SortableEnvironmentHeader({
         </Dropdown.Trigger>
         <Dropdown.Popover placement="bottom end">
           <Dropdown.Menu onAction={handleAction}>
-            <Dropdown.Item
-              id="manage-sources"
-              textValue="Manage sources"
-            >
+            <Dropdown.Item id="manage-sources" textValue="Manage sources">
               <IconSettings
                 aria-hidden="true"
                 size={ICON_SIZE.button}
@@ -398,10 +388,7 @@ function SortableEnvironmentHeader({
               />
               <Label>Manage sources</Label>
             </Dropdown.Item>
-            <Dropdown.Item
-              id="refresh"
-              textValue="Refresh environment"
-            >
+            <Dropdown.Item id="refresh" textValue="Refresh environment">
               <IconRefresh
                 aria-hidden="true"
                 size={ICON_SIZE.button}

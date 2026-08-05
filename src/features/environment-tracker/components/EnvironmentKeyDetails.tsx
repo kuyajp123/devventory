@@ -247,6 +247,7 @@ function sourceExplanation(
     return `${sourcePath} contains one active and ${commented} commented definition${commented === 1 ? '' : 's'}.`;
   }
   if (active === 1) return `${sourcePath} contains one active definition.`;
-  if (commented > 0) return `${sourcePath} contains only commented definitions.`;
+  if (commented > 0)
+    return `${sourcePath} contains only commented definitions.`;
   return `${sourcePath} does not contain this key.`;
 }

@@ -19,6 +19,7 @@ import {
   IconRefresh,
   IconSearch,
   IconSettings,
+  IconWorld,
 } from '@tabler/icons-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useActiveProject } from '@/features/projects';
@@ -63,8 +64,9 @@ export function EnvironmentTrackerPage() {
   const [selectedEnvironmentId, setSelectedEnvironmentId] = useState<
     string | null
   >(null);
-  const [selection, setSelection] =
-    useState<EnvironmentKeySelection | null>(null);
+  const [selection, setSelection] = useState<EnvironmentKeySelection | null>(
+    null,
+  );
   const [editing, setEditing] = useState<Environment | null | 'new'>(null);
   const [sourceEnvironment, setSourceEnvironment] =
     useState<Environment | null>(null);
@@ -212,7 +214,8 @@ export function EnvironmentTrackerPage() {
     };
   }, [inspectMatrix.data, page]);
   const activeMatrix = view === 'compare' ? compareMatrix : inspectMatrix;
-  const matrixData = view === 'compare' ? compareMatrix.data : inspectMatrixPage;
+  const matrixData =
+    view === 'compare' ? compareMatrix.data : inspectMatrixPage;
   const isLoading = environments.isPending || activeMatrix.isPending;
 
   if (isHydrating) return <EnvironmentTrackerSkeleton />;
@@ -365,8 +368,8 @@ export function EnvironmentTrackerPage() {
                   stroke={ICON_STROKE}
                 />
                 <p>
-                  An environment may contain multiple source files when the
-                  same runtime intentionally uses base, secrets, override, or
+                  An environment may contain multiple source files when the same
+                  runtime intentionally uses base, secrets, override, or
                   service-specific files. Multiple definitions are calculated
                   inside each environment—not between Local and Staging.
                 </p>
@@ -377,11 +380,19 @@ export function EnvironmentTrackerPage() {
               className="space-y-4"
               aria-label="Inspect environment controls"
             >
-              <div className="flex flex-col gap-3 rounded-xl border border-divider bg-surface p-4 sm:flex-row sm:items-end sm:justify-between">
+              <div className="flex flex-col gap-3 rounded-xl border border-divider border-t-2 border-t-accent/40 bg-surface p-4 shadow-sm shadow-black/5 sm:flex-row sm:items-end sm:justify-between">
                 <label className="flex min-w-64 flex-col gap-1.5 text-sm font-medium">
-                  Environment
+                  <span className="flex items-center gap-1.5">
+                    <IconWorld
+                      aria-hidden="true"
+                      size={ICON_SIZE.small}
+                      stroke={ICON_STROKE}
+                      className="text-accent"
+                    />
+                    Environment
+                  </span>
                   <select
-                    className="h-10 rounded-lg border border-divider bg-surface-secondary px-3 text-sm outline-none focus:border-accent focus:ring-2 focus:ring-accent/30"
+                    className="h-10 rounded-lg border border-divider bg-surface-secondary px-3 text-sm outline-none transition-colors duration-200 focus:border-accent focus:ring-2 focus:ring-accent/30 hover:border-accent/50"
                     onChange={(event) => {
                       setSelectedEnvironmentId(event.target.value);
                       setSelection(null);
@@ -417,6 +428,7 @@ export function EnvironmentTrackerPage() {
                   </Button>
                 </div>
               </div>
+              <EnvironmentStatusLegend />
             </section>
           ) : null}
 

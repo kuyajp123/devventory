@@ -17,10 +17,7 @@ export function EnvironmentStatusLegend() {
     >
       <LegendChip
         icon={
-          <IconPointFilled
-            className="text-success"
-            size={ICON_SIZE.small}
-          />
+          <IconPointFilled className="text-success" size={ICON_SIZE.small} />
         }
         label="Present"
         title="Exactly one active definition exists in this environment."
