@@ -6,6 +6,7 @@ use crate::features::asset_library::{AssetService, LocalAssetFilesystem, SqliteA
 use crate::features::backups::repository::{
     BackupRecordDraft, BackupRepository, SqliteBackupRepository,
 };
+use crate::features::environment_tracker::{EnvironmentService, SqliteEnvironmentRepository};
 use crate::features::file_inventory::{
     FileInventoryService, InventoryRuntime, SqliteFileInventoryRepository,
 };
@@ -19,6 +20,7 @@ pub(crate) struct AppState {
     database: Database,
     file_inventory_service: FileInventoryService,
     asset_service: AssetService,
+    environment_service: EnvironmentService,
     inventory_runtime: InventoryRuntime,
 }
 
@@ -69,10 +71,18 @@ impl AppState {
             ),
             LocalAssetFilesystem,
         );
+        let environment_service = EnvironmentService::new(
+            SqliteEnvironmentRepository::new(database.pool().clone()),
+            ProjectService::new(
+                SqliteProjectRepository::new(database.pool().clone()),
+                LocalProjectFilesystem,
+            ),
+        );
 
         Ok(Self {
             database,
             asset_service,
+            environment_service,
             file_inventory_service,
             inventory_runtime: InventoryRuntime::new(),
         })
@@ -106,13 +116,21 @@ impl AppState {
         self.asset_service.clone()
     }
 
+    pub(crate) fn environment_service(&self) -> EnvironmentService {
+        self.environment_service.clone()
+    }
+
     pub(crate) async fn start_inventory_runtime(
         &self,
         app: AppHandle,
     ) -> Result<(), crate::features::file_inventory::FileInventoryError> {
         self.refresh_inventory_watchers().await?;
         self.inventory_runtime
-            .start(app, self.file_inventory_service())
+            .start(
+                app,
+                self.file_inventory_service(),
+                self.environment_service(),
+            )
             .await
     }
 

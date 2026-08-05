@@ -10,13 +10,22 @@ mod tests;
 
 #[derive(Debug, Error)]
 pub(crate) enum AppError {
-    #[error("database operation failed")]
+    // #[error("database operation failed")]
+    // Database(#[from] sqlx::Error),
+
+    // #[error("database migration failed")]
+    // Migration(#[from] MigrateError),
+
+    // #[error("filesystem operation failed")]
+    // Filesystem(#[from] io::Error),
+
+    #[error("database operation failed: {0}")]
     Database(#[from] sqlx::Error),
 
-    #[error("database migration failed")]
+    #[error("database migration failed: {0}")]
     Migration(#[from] MigrateError),
 
-    #[error("filesystem operation failed")]
+    #[error("filesystem operation failed: {0}")]
     Filesystem(#[from] io::Error),
 
     #[error("database backup path is invalid")]

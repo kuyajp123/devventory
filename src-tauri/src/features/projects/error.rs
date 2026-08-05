@@ -93,3 +93,23 @@ impl From<ProjectError> for CommandError {
         }
     }
 }
+
+#[derive(Debug, Error)]
+pub(crate) enum ProjectFileError {
+    #[error("project file path is invalid")]
+    InvalidRelativePath,
+    #[error("project file cannot be represented safely")]
+    InvalidPathEncoding,
+    #[error("project file cannot be a symbolic link or junction")]
+    LinkNotAllowed,
+    #[error("project file does not exist")]
+    NotFound,
+    #[error("project file is not a regular file")]
+    NotRegularFile,
+    #[error("project was not found")]
+    ProjectNotFound,
+    #[error("project root cannot be read")]
+    RootUnavailable,
+    #[error("project file cannot be read")]
+    Unreadable,
+}

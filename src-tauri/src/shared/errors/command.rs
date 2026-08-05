@@ -6,6 +6,7 @@ use super::AppError;
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 enum CommandErrorCode {
     AssetConflict,
+    EnvironmentConflict,
     FilesystemUnavailable,
     InvalidInput,
     NotFound,
@@ -36,6 +37,14 @@ impl CommandError {
     pub(crate) fn asset_conflict(message: &'static str) -> Self {
         Self {
             code: CommandErrorCode::AssetConflict,
+            message,
+            recoverable: true,
+        }
+    }
+
+    pub(crate) fn environment_conflict(message: &'static str) -> Self {
+        Self {
+            code: CommandErrorCode::EnvironmentConflict,
             message,
             recoverable: true,
         }
@@ -172,6 +181,7 @@ impl CommandError {
     pub(crate) fn code(&self) -> &'static str {
         match self.code {
             CommandErrorCode::AssetConflict => "ASSET_CONFLICT",
+            CommandErrorCode::EnvironmentConflict => "ENVIRONMENT_CONFLICT",
             CommandErrorCode::FilesystemUnavailable => "FILESYSTEM_UNAVAILABLE",
             CommandErrorCode::InvalidInput => "INVALID_INPUT",
             CommandErrorCode::NotFound => "NOT_FOUND",

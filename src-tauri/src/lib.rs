@@ -11,15 +11,19 @@ use features::asset_library::commands::{
     preview_asset_import, resolve_asset_variant_path, run_asset_action, update_asset_metadata,
     update_asset_variants,
 };
+use features::environment_tracker::commands::{
+    add_environment_source, create_environment, delete_environment, delete_environment_source,
+    get_environment_matrix, list_environment_source_candidates, list_environment_sources,
+    list_environments, refresh_environment, refresh_project_environment_sources,
+    reorder_environment_sources, reorder_environments, update_environment,
+};
 use features::file_inventory::commands::{
     list_project_files, rescan_project, rescan_watched_location,
 };
 use features::projects::commands::{
     create_project, get_project, list_projects, scan_project_root, validate_project_root,
 };
-use features::settings::commands::{
-    get_last_opened_project_id, save_last_opened_project_id,
-};
+use features::settings::commands::{get_last_opened_project_id, save_last_opened_project_id};
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -61,7 +65,20 @@ pub fn run() {
             list_asset_variants,
             resolve_asset_variant_path,
             update_asset_variants,
-            run_asset_action
+            run_asset_action,
+            list_environments,
+            create_environment,
+            update_environment,
+            delete_environment,
+            reorder_environments,
+            list_environment_sources,
+            add_environment_source,
+            delete_environment_source,
+            reorder_environment_sources,
+            list_environment_source_candidates,
+            get_environment_matrix,
+            refresh_environment,
+            refresh_project_environment_sources
         ])
         .run(tauri::generate_context!())
         .expect("error while running Devventory");
