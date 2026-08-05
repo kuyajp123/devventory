@@ -1,10 +1,13 @@
+import { useActiveProject } from '@/features/projects';
+import { ICON_SIZE, ICON_STROKE } from '@/shared/constants/icon.constants';
+import { TauriCommandError } from '@/shared/infrastructure/tauri/tauri-error';
+import { AppPagination } from '@/shared/ui/AppPagination';
 import {
   Alert,
   Button,
   Chip,
   EmptyState,
   Input,
-  Label,
   Skeleton,
   Spinner,
   TextField,
@@ -22,10 +25,6 @@ import {
   IconWorld,
 } from '@tabler/icons-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { useActiveProject } from '@/features/projects';
-import { ICON_SIZE, ICON_STROKE } from '@/shared/constants/icon.constants';
-import { TauriCommandError } from '@/shared/infrastructure/tauri/tauri-error';
-import { AppPagination } from '@/shared/ui/AppPagination';
 import { EnvironmentFormModal } from '../components/EnvironmentFormModal';
 import {
   EnvironmentKeyDetails,
@@ -496,10 +495,7 @@ export function EnvironmentTrackerPage() {
                     : `Compare each key across the source files configured for ${selectedEnvironment?.name ?? 'the selected environment'}.`}
                 </p>
               </div>
-              <TextField className="w-full sm:w-80" variant="secondary">
-                <Label className="sr-only">
-                  Search configuration key names
-                </Label>
+              <TextField className="w-full sm:w-100" variant="secondary">
                 <div className="relative">
                   <IconSearch
                     aria-hidden="true"
@@ -508,7 +504,7 @@ export function EnvironmentTrackerPage() {
                     stroke={ICON_STROKE}
                   />
                   <Input
-                    className="pl-10"
+                    className="pl-10 w-full"
                     onChange={(event) => {
                       setSearch(event.target.value);
                       setSelection(null);
@@ -533,10 +529,7 @@ export function EnvironmentTrackerPage() {
                 <div
                   className={`grid items-start gap-5 ${selection ? 'xl:grid-cols-[minmax(0,1fr)_22rem]' : ''}`}
                 >
-                  <div
-                    ref={matrixContainerRef}
-                    className="min-w-0 max-h-[70vh] overflow-y-auto rounded-xl"
-                  >
+                  <div ref={matrixContainerRef} className="min-w-0 rounded-xl">
                     {view === 'compare' ? (
                       <EnvironmentMatrix
                         isRefreshingId={

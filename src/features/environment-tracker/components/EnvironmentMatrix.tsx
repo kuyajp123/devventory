@@ -22,7 +22,7 @@ import {
   IconGripVertical,
   IconTableOff,
 } from '@tabler/icons-react';
-import { memo, type CSSProperties, useMemo, useRef, useState } from 'react';
+import { type CSSProperties, memo, useMemo, useRef, useState } from 'react';
 import type {
   Environment,
   EnvironmentMatrixCell,
