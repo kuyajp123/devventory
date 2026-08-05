@@ -29,17 +29,20 @@ jobs:
         with:
           fetch-depth: 0
 
+      # Caches npm's downloaded packages based on package-lock.json.
       - name: Set up Node.js
         uses: actions/setup-node@v6
         with:
           node-version: 24
           cache: npm
+          cache-dependency-path: package-lock.json
 
       - name: Install frontend dependencies
         run: npm ci
 
-      - name: Install Playwright Chromium
-        run: npm exec playwright install chromium
+      # Installs only the browser required for headless Playwright tests.
+      - name: Install Playwright Chromium headless shell
+        run: npm exec playwright install chromium --only-shell
 
       - name: Lint frontend
         run: npm run lint
@@ -70,10 +73,14 @@ jobs:
           $hasHeadSha = $false
 
           git cat-file -e "$baseSha^{commit}" 2>$null
-          if ($LASTEXITCODE -eq 0) { $hasBaseSha = $true }
+          if ($LASTEXITCODE -eq 0) {
+            $hasBaseSha = $true
+          }
 
           git cat-file -e "$headSha^{commit}" 2>$null
-          if ($LASTEXITCODE -eq 0) { $hasHeadSha = $true }
+          if ($LASTEXITCODE -eq 0) {
+            $hasHeadSha = $true
+          }
 
           if ($hasBaseSha -and $hasHeadSha) {
             npm exec commitlint -- --from "$baseSha" --to "$headSha" --verbose
@@ -84,6 +91,15 @@ jobs:
 
       - name: Install Rust quality components
         run: rustup component add clippy
+
+      # Caches Cargo registry, Git dependencies, and compiled Rust output.
+      - name: Cache Rust dependencies and build output
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: |
+            src-tauri -> target
+          shared-key: devventory-ci
+          cache-on-failure: true
 
       - name: Lint Rust
         working-directory: src-tauri
@@ -97,8 +113,11 @@ jobs:
         working-directory: src-tauri
         run: cargo check
 
+      # Downloads a prebuilt cargo-audit binary instead of compiling it.
       - name: Install RustSec cargo-audit
-        run: cargo install cargo-audit --locked
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-audit
 
       - name: Audit Rust dependencies
         working-directory: src-tauri
