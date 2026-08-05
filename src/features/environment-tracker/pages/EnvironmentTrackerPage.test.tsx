@@ -137,7 +137,7 @@ describe('EnvironmentTrackerPage', () => {
     expect(
       await screen.findByRole('button', { name: 'Reorder Development' }),
     ).toBeVisible();
-    expect(screen.getByText('1 source')).toBeVisible();
+    expect(await screen.findByText('1 source')).toBeVisible();
     expect(
       screen.queryByLabelText('Environment summaries'),
     ).not.toBeInTheDocument();
