@@ -340,7 +340,6 @@ function SortableEnvironmentHeader({
     <div
       ref={setNodeRef}
       style={style}
-      {...attributes}
       className="flex min-w-52 items-start gap-1 rounded-lg py-1"
     >
       <Button
@@ -350,6 +349,7 @@ function SortableEnvironmentHeader({
         ref={setActivatorNodeRef}
         size="sm"
         variant="ghost"
+        {...attributes}
         {...listeners}
       >
         <IconGripVertical
@@ -374,20 +374,16 @@ function SortableEnvironmentHeader({
         </p>
       </div>
       <Dropdown>
-        <Dropdown.Trigger>
-          <Button
-            aria-label={`Open actions for ${environment.name}`}
-            isDisabled={isBusy}
-            isIconOnly
-            size="sm"
-            variant="ghost"
-          >
-            <IconDotsVertical
-              aria-hidden="true"
-              size={ICON_SIZE.button}
-              stroke={ICON_STROKE}
-            />
-          </Button>
+        <Dropdown.Trigger
+          aria-label={`Open actions for ${environment.name}`}
+          className="inline-flex size-8 items-center justify-center rounded-lg text-muted transition hover:bg-surface-secondary hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:cursor-not-allowed disabled:opacity-50"
+          isDisabled={isBusy}
+        >
+          <IconDotsVertical
+            aria-hidden="true"
+            size={ICON_SIZE.button}
+            stroke={ICON_STROKE}
+          />
         </Dropdown.Trigger>
         <Dropdown.Popover placement="bottom end">
           <Dropdown.Menu onAction={handleAction}>
