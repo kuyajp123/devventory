@@ -1,6 +1,7 @@
 import {
   Alert,
   Button,
+  Chip,
   EmptyState,
   Input,
   Label,
@@ -11,23 +12,35 @@ import {
 } from '@heroui/react';
 import {
   IconAdjustments,
+  IconColumns3,
+  IconFiles,
+  IconInfoCircle,
   IconPlus,
   IconRefresh,
   IconSearch,
+  IconSettings,
 } from '@tabler/icons-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useActiveProject } from '@/features/projects';
-import { TauriCommandError } from '@/shared/infrastructure/tauri/tauri-error';
 import { ICON_SIZE, ICON_STROKE } from '@/shared/constants/icon.constants';
+import { TauriCommandError } from '@/shared/infrastructure/tauri/tauri-error';
 import { AppPagination } from '@/shared/ui/AppPagination';
 import { EnvironmentColumns } from '../components/EnvironmentColumns';
 import { EnvironmentFormModal } from '../components/EnvironmentFormModal';
+import {
+  EnvironmentKeyDetails,
+  type EnvironmentKeySelection,
+} from '../components/EnvironmentKeyDetails';
 import { EnvironmentMatrix } from '../components/EnvironmentMatrix';
 import { EnvironmentSourceManager } from '../components/EnvironmentSourceManager';
+import { EnvironmentStatusLegend } from '../components/EnvironmentStatusLegend';
+import { InspectEnvironmentMatrix } from '../components/InspectEnvironmentMatrix';
 import {
   useCreateEnvironmentMutation,
   useDeleteEnvironmentMutation,
+  useEnvironmentInspectMatrixQuery,
   useEnvironmentMatrixQuery,
+  useEnvironmentSourcesQuery,
   useEnvironmentsQuery,
   useRefreshEnvironmentMutation,
   useRefreshProjectEnvironmentsMutation,
@@ -37,6 +50,7 @@ import {
 import type { Environment, EnvironmentFormValues } from '../models/environment';
 
 const MATRIX_PAGE_SIZE = 50;
+type TrackerView = 'compare' | 'inspect';
 
 export function EnvironmentTrackerPage() {
   const {
@@ -46,10 +60,23 @@ export function EnvironmentTrackerPage() {
   } = useActiveProject();
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(1);
+  const [view, setView] = useState<TrackerView>('compare');
+  const [selectedEnvironmentId, setSelectedEnvironmentId] = useState<
+    string | null
+  >(null);
+  const [selection, setSelection] =
+    useState<EnvironmentKeySelection | null>(null);
   const [editing, setEditing] = useState<Environment | null | 'new'>(null);
   const [sourceEnvironment, setSourceEnvironment] =
     useState<Environment | null>(null);
   const previousProjectId = useRef(projectId);
+
+  const environments = useEnvironmentsQuery(projectId ?? '');
+  const environmentItems = environments.data ?? [];
+  const selectedEnvironment =
+    environmentItems.find(
+      (environment) => environment.id === selectedEnvironmentId,
+    ) ?? environmentItems[0];
   const filters = useMemo(
     () => ({
       page,
@@ -58,8 +85,21 @@ export function EnvironmentTrackerPage() {
     }),
     [page, search],
   );
-  const environments = useEnvironmentsQuery(projectId ?? '');
-  const matrix = useEnvironmentMatrixQuery(projectId ?? '', filters);
+  const compareMatrix = useEnvironmentMatrixQuery(
+    projectId ?? '',
+    filters,
+    view === 'compare',
+  );
+  const inspectMatrix = useEnvironmentInspectMatrixQuery(
+    projectId ?? '',
+    selectedEnvironment?.id ?? '',
+    search.trim() || undefined,
+    view === 'inspect',
+  );
+  const selectedSources = useEnvironmentSourcesQuery(
+    projectId ?? '',
+    view === 'inspect' ? (selectedEnvironment?.id ?? '') : '',
+  );
   const createEnvironment = useCreateEnvironmentMutation(projectId ?? '');
   const updateEnvironment = useUpdateEnvironmentMutation(projectId ?? '');
   const deleteEnvironment = useDeleteEnvironmentMutation(projectId ?? '');
@@ -72,6 +112,9 @@ export function EnvironmentTrackerPage() {
     previousProjectId.current = projectId;
     setEditing(null);
     setSourceEnvironment(null);
+    setSelection(null);
+    setSelectedEnvironmentId(null);
+    setView('compare');
     setPage(1);
     setSearch('');
   }, [projectId]);
@@ -107,6 +150,7 @@ export function EnvironmentTrackerPage() {
       onSuccess: () => {
         if (sourceEnvironment?.id === environment.id)
           setSourceEnvironment(null);
+        if (selection?.environment.id === environment.id) setSelection(null);
         toast.success('Environment deleted');
       },
     });
@@ -135,6 +179,32 @@ export function EnvironmentTrackerPage() {
     });
   }
 
+  function changeView(nextView: TrackerView) {
+    setView(nextView);
+    setSelection(null);
+    setPage(1);
+  }
+
+  const isSaving = createEnvironment.isPending || updateEnvironment.isPending;
+  const inspectMatrixPage = useMemo(() => {
+    if (!inspectMatrix.data) return null;
+    const totalPages = Math.ceil(
+      inspectMatrix.data.totalItems / MATRIX_PAGE_SIZE,
+    );
+    const start = (page - 1) * MATRIX_PAGE_SIZE;
+    return {
+      environments: inspectMatrix.data.environments,
+      page,
+      pageSize: MATRIX_PAGE_SIZE,
+      rows: inspectMatrix.data.rows.slice(start, start + MATRIX_PAGE_SIZE),
+      totalItems: inspectMatrix.data.totalItems,
+      totalPages,
+    };
+  }, [inspectMatrix.data, page]);
+  const activeMatrix = view === 'compare' ? compareMatrix : inspectMatrix;
+  const matrixData = view === 'compare' ? compareMatrix.data : inspectMatrixPage;
+  const isLoading = environments.isPending || activeMatrix.isPending;
+
   if (isHydrating) return <EnvironmentTrackerSkeleton />;
   if (!activeProject || !projectId) {
     return (
@@ -150,12 +220,8 @@ export function EnvironmentTrackerPage() {
     );
   }
 
-  const isSaving = createEnvironment.isPending || updateEnvironment.isPending;
-  const isLoading = environments.isPending || matrix.isPending;
-  const environmentItems = environments.data ?? [];
-
   return (
-    <section className="mx-auto w-full max-w-7xl space-y-6">
+    <section className="mx-auto w-full max-w-[96rem] space-y-6">
       <header className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div className="flex items-start gap-3">
           <IconAdjustments
@@ -172,7 +238,9 @@ export function EnvironmentTrackerPage() {
               Environment tracker
             </h1>
             <p className="mt-2 max-w-3xl leading-7 text-muted">
-              Compare configuration key presence across local environments.
+              {view === 'compare'
+                ? 'Compare configuration-key coverage across environments.'
+                : 'Inspect how keys are distributed across source files inside one environment.'}{' '}
               Devventory records key names and safe metadata only—never
               configuration values.
             </p>
@@ -207,7 +275,7 @@ export function EnvironmentTrackerPage() {
       </header>
 
       {isLoading && <EnvironmentTrackerSkeleton />}
-      {environments.isError || matrix.isError ? (
+      {environments.isError || activeMatrix.isError ? (
         <Alert role="alert" status="danger">
           <Alert.Indicator />
           <Alert.Content>
@@ -231,8 +299,9 @@ export function EnvironmentTrackerPage() {
             Create your first environment
           </h2>
           <p className="mt-2 text-sm text-muted">
-            Start with Development, Staging, or Production, then add
-            project-relative configuration sources.
+            Start with Development, Staging, or Production, then add one
+            configuration source. Additional sources are available for layered
+            or service-specific setups.
           </p>
           <Button
             className="mt-5"
@@ -244,30 +313,126 @@ export function EnvironmentTrackerPage() {
         </EmptyState>
       ) : null}
 
-      {environmentItems.length > 0 && (
+      {environmentItems.length > 0 && !environments.isError ? (
         <>
-          <EnvironmentColumns
-            environments={environmentItems}
-            isRefreshingId={
-              refreshEnvironment.isPending ? refreshEnvironment.variables : null
-            }
-            isReordering={reorder.isPending}
-            onDelete={removeEnvironment}
-            onEdit={setEditing}
-            onManageSources={setSourceEnvironment}
-            onRefresh={refreshOne}
-            onReorder={(ids) =>
-              reorder.mutate(ids, {
-                onError: (error) =>
-                  toast.danger(
-                    errorMessage(
-                      error,
-                      'The environment order could not be saved.',
-                    ),
-                  ),
-              })
-            }
-          />
+          <div
+            aria-label="Environment Tracker view"
+            className="inline-flex rounded-xl border border-divider bg-surface p-1"
+            role="group"
+          >
+            <Button
+              onPress={() => changeView('compare')}
+              variant={view === 'compare' ? 'primary' : 'ghost'}
+            >
+              <IconColumns3
+                aria-hidden="true"
+                size={ICON_SIZE.button}
+                stroke={ICON_STROKE}
+              />
+              Compare environments
+            </Button>
+            <Button
+              onPress={() => changeView('inspect')}
+              variant={view === 'inspect' ? 'primary' : 'ghost'}
+            >
+              <IconFiles
+                aria-hidden="true"
+                size={ICON_SIZE.button}
+                stroke={ICON_STROKE}
+              />
+              Inspect environment
+            </Button>
+          </div>
+
+          {view === 'compare' ? (
+            <>
+              <EnvironmentStatusLegend />
+              <div className="flex gap-3 rounded-xl border border-accent/30 bg-accent/5 p-4 text-sm leading-6 text-muted">
+                <IconInfoCircle
+                  aria-hidden="true"
+                  className="mt-0.5 shrink-0 text-accent"
+                  size={ICON_SIZE.button}
+                  stroke={ICON_STROKE}
+                />
+                <p>
+                  An environment may contain multiple source files when the
+                  same runtime intentionally uses base, secrets, override, or
+                  service-specific files. Multiple definitions are calculated
+                  inside each environment—not between Local and Staging.
+                </p>
+              </div>
+              <EnvironmentColumns
+                environments={environmentItems}
+                isRefreshingId={
+                  refreshEnvironment.isPending
+                    ? refreshEnvironment.variables
+                    : null
+                }
+                isReordering={reorder.isPending}
+                onDelete={removeEnvironment}
+                onEdit={setEditing}
+                onManageSources={setSourceEnvironment}
+                onRefresh={refreshOne}
+                onReorder={(ids) =>
+                  reorder.mutate(ids, {
+                    onError: (error) =>
+                      toast.danger(
+                        errorMessage(
+                          error,
+                          'The environment order could not be saved.',
+                        ),
+                      ),
+                  })
+                }
+              />
+            </>
+          ) : selectedEnvironment ? (
+            <section
+              className="space-y-4"
+              aria-label="Inspect environment controls"
+            >
+              <div className="flex flex-col gap-3 rounded-xl border border-divider bg-surface p-4 sm:flex-row sm:items-end sm:justify-between">
+                <label className="flex min-w-64 flex-col gap-1.5 text-sm font-medium">
+                  Environment
+                  <select
+                    className="h-10 rounded-lg border border-divider bg-surface-secondary px-3 text-sm outline-none focus:border-accent focus:ring-2 focus:ring-accent/30"
+                    onChange={(event) => {
+                      setSelectedEnvironmentId(event.target.value);
+                      setSelection(null);
+                      setPage(1);
+                    }}
+                    value={selectedEnvironment.id}
+                  >
+                    {environmentItems.map((environment) => (
+                      <option key={environment.id} value={environment.id}>
+                        {environment.name}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <div className="flex flex-wrap items-center gap-2">
+                  <Chip size="sm" variant="soft">
+                    <Chip.Label>
+                      {selectedSources.isPending
+                        ? 'Loading sources'
+                        : `${selectedSources.data?.length ?? 0} source file${selectedSources.data?.length === 1 ? '' : 's'}`}
+                    </Chip.Label>
+                  </Chip>
+                  <Button
+                    onPress={() => setSourceEnvironment(selectedEnvironment)}
+                    variant="secondary"
+                  >
+                    <IconSettings
+                      aria-hidden="true"
+                      size={ICON_SIZE.button}
+                      stroke={ICON_STROKE}
+                    />
+                    Manage sources
+                  </Button>
+                </div>
+              </div>
+            </section>
+          ) : null}
 
           <section
             aria-labelledby="environment-matrix-heading"
@@ -279,12 +444,12 @@ export function EnvironmentTrackerPage() {
                   className="text-xl font-semibold"
                   id="environment-matrix-heading"
                 >
-                  Key matrix
+                  {view === 'compare' ? 'Key comparison' : 'Source breakdown'}
                 </h2>
                 <p className="mt-1 text-sm text-muted">
-                  A key’s state reflects configured sources in the matching
-                  environment. Duplicate means more than one active source
-                  contains that key.
+                  {view === 'compare'
+                    ? 'Select a cell to see why a key is present, commented, missing, or actively defined more than once.'
+                    : `Compare each key across the source files configured for ${selectedEnvironment?.name ?? 'the selected environment'}.`}
                 </p>
               </div>
               <TextField className="w-full sm:w-80" variant="secondary">
@@ -294,6 +459,7 @@ export function EnvironmentTrackerPage() {
                 <Input
                   onChange={(event) => {
                     setSearch(event.target.value);
+                    setSelection(null);
                     setPage(1);
                   }}
                   placeholder="Search key name"
@@ -307,24 +473,67 @@ export function EnvironmentTrackerPage() {
                 />
               </TextField>
             </div>
-            {matrix.data ? (
+
+            {matrixData ? (
               <>
                 <p aria-live="polite" className="text-sm text-muted">
-                  {matrix.data.totalItems.toLocaleString()} key
-                  {matrix.data.totalItems === 1 ? '' : 's'}
+                  {matrixData.totalItems.toLocaleString()} key
+                  {matrixData.totalItems === 1 ? '' : 's'}
+                  {view === 'inspect' && selectedEnvironment
+                    ? ` found in ${selectedEnvironment.name}`
+                    : ''}
                 </p>
-                <EnvironmentMatrix matrix={matrix.data} />
+                <div className="grid items-start gap-5 xl:grid-cols-[minmax(0,1fr)_22rem]">
+                  <div className="min-w-0">
+                    {view === 'compare' ? (
+                      <EnvironmentMatrix
+                        matrix={matrixData}
+                        onSelect={setSelection}
+                        selection={selection}
+                      />
+                    ) : selectedEnvironment && selectedSources.data ? (
+                      <InspectEnvironmentMatrix
+                        environment={selectedEnvironment}
+                        matrix={matrixData}
+                        onSelect={setSelection}
+                        selection={selection}
+                        sources={selectedSources.data}
+                      />
+                    ) : selectedSources.isPending ? (
+                      <div className="flex min-h-48 items-center justify-center rounded-xl border border-divider bg-surface">
+                        <Spinner aria-label="Loading environment sources" />
+                      </div>
+                    ) : (
+                      <Alert role="alert" status="danger">
+                        <Alert.Indicator />
+                        <Alert.Content>
+                          <Alert.Title>Sources unavailable</Alert.Title>
+                          <Alert.Description>
+                            Refresh this environment and try again.
+                          </Alert.Description>
+                        </Alert.Content>
+                      </Alert>
+                    )}
+                  </div>
+                  <EnvironmentKeyDetails
+                    onClose={() => setSelection(null)}
+                    selection={selection}
+                  />
+                </div>
                 <AppPagination
                   ariaLabel="Environment matrix pages"
-                  onPageChange={setPage}
-                  page={matrix.data.page}
-                  totalPages={matrix.data.totalPages}
+                  onPageChange={(nextPage) => {
+                    setPage(nextPage);
+                    setSelection(null);
+                  }}
+                  page={matrixData.page}
+                  totalPages={matrixData.totalPages}
                 />
               </>
             ) : null}
           </section>
         </>
-      )}
+      ) : null}
 
       <EnvironmentFormModal
         environment={editing === 'new' ? null : editing}

@@ -24,6 +24,7 @@ import {
   IconTrash,
 } from '@tabler/icons-react';
 import { ICON_SIZE, ICON_STROKE } from '@/shared/constants/icon.constants';
+import { useEnvironmentSourcesQuery } from '../hooks/use-environments';
 import type { Environment } from '../models/environment';
 
 interface EnvironmentColumnsProps {
@@ -74,10 +75,9 @@ export function EnvironmentColumns({
   if (environments.length === 0) return null;
 
   return (
-    <section aria-label="Environment columns" className="space-y-2">
+    <section aria-label="Environment summaries" className="space-y-2">
       <p className="text-sm text-muted">
-        Drag environment cards to set the order of matrix columns. Source
-        priority only controls display order; it does not overwrite files.
+        Drag environment cards to change the order of matrix columns.
       </p>
       <DndContext
         collisionDetection={closestCenter}
@@ -118,6 +118,10 @@ function SortableEnvironmentCard({
   EnvironmentColumnsProps,
   'environments' | 'isRefreshingId' | 'isReordering' | 'onReorder'
 > & { environment: Environment; isBusy: boolean }) {
+  const sources = useEnvironmentSourcesQuery(
+    environment.projectId,
+    environment.id,
+  );
   const {
     attributes,
     listeners,
@@ -127,12 +131,14 @@ function SortableEnvironmentCard({
     transition,
   } = useSortable({ id: environment.id });
   const style = { transform: CSS.Transform.toString(transform), transition };
+  const configuredSources = sources.data ?? [];
+
   return (
     <Card
       ref={setNodeRef}
       style={style}
       {...attributes}
-      className="w-72 shrink-0"
+      className="w-80 shrink-0"
     >
       <Card.Header className="items-start gap-2 pb-2">
         <Button
@@ -151,36 +157,67 @@ function SortableEnvironmentCard({
           />
         </Button>
         <div className="min-w-0 flex-1">
-          <Card.Title className="truncate">{environment.name}</Card.Title>
+          <div className="flex flex-wrap items-center gap-2">
+            <Card.Title className="truncate">{environment.name}</Card.Title>
+            <Chip size="sm" variant="soft">
+              <Chip.Label>
+                {sources.isPending
+                  ? 'Loading sources'
+                  : `${configuredSources.length} source file${configuredSources.length === 1 ? '' : 's'}`}
+              </Chip.Label>
+            </Chip>
+          </div>
           {environment.description ? (
-            <Card.Description className="line-clamp-2">
+            <Card.Description className="mt-1 line-clamp-2">
               {environment.description}
             </Card.Description>
           ) : (
-            <Card.Description>No description</Card.Description>
+            <Card.Description className="mt-1">
+              No description
+            </Card.Description>
           )}
         </div>
       </Card.Header>
-      <Card.Content className="pt-0">
-        <Chip size="sm" variant="soft">
-          <Chip.Label>Configuration sources</Chip.Label>
-        </Chip>
-      </Card.Content>
-      <Card.Footer className="justify-end gap-1 pt-3">
+      <Card.Content className="space-y-3 pt-0">
+        {configuredSources.length > 0 ? (
+          <ul className="space-y-1">
+            {configuredSources.slice(0, 3).map((source) => (
+              <li
+                className="truncate rounded-lg bg-surface-secondary px-2.5 py-1.5 font-mono text-xs text-muted"
+                key={source.id}
+                title={source.relativePath}
+              >
+                {source.relativePath}
+              </li>
+            ))}
+            {configuredSources.length > 3 ? (
+              <li className="text-xs text-muted">
+                +{configuredSources.length - 3} more source files
+              </li>
+            ) : null}
+          </ul>
+        ) : (
+          <p className="rounded-lg border border-dashed border-divider p-3 text-xs text-muted">
+            No configuration sources are assigned yet.
+          </p>
+        )}
         <Button
           aria-label={`Manage ${environment.name} sources`}
+          fullWidth
           isDisabled={isBusy}
-          isIconOnly
           onPress={() => onManageSources(environment)}
           size="sm"
-          variant="ghost"
+          variant="secondary"
         >
           <IconSettings
             aria-hidden="true"
             size={ICON_SIZE.button}
             stroke={ICON_STROKE}
           />
+          Manage sources
         </Button>
+      </Card.Content>
+      <Card.Footer className="justify-end gap-1 pt-3">
         <Button
           aria-label={`Refresh ${environment.name}`}
           isDisabled={isBusy}

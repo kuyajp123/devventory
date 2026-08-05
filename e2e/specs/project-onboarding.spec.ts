@@ -106,13 +106,21 @@ test('adds a project through the selector and restores it after reload', async (
     .click();
   await page.getByLabel('Environment name').fill('Development');
   await page.getByRole('button', { name: 'Create environment' }).last().click();
-  await expect(page.getByText('Development', { exact: true })).toBeVisible();
-  await page
-    .getByRole('button', { name: 'Manage Development sources' })
-    .click();
-  await page.getByRole('button', { name: 'Add' }).click();
   await expect(
-    page.getByText('config/local.env', { exact: true }),
+    page.getByRole('heading', { level: 3, name: 'Development' }),
+  ).toBeVisible();
+  await page
+    .getByRole('button', {
+      name: 'Manage Development sources',
+      exact: true,
+    })
+    .click();
+  await page.getByRole('button', { name: 'Add', exact: true }).click();
+  await expect(
+    page.getByRole('button', {
+      name: 'Remove config/local.env',
+      exact: true,
+    }),
   ).toBeVisible();
   await page.getByRole('button', { name: 'Done' }).click();
   await expect(page.getByText('APP_MODE', { exact: true })).toBeVisible();
