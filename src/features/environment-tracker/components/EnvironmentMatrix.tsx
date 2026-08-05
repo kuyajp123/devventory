@@ -276,7 +276,8 @@ export function EnvironmentMatrix({
           <Table variant="secondary">
             <Table.ScrollContainer
               ref={scrollContainerRef}
-              className="overflow-x-auto"
+              className="max-h-[70vh] overflow-auto overscroll-contain"
+              data-testid="environment-matrix-scroll"
             >
               <Table.Content
                 aria-label="Environment key matrix"
@@ -289,9 +290,9 @@ export function EnvironmentMatrix({
                   } as CSSProperties
                 }
               >
-                <Table.Header className="sticky top-0 z-20 bg-surface">
+                <Table.Header className="sticky top-0 z-40 bg-surface">
                   <Table.Column
-                    className={KEY_COLUMN_CLASS}
+                    className={`${KEY_COLUMN_CLASS} top-0 z-50`}
                     isRowHeader
                     id="key"
                   >
@@ -358,7 +359,14 @@ const EnvironmentMatrixBody = memo(function EnvironmentMatrixBody({
   selection,
 }: EnvironmentMatrixBodyProps) {
   return (
-    <Table.Body items={rows}>
+    <Table.Body
+      dependencies={[
+        selection?.keyName,
+        selection?.environment.id,
+        selection?.selectedSourcePath,
+      ]}
+      items={rows}
+    >
       {(row) => (
         <Table.Row className="even:bg-surface-secondary/40" id={row.keyName}>
           <Table.Cell
@@ -426,7 +434,7 @@ const SortableEnvironmentColumn = memo(function SortableEnvironmentColumn({
   return (
     <Table.Column
       ref={setNodeRef}
-      className={`${ENVIRONMENT_COLUMN_CLASS} ${
+      className={`${ENVIRONMENT_COLUMN_CLASS} sticky top-0 z-40 bg-surface ${
         isDropTarget ? 'bg-accent/5 ring-2 ring-inset ring-accent/60' : ''
       } ${isDragging ? 'opacity-40' : ''}`}
       id={environment.id}
@@ -500,10 +508,14 @@ const MatrixCell = memo(function MatrixCell({
       aria-label={`${keyName} in ${environment.name}: ${status}${
         summary ? `. ${summary}` : ''
       }`}
-      className={`flex h-full min-h-16 w-full items-center justify-between gap-3 rounded-lg p-3 text-left transition hover:bg-surface-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent ${
-        isSelected ? 'bg-accent/15 border-2 border-accent shadow-sm' : ''
+      aria-pressed={isSelected}
+      className={`flex h-full min-h-16 w-full items-center justify-between gap-3 rounded-lg border border-transparent p-3 text-left transition-colors hover:bg-surface-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent ${
+        isSelected
+          ? 'relative z-10 border-accent bg-accent/15 ring-2 ring-inset ring-accent shadow-sm'
+          : ''
       }`}
       data-cell-id={`${keyName}:${environment.id}`}
+      data-selected={isSelected ? 'true' : undefined}
       onClick={() =>
         onSelect({
           environment,
