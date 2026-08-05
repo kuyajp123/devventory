@@ -117,7 +117,7 @@ test('adds a project through the selector and restores it after reload', async (
     .click();
   await page.getByRole('button', { name: 'Add', exact: true }).click();
   await expect(
-    page.getByText('config/local.env', { exact: true }),
+    page.getByRole('button', { name: 'Remove config/local.env' }),
   ).toBeVisible();
   await page.getByRole('button', { name: 'Done' }).click();
   await expect(page.getByText('APP_MODE', { exact: true })).toBeVisible();
