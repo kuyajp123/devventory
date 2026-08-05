@@ -5,7 +5,7 @@ import {
   IconInfoCircle,
   IconX,
 } from '@tabler/icons-react';
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { ICON_SIZE, ICON_STROKE } from '@/shared/constants/icon.constants';
 import type {
   Environment,
@@ -34,7 +34,7 @@ export function EnvironmentKeyDetails({
 
   return (
     <EnvironmentKeyDetailsContent
-      key={`${selection.environment.id}:${selection.keyName}`}
+      key={`${selection.environment.id}:${selection.keyName}:${selection.selectedSourcePath ?? 'environment'}`}
       onClose={onClose}
       onDefinitionClick={onDefinitionClick}
       selection={selection}
@@ -54,10 +54,6 @@ function EnvironmentKeyDetailsContent({
   const [selectedDefinitionPath, setSelectedDefinitionPath] = useState<
     string | null
   >(selection.selectedSourcePath ?? null);
-
-  useEffect(() => {
-    setSelectedDefinitionPath(selection.selectedSourcePath ?? null);
-  }, [selection.selectedSourcePath]);
 
   const activeDetails = useMemo(
     () => selection.sourceDetails.filter((detail) => !detail.isCommented),
