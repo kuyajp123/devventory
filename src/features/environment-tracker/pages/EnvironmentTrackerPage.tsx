@@ -119,21 +119,6 @@ export function EnvironmentTrackerPage() {
     setSearch('');
   }, [projectId]);
 
-  useEffect(() => {
-    if (environmentItems.length === 0) {
-      setSelectedEnvironmentId(null);
-      return;
-    }
-    if (
-      !selectedEnvironmentId ||
-      !environmentItems.some(
-        (environment) => environment.id === selectedEnvironmentId,
-      )
-    ) {
-      setSelectedEnvironmentId(environmentItems[0]?.id ?? null);
-    }
-  }, [environmentItems, selectedEnvironmentId]);
-
   async function saveEnvironment(values: EnvironmentFormValues) {
     try {
       if (editing && editing !== 'new') {
