@@ -128,7 +128,14 @@ export function InspectEnvironmentMatrix({
                   </Table.Column>
                 ))}
               </Table.Header>
-              <Table.Body items={matrix.rows}>
+              <Table.Body
+                dependencies={[
+                  selection?.keyName,
+                  selection?.environment.id,
+                  selection?.selectedSourcePath,
+                ]}
+                items={matrix.rows}
+              >
                 {(row) => {
                   const environmentCell =
                     environmentIndex >= 0
