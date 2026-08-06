@@ -24,20 +24,25 @@ export function DevventoryDialog({
   scroll = false,
 }: DevventoryDialogProps) {
   return (
-    <Modal isOpen={isOpen} onOpenChange={onOpenChange}>
-      <Modal.Backdrop variant="blur" />
-      <Modal.Container
-        className={sizeClasses[size]}
-        scroll={scroll ? 'inside' : undefined}
+    <Modal>
+      <Modal.Backdrop
+        isOpen={isOpen}
+        onOpenChange={onOpenChange}
+        variant="blur"
       >
-        <Modal.Dialog
-          className="flex max-h-[min(80vh,720px)] flex-col overflow-hidden rounded-[4px] border border-divider bg-surface shadow-lg"
-          role="dialog"
-          aria-modal="true"
+        <Modal.Container
+          className={sizeClasses[size]}
+          scroll={scroll ? 'inside' : undefined}
         >
-          {children}
-        </Modal.Dialog>
-      </Modal.Container>
+          <Modal.Dialog
+            className="flex max-h-[min(80vh,720px)] flex-col overflow-hidden rounded-[4px] border border-divider bg-surface shadow-lg"
+            role="dialog"
+            aria-modal="true"
+          >
+            {children}
+          </Modal.Dialog>
+        </Modal.Container>
+      </Modal.Backdrop>
     </Modal>
   );
 }
