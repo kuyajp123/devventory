@@ -171,7 +171,11 @@ export function CommandPalette() {
     >
       <Modal.Backdrop />
       <Modal.Container>
-        <Modal.Dialog className="overflow-hidden rounded-md border border-divider bg-surface shadow-2xl">
+        <Modal.Dialog
+          className="overflow-hidden rounded-[4px] border border-divider bg-surface shadow-lg"
+          role="dialog"
+          aria-modal="true"
+        >
           <div className="flex items-center border-b border-divider px-3 py-2">
             <IconSearch
               aria-hidden="true"
