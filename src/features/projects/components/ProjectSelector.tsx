@@ -63,8 +63,8 @@ export function ProjectSelector({ compact = false }: ProjectSelectorProps) {
         }
         className={
           compact
-            ? 'h-11 w-full min-w-0 justify-center px-0'
-            : 'h-11 w-full min-w-0 justify-between px-3'
+            ? 'h-7 w-full min-w-0 justify-center px-0 font-mono text-xs'
+            : 'h-7 w-full min-w-0 justify-between px-2 font-mono text-xs border border-divider bg-workspace hover:border-accent/40'
         }
         isDisabled={isHydrating}
         isIconOnly={compact}
@@ -94,7 +94,7 @@ export function ProjectSelector({ compact = false }: ProjectSelectorProps) {
 
       {isOpen && (
         <div
-          className={`absolute top-full z-50 mt-2 overflow-hidden rounded-xl border border-divider bg-surface shadow-lg ${
+          className={`absolute top-full z-50 mt-2 overflow-hidden rounded-md border border-divider bg-surface shadow-lg ${
             compact ? 'left-0 w-64' : 'left-0 right-0 min-w-64'
           }`}
         >

@@ -27,7 +27,7 @@ export function AssetTable({
 }: AssetTableProps) {
   if (assets.length === 0) {
     return (
-      <EmptyState className="rounded-xl border border-dashed border-divider bg-surface p-8 text-center">
+      <EmptyState className="rounded-md border border-dashed border-divider bg-surface p-8 text-center">
         <IconFileOff
           aria-hidden="true"
           className="mx-auto text-muted"

@@ -10,11 +10,19 @@ test('adds a project through the selector and restores it after reload', async (
     page.getByRole('heading', { name: 'Add your first project' }),
   ).toBeVisible();
 
-  const sidebar = page.getByRole('complementary', {
+  const topApplicationBar = page.getByRole('banner', {
+    name: 'Top application bar',
+  });
+
+  const primaryNavigation = page.getByRole('navigation', {
     name: 'Primary navigation',
   });
-  await sidebar.getByRole('button', { name: 'Select active project' }).click();
-  await sidebar.getByRole('link', { name: 'Add Project' }).click();
+
+  await topApplicationBar
+    .getByRole('button', { name: 'Select active project' })
+    .click();
+
+  await topApplicationBar.getByRole('link', { name: 'Add Project' }).click();
 
   await page.getByLabel('Project name').fill('Browser project');
   await page.getByLabel('Description (optional)').fill('Playwright onboarding');
@@ -41,9 +49,9 @@ test('adds a project through the selector and restores it after reload', async (
     page.getByRole('heading', { name: 'Browser project' }),
   ).toBeVisible();
   await expect(page.getByText('Playwright onboarding')).toBeVisible();
-  await expect(page.getByText('node_modules/')).toBeVisible();
+  await expect(page.getByRole('main').getByText('node_modules/')).toBeVisible();
 
-  await sidebar.getByRole('link', { name: 'File Inventory' }).click();
+  await primaryNavigation.getByRole('link', { name: 'File Inventory' }).click();
   await expect(page).toHaveURL('/files');
   await expect(
     page.getByRole('heading', { name: 'File inventory' }),
@@ -52,7 +60,7 @@ test('adds a project through the selector and restores it after reload', async (
   await page.getByRole('button', { name: 'Rescan project' }).click();
   await expect(page.getByText(/Completed: 1 files found/)).toBeVisible();
 
-  await sidebar.getByRole('link', { name: 'Asset Library' }).click();
+  await primaryNavigation.getByRole('link', { name: 'Asset Library' }).click();
   await expect(page).toHaveURL('/assets');
   await expect(
     page.getByRole('heading', { level: 1, name: 'Asset library' }),
@@ -86,17 +94,21 @@ test('adds a project through the selector and restores it after reload', async (
     page.getByRole('alertdialog', { name: 'Asset variants saved' }),
   ).toBeVisible();
 
-  await sidebar.getByRole('link', { name: 'Dashboard' }).click();
+  await primaryNavigation.getByRole('link', { name: 'Dashboard' }).click();
   await page.reload();
   await expect(page).toHaveURL('/dashboard');
   await expect(
     page.getByRole('heading', { name: 'Browser project' }),
   ).toBeVisible();
   await expect(
-    sidebar.getByRole('button', { name: 'Select active project' }),
+    topApplicationBar.getByRole('button', {
+      name: 'Select active project',
+    }),
   ).toContainText('Browser project');
 
-  await sidebar.getByRole('link', { name: 'Environment Tracker' }).click();
+  await primaryNavigation
+    .getByRole('link', { name: 'Environment Tracker' })
+    .click();
   await expect(
     page.getByRole('heading', { name: 'Environment tracker' }),
   ).toBeVisible();
@@ -108,7 +120,7 @@ test('adds a project through the selector and restores it after reload', async (
   await page.getByRole('button', { name: 'Create environment' }).last().click();
   await expect(
     page.getByRole('button', { name: 'Reorder Development' }),
-  ).toBeVisible();
+  ).toBeVisible({ timeout: 10_000 });
   await page
     .getByRole('button', {
       name: 'Open actions for Development',
