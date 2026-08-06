@@ -1,9 +1,9 @@
+import { renderWithProviders } from '@/test/render';
 import { Button } from '@heroui/react';
 import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { useState } from 'react';
 import { describe, expect, it } from 'vitest';
-import { renderWithProviders } from '@/test/render';
 import { DevventoryDialog } from './DevventoryDialog';
 
 function DialogHarness() {
@@ -50,9 +50,7 @@ describe('DevventoryDialog', () => {
       expect(document.querySelector('.modal__backdrop')).toBeNull();
     });
 
-    await user.click(
-      screen.getByRole('button', { name: 'Workspace action' }),
-    );
+    await user.click(screen.getByRole('button', { name: 'Workspace action' }));
 
     expect(screen.getByLabelText('Workspace clicks')).toHaveTextContent('1');
   });
