@@ -26,9 +26,6 @@ test-results
 *.sln
 *.sw?
 
-# skills
-.claude
-
 # Ignore everything inside .github
 .github/*
 
