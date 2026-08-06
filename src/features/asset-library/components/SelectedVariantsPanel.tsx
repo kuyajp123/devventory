@@ -35,15 +35,15 @@ export function SelectedVariantsPanel({
     >
       {/* Expanded file list — conditionally rendered for accessibility */}
       {expanded && (
-        <div className="max-h-80 overflow-y-auto rounded-t-md border border-b-0 border-default bg-surface p-3 shadow-xl">
+        <div className="max-h-80 overflow-y-auto rounded-t-2xl border border-b-0 border-default bg-surface p-3 shadow-xl">
           {count > 0 ? (
             <ul className="space-y-1.5">
               {variants.map((variant) => (
                 <li
-                  className="group flex items-center gap-2.5 rounded-md border border-default/60 bg-surface-secondary/50 p-2.5 transition-colors hover:border-accent/30 hover:bg-accent/5"
+                  className="group flex items-center gap-2.5 rounded-xl border border-default/60 bg-surface-secondary/50 p-2.5 transition-colors hover:border-accent/30 hover:bg-accent/5"
                   key={variant.id}
                 >
-                  <div className="flex size-8 shrink-0 items-center justify-center rounded-md bg-accent/10 text-accent">
+                  <div className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-accent/10 text-accent">
                     <IconLayersLinked
                       aria-hidden="true"
                       size={ICON_SIZE.small}
@@ -99,12 +99,12 @@ export function SelectedVariantsPanel({
         aria-expanded={expanded}
         aria-label={`Selected variants, ${count} files`}
         className={`flex w-full cursor-pointer items-center gap-2.5 border border-default bg-surface px-4 py-3 shadow-xl transition-all duration-200 hover:bg-surface-secondary ${
-          expanded ? 'rounded-b-md border-t-0' : 'rounded-md'
+          expanded ? 'rounded-b-2xl border-t-0' : 'rounded-2xl'
         }`}
         onClick={() => setExpanded((prev) => !prev)}
         type="button"
       >
-        <div className="flex size-8 shrink-0 items-center justify-center rounded-md bg-accent/10 text-accent">
+        <div className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-accent/10 text-accent">
           <IconLayersLinked
             aria-hidden="true"
             size={ICON_SIZE.button}

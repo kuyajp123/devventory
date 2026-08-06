@@ -1,48 +1,48 @@
-import { ICON_SIZE, ICON_STROKE } from '@/shared/constants/icon.constants';
 import {
   DndContext,
-  type DragEndEvent,
-  type DragOverEvent,
-  DragOverlay,
-  type DragStartEvent,
   KeyboardSensor,
   PointerSensor,
   closestCenter,
+  type DragEndEvent,
   useSensor,
   useSensors,
 } from '@dnd-kit/core';
 import {
   SortableContext,
+  arrayMove,
+  horizontalListSortingStrategy,
   sortableKeyboardCoordinates,
   useSortable,
 } from '@dnd-kit/sortable';
-import { Chip, EmptyState, Table } from '@heroui/react';
+import { CSS } from '@dnd-kit/utilities';
+import {
+  Button,
+  Chip,
+  Dropdown,
+  EmptyState,
+  Label,
+  Table,
+} from '@heroui/react';
 import {
   IconChevronRight,
+  IconDotsVertical,
   IconGripVertical,
+  IconPencil,
+  IconRefresh,
+  IconSettings,
   IconTableOff,
+  IconTrash,
 } from '@tabler/icons-react';
-import { memo, type CSSProperties, useMemo, useRef, useState } from 'react';
+import { type Key, useMemo, useState } from 'react';
+import { ICON_SIZE, ICON_STROKE } from '@/shared/constants/icon.constants';
+import { useEnvironmentSourcesQuery } from '../hooks/use-environments';
 import type {
   Environment,
   EnvironmentMatrixCell,
   EnvironmentMatrixPage,
+  EnvironmentSource,
 } from '../models/environment';
 import type { EnvironmentKeySelection } from './EnvironmentKeyDetails';
-import { EnvironmentMatrixColumnHeader } from './EnvironmentMatrixColumnHeader';
-import {
-  createRestrictToEnvironmentHeaderBounds,
-  getEnvironmentHeaderBounds,
-  restrictToHorizontalAxis,
-} from './environment-matrix-dnd';
-import {
-  ENVIRONMENT_COLUMN_CLASS,
-  ENVIRONMENT_COLUMN_WIDTH_PX,
-  KEY_COLUMN_CLASS,
-  getMatrixTableMinWidth,
-  mergePreferredEnvironmentOrder,
-  resolveEnvironmentReorder,
-} from './environment-matrix-layout';
 
 interface EnvironmentMatrixProps {
   isRefreshingId: string | null;
@@ -57,20 +57,10 @@ interface EnvironmentMatrixProps {
   selection: EnvironmentKeySelection | null;
 }
 
-interface EnvironmentMatrixBodyProps {
-  environmentIndexById: Map<string, number>;
-  environments: Environment[];
-  onSelect: (selection: EnvironmentKeySelection) => void;
-  rows: EnvironmentMatrixPage['rows'];
-  selection: EnvironmentKeySelection | null;
-}
-
 const ABSENT_CELL: EnvironmentMatrixCell = {
   sourceDetails: [],
   state: 'absent',
 };
-
-const noopSortingStrategy = () => null;
 
 export function EnvironmentMatrix({
   isRefreshingId,
@@ -84,25 +74,13 @@ export function EnvironmentMatrix({
   onSelect,
   selection,
 }: EnvironmentMatrixProps) {
-  const scrollContainerRef = useRef<HTMLDivElement>(null);
-
   const matrixEnvironmentIds = useMemo(
     () => matrix.environments.map((environment) => environment.id),
     [matrix.environments],
   );
-
   const [preferredEnvironmentIds, setPreferredEnvironmentIds] = useState<
     string[]
   >([]);
-
-  const [activeEnvironmentId, setActiveEnvironmentId] = useState<string | null>(
-    null,
-  );
-
-  const [overEnvironmentId, setOverEnvironmentId] = useState<string | null>(
-    null,
-  );
-
   const environmentById = useMemo(
     () =>
       new Map(
@@ -110,7 +88,6 @@ export function EnvironmentMatrix({
       ),
     [matrix.environments],
   );
-
   const environmentIndexById = useMemo(
     () =>
       new Map(
@@ -121,113 +98,50 @@ export function EnvironmentMatrix({
       ),
     [matrix.environments],
   );
-
-  const orderedEnvironmentIds = useMemo(
-    () =>
-      mergePreferredEnvironmentOrder(
-        matrixEnvironmentIds,
-        preferredEnvironmentIds,
+  const orderedEnvironmentIds = useMemo(() => {
+    const availableIds = new Set(matrixEnvironmentIds);
+    const preferredIds = preferredEnvironmentIds.filter((environmentId) =>
+      availableIds.has(environmentId),
+    );
+    const preferredIdSet = new Set(preferredIds);
+    return [
+      ...preferredIds,
+      ...matrixEnvironmentIds.filter(
+        (environmentId) => !preferredIdSet.has(environmentId),
       ),
-    [matrixEnvironmentIds, preferredEnvironmentIds],
-  );
-
-  const orderedEnvironments = useMemo(
-    () =>
-      orderedEnvironmentIds
-        .map((environmentId) => environmentById.get(environmentId))
-        .filter(
-          (environment): environment is Environment =>
-            environment !== undefined,
-        ),
-    [environmentById, orderedEnvironmentIds],
-  );
-
-  const activeEnvironment = activeEnvironmentId
-    ? environmentById.get(activeEnvironmentId)
-    : undefined;
-
-  const tableMinWidth = getMatrixTableMinWidth(orderedEnvironments.length);
-
-  const [environmentHeaderBounds, setEnvironmentHeaderBounds] = useState(() =>
-    getEnvironmentHeaderBounds(null),
-  );
-
-  const dragModifiers = useMemo(
-    () => [
-      restrictToHorizontalAxis,
-      createRestrictToEnvironmentHeaderBounds(() => environmentHeaderBounds),
-    ],
-    [environmentHeaderBounds],
-  );
-
+    ];
+  }, [matrixEnvironmentIds, preferredEnvironmentIds]);
+  const orderedEnvironments = orderedEnvironmentIds
+    .map((environmentId) => environmentById.get(environmentId))
+    .filter(
+      (environment): environment is Environment => environment !== undefined,
+    );
   const sensors = useSensors(
-    useSensor(PointerSensor, {
-      activationConstraint: {
-        distance: 8,
-      },
-    }),
+    useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
     useSensor(KeyboardSensor, {
       coordinateGetter: sortableKeyboardCoordinates,
     }),
   );
 
-  function resetDragState() {
-    setActiveEnvironmentId(null);
-    setOverEnvironmentId(null);
-  }
-
-  function handleDragStart(event: DragStartEvent) {
-    const tableHeader =
-      scrollContainerRef.current?.querySelector('[data-slot="table-header"]') ??
-      null;
-
-    setEnvironmentHeaderBounds(getEnvironmentHeaderBounds(tableHeader));
-    setActiveEnvironmentId(String(event.active.id));
-    setOverEnvironmentId(String(event.active.id));
-  }
-
-  function handleDragOver(event: DragOverEvent) {
-    const nextOverEnvironmentId = event.over ? String(event.over.id) : null;
-
-    setOverEnvironmentId((currentEnvironmentId) =>
-      currentEnvironmentId === nextOverEnvironmentId
-        ? currentEnvironmentId
-        : nextOverEnvironmentId,
-    );
-  }
-
-  function handleDragCancel() {
-    setEnvironmentHeaderBounds(null);
-    resetDragState();
-  }
-
   function handleDragEnd(event: DragEndEvent) {
-    const nextIds = resolveEnvironmentReorder(
-      orderedEnvironmentIds,
-      event.active?.id ? String(event.active.id) : null,
-      event.over?.id ? String(event.over.id) : null,
-    );
-
-    setEnvironmentHeaderBounds(null);
-    resetDragState();
-
-    if (!nextIds) {
-      return;
-    }
+    const { active, over } = event;
+    if (!over || active.id === over.id) return;
 
     const previousPreference = preferredEnvironmentIds;
+    const nextIds = reorderEnvironmentIds(
+      orderedEnvironmentIds,
+      String(active.id),
+      String(over.id),
+    );
+    if (nextIds === orderedEnvironmentIds) return;
 
     setPreferredEnvironmentIds(nextIds);
-
     void onReorder(nextIds).catch(() => {
       setPreferredEnvironmentIds(previousPreference);
     });
   }
 
-  if (matrix.environments.length === 0) {
-    return null;
-  }
-
+  if (matrix.environments.length === 0) return null;
   if (matrix.rows.length === 0) {
     return (
       <EmptyState className="rounded-xl border border-dashed border-divider bg-surface p-8 text-center">
@@ -237,11 +151,9 @@ export function EnvironmentMatrix({
           size={ICON_SIZE.emptyState}
           stroke={ICON_STROKE}
         />
-
         <h2 className="mt-4 text-lg font-semibold">
           No configuration keys match
         </h2>
-
         <p className="mt-2 text-sm text-muted">
           Add a readable source or adjust the key-name search.
         </p>
@@ -251,157 +163,111 @@ export function EnvironmentMatrix({
 
   return (
     <section aria-label="Environment comparison matrix" className="space-y-2">
+      <p className="flex items-center gap-1.5 text-xs text-muted">
+        <IconGripVertical
+          aria-hidden="true"
+          size={ICON_SIZE.small}
+          stroke={ICON_STROKE}
+        />
+        Drag environment headers to reorder table columns.
+      </p>
       <DndContext
         collisionDetection={closestCenter}
-        modifiers={dragModifiers}
-        onDragCancel={handleDragCancel}
         onDragEnd={handleDragEnd}
-        onDragOver={handleDragOver}
-        onDragStart={handleDragStart}
         sensors={sensors}
       >
         <SortableContext
           items={orderedEnvironmentIds}
-          strategy={noopSortingStrategy}
+          strategy={horizontalListSortingStrategy}
         >
           <Table variant="secondary">
-            <Table.ScrollContainer
-              ref={scrollContainerRef}
-              className="max-h-[70vh] overflow-auto overscroll-contain"
-              data-testid="environment-matrix-scroll"
-            >
-              <Table.Content
-                aria-label="Environment key matrix"
-                className="table-fixed"
-                style={
-                  {
-                    minWidth: tableMinWidth,
-                    width: 'max(100%, var(--matrix-table-min-width))',
-                    '--matrix-table-min-width': `${tableMinWidth}px`,
-                  } as CSSProperties
-                }
-              >
-                <Table.Header className="sticky top-0 z-40 bg-surface">
+            <Table.ScrollContainer>
+              <Table.Content aria-label="Environment key matrix">
+                <Table.Header className="sticky top-0 z-20">
                   <Table.Column
-                    className={`${KEY_COLUMN_CLASS} top-0 z-50`}
+                    className="sticky left-0 z-30 min-w-64 bg-surface"
                     isRowHeader
                     id="key"
                   >
                     Configuration key
                   </Table.Column>
-
                   {orderedEnvironments.map((environment) => (
-                    <SortableEnvironmentColumn
-                      environment={environment}
-                      isBusy={isReordering || isRefreshingId === environment.id}
-                      isDropTarget={
-                        overEnvironmentId === environment.id &&
-                        activeEnvironmentId !== environment.id
-                      }
-                      key={environment.id}
-                      onDelete={onDelete}
-                      onEdit={onEdit}
-                      onManageSources={onManageSources}
-                      onRefresh={onRefresh}
-                    />
+                    <Table.Column id={environment.id} key={environment.id}>
+                      <SortableEnvironmentHeader
+                        environment={environment}
+                        isBusy={
+                          isReordering || isRefreshingId === environment.id
+                        }
+                        onDelete={onDelete}
+                        onEdit={onEdit}
+                        onManageSources={onManageSources}
+                        onRefresh={onRefresh}
+                      />
+                    </Table.Column>
                   ))}
                 </Table.Header>
+                <Table.Body items={matrix.rows}>
+                  {(row) => (
+                    <Table.Row id={row.keyName}>
+                      <Table.Cell className="sticky left-0 z-10 bg-surface font-mono text-sm font-medium">
+                        {row.keyName}
+                      </Table.Cell>
+                      {orderedEnvironments.map((environment) => {
+                        const cellIndex = environmentIndexById.get(
+                          environment.id,
+                        );
+                        const cell =
+                          cellIndex === undefined
+                            ? ABSENT_CELL
+                            : (row.cells[cellIndex] ?? ABSENT_CELL);
 
-                <EnvironmentMatrixBody
-                  environmentIndexById={environmentIndexById}
-                  environments={orderedEnvironments}
-                  onSelect={onSelect}
-                  rows={matrix.rows}
-                  selection={selection}
-                />
+                        return (
+                          <Table.Cell
+                            className="p-0"
+                            key={`${row.keyName}-${environment.id}`}
+                          >
+                            <MatrixCell
+                              cell={cell}
+                              environment={environment}
+                              isSelected={
+                                selection?.keyName === row.keyName &&
+                                selection.environment.id === environment.id &&
+                                !selection.selectedSourcePath
+                              }
+                              keyName={row.keyName}
+                              onSelect={onSelect}
+                            />
+                          </Table.Cell>
+                        );
+                      })}
+                    </Table.Row>
+                  )}
+                </Table.Body>
               </Table.Content>
             </Table.ScrollContainer>
           </Table>
         </SortableContext>
-
-        <DragOverlay
-          adjustScale={false}
-          dropAnimation={null}
-          modifiers={dragModifiers}
-        >
-          {activeEnvironment ? (
-            <div
-              className="pointer-events-none transform-gpu"
-              style={{
-                contain: 'layout paint style',
-                width: ENVIRONMENT_COLUMN_WIDTH_PX,
-                willChange: 'transform',
-              }}
-            >
-              <EnvironmentColumnDragPreview environment={activeEnvironment} />
-            </div>
-          ) : null}
-        </DragOverlay>
       </DndContext>
     </section>
   );
 }
 
-const EnvironmentMatrixBody = memo(function EnvironmentMatrixBody({
-  environmentIndexById,
-  environments,
-  onSelect,
-  rows,
-  selection,
-}: EnvironmentMatrixBodyProps) {
-  return (
-    <Table.Body
-      dependencies={[
-        selection?.keyName,
-        selection?.environment.id,
-        selection?.selectedSourcePath,
-      ]}
-      items={rows}
-    >
-      {(row) => (
-        <Table.Row className="even:bg-surface-secondary/40" id={row.keyName}>
-          <Table.Cell
-            className={`${KEY_COLUMN_CLASS} font-mono text-sm font-medium`}
-          >
-            {row.keyName}
-          </Table.Cell>
+function reorderEnvironmentIds(
+  environmentIds: string[],
+  activeId: string,
+  overId: string,
+): string[] {
+  const oldIndex = environmentIds.indexOf(activeId);
+  const newIndex = environmentIds.indexOf(overId);
+  if (oldIndex < 0 || newIndex < 0 || oldIndex === newIndex) {
+    return environmentIds;
+  }
+  return arrayMove(environmentIds, oldIndex, newIndex);
+}
 
-          {environments.map((environment) => {
-            const cellIndex = environmentIndexById.get(environment.id);
-
-            const cell =
-              cellIndex === undefined
-                ? ABSENT_CELL
-                : (row.cells[cellIndex] ?? ABSENT_CELL);
-
-            return (
-              <Table.Cell
-                className={`${ENVIRONMENT_COLUMN_CLASS} p-1`}
-                key={`${row.keyName}-${environment.id}`}
-              >
-                <MatrixCell
-                  cell={cell}
-                  environment={environment}
-                  isSelected={
-                    selection?.keyName === row.keyName &&
-                    selection.environment.id === environment.id
-                  }
-                  keyName={row.keyName}
-                  onSelect={onSelect}
-                />
-              </Table.Cell>
-            );
-          })}
-        </Table.Row>
-      )}
-    </Table.Body>
-  );
-});
-
-const SortableEnvironmentColumn = memo(function SortableEnvironmentColumn({
+function SortableEnvironmentHeader({
   environment,
   isBusy,
-  isDropTarget,
   onDelete,
   onEdit,
   onManageSources,
@@ -409,71 +275,174 @@ const SortableEnvironmentColumn = memo(function SortableEnvironmentColumn({
 }: {
   environment: Environment;
   isBusy: boolean;
-  isDropTarget: boolean;
   onDelete: (environment: Environment) => void;
   onEdit: (environment: Environment) => void;
   onManageSources: (environment: Environment) => void;
   onRefresh: (environment: Environment) => void;
 }) {
-  const { attributes, isDragging, listeners, setActivatorNodeRef, setNodeRef } =
-    useSortable({
-      animateLayoutChanges: () => false,
-      disabled: isBusy,
-      id: environment.id,
-    });
-
-  return (
-    <Table.Column
-      ref={setNodeRef}
-      className={`${ENVIRONMENT_COLUMN_CLASS} sticky top-0 z-40 bg-surface ${
-        isDropTarget ? 'bg-accent/5 ring-2 ring-inset ring-accent/60' : ''
-      } ${isDragging ? 'opacity-40' : ''}`}
-      id={environment.id}
-    >
-      {isDragging ? (
-        <div
-          aria-hidden="true"
-          className="min-h-[3.75rem] rounded-lg border border-dashed border-divider bg-surface-secondary/60"
-        />
-      ) : (
-        <EnvironmentMatrixColumnHeader
-          attributes={attributes}
-          environment={environment}
-          isBusy={isBusy}
-          listeners={listeners}
-          onDelete={onDelete}
-          onEdit={onEdit}
-          onManageSources={onManageSources}
-          onRefresh={onRefresh}
-          setActivatorNodeRef={setActivatorNodeRef}
-        />
-      )}
-    </Table.Column>
+  const sources = useEnvironmentSourcesQuery(
+    environment.projectId,
+    environment.id,
   );
-});
+  const {
+    attributes,
+    listeners,
+    setActivatorNodeRef,
+    setNodeRef,
+    transform,
+    transition,
+  } = useSortable({ disabled: isBusy, id: environment.id });
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+  };
+  const configuredSources = sources.data ?? [];
+  const issueCount = configuredSources.filter(sourceHasIssue).length;
+  const sourceSummary = getSourceSummary(
+    sources.isPending,
+    sources.isError,
+    configuredSources.length,
+    issueCount,
+  );
+  const statusClassName = sources.isError
+    ? 'bg-red-500'
+    : issueCount > 0
+      ? 'bg-amber-500'
+      : configuredSources.length > 0
+        ? 'bg-emerald-500'
+        : 'bg-zinc-500';
 
-function EnvironmentColumnDragPreview({
-  environment,
-}: {
-  environment: Environment;
-}) {
+  function handleAction(action: Key) {
+    switch (String(action)) {
+      case 'manage-sources':
+        onManageSources(environment);
+        break;
+      case 'refresh':
+        onRefresh(environment);
+        break;
+      case 'edit':
+        onEdit(environment);
+        break;
+      case 'delete':
+        onDelete(environment);
+        break;
+    }
+  }
+
   return (
-    <div className="flex min-h-[3.75rem] items-center gap-2 rounded-lg border border-accent bg-surface px-3 py-2 shadow-lg ring-1 ring-accent/40">
-      <IconGripVertical
-        aria-hidden="true"
-        className="shrink-0 text-muted"
-        size={ICON_SIZE.button}
-        stroke={ICON_STROKE}
-      />
-      <div className="min-w-0">
-        <p className="truncate font-semibold">{environment.name}</p>
-        <p className="truncate text-xs font-normal text-muted">Moving column</p>
+    <div
+      ref={setNodeRef}
+      style={style}
+      className="flex min-w-52 items-start gap-1 rounded-lg py-1"
+    >
+      <Button
+        aria-label={`Reorder ${environment.name}`}
+        isDisabled={isBusy}
+        isIconOnly
+        ref={setActivatorNodeRef}
+        size="sm"
+        variant="ghost"
+        {...attributes}
+        {...listeners}
+      >
+        <IconGripVertical
+          aria-hidden="true"
+          size={ICON_SIZE.button}
+          stroke={ICON_STROKE}
+        />
+      </Button>
+      <div className="min-w-0 flex-1 py-1">
+        <div className="flex items-center gap-1.5">
+          <span
+            aria-hidden="true"
+            className={`size-2 shrink-0 rounded-full ${statusClassName}`}
+          />
+          <p className="truncate font-semibold">{environment.name}</p>
+        </div>
+        <p
+          className="mt-0.5 truncate text-xs font-normal text-muted"
+          title={sourceSummary}
+        >
+          {sourceSummary}
+        </p>
       </div>
+      <Dropdown>
+        <Dropdown.Trigger
+          aria-label={`Open actions for ${environment.name}`}
+          className="inline-flex size-8 items-center justify-center rounded-lg text-muted transition hover:bg-surface-secondary hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:cursor-not-allowed disabled:opacity-50"
+          isDisabled={isBusy}
+        >
+          <IconDotsVertical
+            aria-hidden="true"
+            size={ICON_SIZE.button}
+            stroke={ICON_STROKE}
+          />
+        </Dropdown.Trigger>
+        <Dropdown.Popover placement="bottom end">
+          <Dropdown.Menu onAction={handleAction}>
+            <Dropdown.Item id="manage-sources" textValue="Manage sources">
+              <IconSettings
+                aria-hidden="true"
+                size={ICON_SIZE.button}
+                stroke={ICON_STROKE}
+              />
+              <Label>Manage sources</Label>
+            </Dropdown.Item>
+            <Dropdown.Item id="refresh" textValue="Refresh environment">
+              <IconRefresh
+                aria-hidden="true"
+                size={ICON_SIZE.button}
+                stroke={ICON_STROKE}
+              />
+              <Label>Refresh environment</Label>
+            </Dropdown.Item>
+            <Dropdown.Item id="edit" textValue="Edit environment">
+              <IconPencil
+                aria-hidden="true"
+                size={ICON_SIZE.button}
+                stroke={ICON_STROKE}
+              />
+              <Label>Edit environment</Label>
+            </Dropdown.Item>
+            <Dropdown.Item
+              id="delete"
+              textValue="Delete environment"
+              variant="danger"
+            >
+              <IconTrash
+                aria-hidden="true"
+                size={ICON_SIZE.button}
+                stroke={ICON_STROKE}
+              />
+              <Label>Delete environment</Label>
+            </Dropdown.Item>
+          </Dropdown.Menu>
+        </Dropdown.Popover>
+      </Dropdown>
     </div>
   );
 }
 
-const MatrixCell = memo(function MatrixCell({
+function sourceHasIssue(source: EnvironmentSource): boolean {
+  return !['not_parsed', 'parsed'].includes(source.parseStatus);
+}
+
+function getSourceSummary(
+  isPending: boolean,
+  isError: boolean,
+  sourceCount: number,
+  issueCount: number,
+): string {
+  if (isPending) return 'Loading sources';
+  if (isError) return 'Sources unavailable';
+  if (sourceCount === 0) return 'No sources';
+
+  const sourceLabel = `${sourceCount} source${sourceCount === 1 ? '' : 's'}`;
+  if (issueCount === 0) return sourceLabel;
+  return `${sourceLabel} · ${issueCount} issue${issueCount === 1 ? '' : 's'}`;
+}
+
+function MatrixCell({
   cell,
   environment,
   isSelected,
@@ -489,22 +458,16 @@ const MatrixCell = memo(function MatrixCell({
   const activeCount = cell.sourceDetails.filter(
     (detail) => !detail.isCommented,
   ).length;
-
   const commentedCount = cell.sourceDetails.length - activeCount;
   const status = cellLabel(cell, activeCount);
   const summary = cellSummary(cell, activeCount, commentedCount);
 
   return (
     <button
-      aria-label={`${keyName} in ${environment.name}: ${status}${
-        summary ? `. ${summary}` : ''
+      aria-label={`${keyName} in ${environment.name}: ${status}${summary ? `. ${summary}` : ''}`}
+      className={`flex min-h-16 w-full min-w-44 items-center justify-between gap-3 p-3 text-left transition hover:bg-surface-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent ${
+        isSelected ? 'bg-accent/10 ring-1 ring-inset ring-accent' : ''
       }`}
-      aria-pressed={isSelected}
-      className={`flex h-full min-h-16 w-full items-center justify-between gap-3 rounded-lg border border-transparent p-3 text-left transition-colors hover:bg-surface-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent ${
-        isSelected ? 'relative z-10 border-accent bg-accent/15 shadow-sm' : ''
-      }`}
-      data-cell-id={`${keyName}:${environment.id}`}
-      data-selected={isSelected ? 'true' : undefined}
       onClick={() =>
         onSelect({
           environment,
@@ -518,14 +481,12 @@ const MatrixCell = memo(function MatrixCell({
         <Chip color={cellColor(cell.state)} size="sm" variant="soft">
           <Chip.Label>{status}</Chip.Label>
         </Chip>
-
         {summary ? (
           <p className="truncate text-xs text-muted" title={summary}>
             {summary}
           </p>
         ) : null}
       </div>
-
       <IconChevronRight
         aria-hidden="true"
         className="shrink-0 text-muted"
@@ -534,27 +495,22 @@ const MatrixCell = memo(function MatrixCell({
       />
     </button>
   );
-});
+}
 
 function cellLabel(cell: EnvironmentMatrixCell, activeCount: number): string {
   switch (cell.state) {
     case 'present':
       return 'Present';
-
     case 'duplicate':
       return activeCount > 1
         ? `${activeCount} active definitions`
         : 'Multiple definitions';
-
     case 'commented':
       return 'Commented only';
-
     case 'source_unreadable':
       return 'Source unreadable';
-
     case 'parse_issue':
       return 'Parse issue';
-
     default:
       return 'Absent';
   }
@@ -568,27 +524,18 @@ function cellSummary(
   if (cell.state === 'present' && commentedCount > 0) {
     return `${activeCount} active · ${commentedCount} commented`;
   }
-
-  if (cell.state === 'present') {
-    return `${activeCount} active`;
-  }
-
+  if (cell.state === 'present') return `${activeCount} active`;
   if (cell.state === 'duplicate') {
     const activeSources = new Set(
       cell.sourceDetails
         .filter((detail) => !detail.isCommented)
         .map((detail) => detail.relativePath),
     ).size;
-
-    return `${activeCount} active across ${activeSources} source${
-      activeSources === 1 ? '' : 's'
-    }`;
+    return `${activeCount} active across ${activeSources} source${activeSources === 1 ? '' : 's'}`;
   }
-
   if (cell.state === 'commented') {
     return `${commentedCount} commented`;
   }
-
   return null;
 }
 
@@ -596,15 +543,12 @@ function cellColor(state: EnvironmentMatrixCell['state']) {
   switch (state) {
     case 'present':
       return 'success' as const;
-
     case 'duplicate':
     case 'parse_issue':
     case 'source_unreadable':
       return 'warning' as const;
-
     case 'commented':
       return 'default' as const;
-
     default:
       return 'default' as const;
   }

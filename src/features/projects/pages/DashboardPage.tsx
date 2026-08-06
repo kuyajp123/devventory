@@ -1,6 +1,7 @@
 import {
   Alert,
   buttonVariants,
+  Card,
   Chip,
   EmptyState,
   Skeleton,
@@ -21,9 +22,9 @@ export function DashboardPage() {
         className="mx-auto max-w-5xl space-y-4"
         role="status"
       >
-        <Skeleton className="h-10 w-2/5 rounded-md" />
-        <Skeleton className="h-40 w-full rounded-md" />
-        <Skeleton className="h-56 w-full rounded-md" />
+        <Skeleton className="h-10 w-2/5 rounded-lg" />
+        <Skeleton className="h-40 w-full rounded-xl" />
+        <Skeleton className="h-56 w-full rounded-xl" />
       </div>
     );
   }
@@ -46,29 +47,25 @@ export function DashboardPage() {
 
   const data = activeProject;
   return (
-    <section className="mx-auto w-full max-w-5xl space-y-6">
-      <header className="border-b border-divider pb-4 space-y-2">
-        <div className="flex items-center gap-2">
-          <Chip size="sm" variant="soft">
-            <Chip.Label className="capitalize font-mono text-[10px] text-accent">
-              {data.projectType}
-            </Chip.Label>
-          </Chip>
-          <span className="font-mono text-xs text-muted">Project Overview</span>
-        </div>
+    <section className="mx-auto w-full max-w-5xl space-y-8">
+      <header className="space-y-3">
+        <p className="text-sm font-medium text-muted">Dashboard</p>
         <div className="flex items-start gap-3">
           <IconFolder
             aria-hidden="true"
             className="mt-1 shrink-0 text-accent"
-            size={ICON_SIZE.navigation}
+            size={ICON_SIZE.emptyState}
             stroke={ICON_STROKE}
           />
           <div className="min-w-0">
-            <h1 className="break-words font-mono text-2xl font-bold tracking-tight text-foreground sm:text-3xl">
+            <Chip size="sm" variant="soft">
+              <Chip.Label className="capitalize">{data.projectType}</Chip.Label>
+            </Chip>
+            <h1 className="break-words text-3xl font-semibold tracking-tight sm:text-4xl">
               {data.name}
             </h1>
             {data.description && (
-              <p className="mt-1 max-w-3xl text-xs leading-5 text-muted">
+              <p className="mt-2 max-w-3xl leading-7 text-muted">
                 {data.description}
               </p>
             )}
@@ -76,28 +73,30 @@ export function DashboardPage() {
         </div>
       </header>
 
-      {/* Configuration Box */}
-      <div className="rounded-md border border-divider bg-surface p-5 space-y-4">
-        <h2 className="font-mono text-xs font-semibold uppercase tracking-wider text-muted">
-          Project Configuration
-        </h2>
-
-        <dl className="grid gap-4 md:grid-cols-2 text-xs">
-          <div className="md:col-span-2">
-            <dt className="font-mono text-[11px] uppercase tracking-wide text-muted">
-              Local Root Path
-            </dt>
-            <dd className="mt-1 break-all rounded border border-divider bg-workspace p-2 font-mono text-xs text-foreground">
-              {data.rootPath}
-            </dd>
-          </div>
-
-          <PathList label="Watched Locations" values={data.watchedLocations} />
-          <PathList label="Exclusions" values={data.exclusions} />
-          <Metadata label="Created" value={formatTimestamp(data.createdAt)} />
-          <Metadata label="Updated" value={formatTimestamp(data.updatedAt)} />
-        </dl>
-      </div>
+      <Card>
+        <Card.Header>
+          <Card.Title>Project configuration</Card.Title>
+        </Card.Header>
+        <Card.Content>
+          <dl className="grid gap-5 md:grid-cols-2">
+            <div className="md:col-span-2">
+              <dt className="text-xs font-medium uppercase tracking-wide text-muted">
+                Local root
+              </dt>
+              <dd className="mt-2 break-all rounded-lg bg-surface-secondary p-3 font-mono text-xs">
+                {data.rootPath}
+              </dd>
+            </div>
+            <PathList
+              label="Watched locations"
+              values={data.watchedLocations}
+            />
+            <PathList label="Exclusions" values={data.exclusions} />
+            <Metadata label="Created" value={formatTimestamp(data.createdAt)} />
+            <Metadata label="Updated" value={formatTimestamp(data.updatedAt)} />
+          </dl>
+        </Card.Content>
+      </Card>
 
       <ScanSummaryCard summary={data.initialScan} />
     </section>
@@ -106,22 +105,22 @@ export function DashboardPage() {
 
 function EmptyDashboard() {
   return (
-    <EmptyState className="mx-auto max-w-2xl rounded-md border border-dashed border-divider bg-surface p-8 text-center">
+    <EmptyState className="mx-auto max-w-3xl rounded-xl border border-dashed border-divider bg-surface p-10 text-center">
       <IconFolder
         aria-hidden="true"
         className="mx-auto text-muted"
         size={ICON_SIZE.emptyState}
         stroke={ICON_STROKE}
       />
-      <h1 className="mt-3 text-2xl font-semibold tracking-tight">
+      <h1 className="mt-4 text-3xl font-semibold tracking-tight">
         Add your first project
       </h1>
-      <p className="mx-auto mt-2 max-w-md text-xs leading-relaxed text-muted">
+      <p className="mx-auto mt-3 max-w-xl leading-7 text-muted">
         Choose a local project folder to unlock the Dashboard, Asset Library,
         and File Inventory modules.
       </p>
       <Link
-        className={`${buttonVariants({ variant: 'primary' })} mt-5`}
+        className={`${buttonVariants({ variant: 'primary' })} mt-6`}
         to="/projects/new"
       >
         <IconPlus
@@ -138,15 +137,15 @@ function EmptyDashboard() {
 function PathList({ label, values }: { label: string; values: string[] }) {
   return (
     <div>
-      <dt className="font-mono text-[11px] uppercase tracking-wide text-muted">
+      <dt className="text-xs font-medium uppercase tracking-wide text-muted">
         {label}
       </dt>
-      <dd className="mt-1">
+      <dd className="mt-2">
         {values.length > 0 ? (
           <ul className="space-y-1 font-mono text-xs">
             {values.map((value) => (
               <li
-                className="rounded border border-divider bg-workspace px-2.5 py-1 text-secondary"
+                className="rounded-lg bg-surface-secondary px-3 py-2"
                 key={value}
               >
                 {value}
@@ -154,7 +153,7 @@ function PathList({ label, values }: { label: string; values: string[] }) {
             ))}
           </ul>
         ) : (
-          <span className="text-xs text-muted">None</span>
+          <span className="text-sm text-muted">None</span>
         )}
       </dd>
     </div>
@@ -164,10 +163,10 @@ function PathList({ label, values }: { label: string; values: string[] }) {
 function Metadata({ label, value }: { label: string; value: string }) {
   return (
     <div>
-      <dt className="font-mono text-[11px] uppercase tracking-wide text-muted">
+      <dt className="text-xs font-medium uppercase tracking-wide text-muted">
         {label}
       </dt>
-      <dd className="mt-1 font-mono text-xs text-foreground">{value}</dd>
+      <dd className="mt-2 text-sm">{value}</dd>
     </div>
   );
 }

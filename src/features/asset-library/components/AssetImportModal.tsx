@@ -1,15 +1,9 @@
 import { zodResolver } from '@hookform/resolvers/zod';
-import { Button, Form, Spinner, toast } from '@heroui/react';
+import { Button, Form, Modal, Spinner, toast } from '@heroui/react';
 import { IconFileImport } from '@tabler/icons-react';
 import { useEffect, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { TauriCommandError } from '@/shared/infrastructure/tauri/tauri-error';
-import {
-  DevventoryDialog,
-  DialogBody,
-  DialogFooter,
-  DialogHeader,
-} from '@/shared/ui';
 import {
   useImportAssetMutation,
   usePreviewAssetMutation,
@@ -136,64 +130,75 @@ export function AssetImportModal({
   });
 
   return (
-    <DevventoryDialog
-      isOpen={isOpen}
-      onOpenChange={onOpenChange}
-      size="lg"
-      scroll
-    >
-      <DialogHeader
-        icon={<IconFileImport aria-hidden="true" />}
-        title="Import managed asset"
-      />
-      <DialogBody>
-        <Form
-          className="flex flex-col gap-5"
-          onSubmit={(event) => event.preventDefault()}
-          validationBehavior="aria"
-        >
-          <AssetImportSourcePanel
-            isBusy={isBusy}
-            isPreviewing={preview.isPending}
-            onChoose={() => void chooseFile()}
-            preview={preview.data}
-            projectId={projectId}
-            sourcePath={sourcePath}
-          />
+    <Modal>
+      <Button aria-hidden="true" className="hidden">
+        Open import dialog
+      </Button>
+      <Modal.Backdrop
+        isOpen={isOpen}
+        onOpenChange={onOpenChange}
+        variant="blur"
+      >
+        <Modal.Container scroll="inside" size="lg">
+          <Modal.Dialog>
+            <Modal.CloseTrigger />
+            <Modal.Header>
+              <Modal.Icon>
+                <IconFileImport aria-hidden="true" />
+              </Modal.Icon>
+              <Modal.Heading>Import managed asset</Modal.Heading>
+            </Modal.Header>
+            <Modal.Body>
+              <Form
+                className="space-y-5"
+                onSubmit={(event) => event.preventDefault()}
+                validationBehavior="aria"
+              >
+                <AssetImportSourcePanel
+                  isBusy={isBusy}
+                  isPreviewing={preview.isPending}
+                  onChoose={() => void chooseFile()}
+                  preview={preview.data}
+                  projectId={projectId}
+                  sourcePath={sourcePath}
+                />
 
-          <AssetImportFields
-            control={control}
-            errors={errors}
-            isDisabled={isBusy || !preview.data}
-            register={register}
-            watchedLocations={watchedLocations}
-          />
+                <AssetImportFields
+                  control={control}
+                  errors={errors}
+                  isDisabled={isBusy || !preview.data}
+                  register={register}
+                  watchedLocations={watchedLocations}
+                />
 
-          {operationError && <AssetOperationError message={operationError} />}
-        </Form>
-      </DialogBody>
-      <DialogFooter>
-        <Button
-          isDisabled={isBusy}
-          onPress={() => onOpenChange(false)}
-          variant="secondary"
-          size="sm"
-        >
-          Close
-        </Button>
-        <Button
-          isDisabled={isBusy || !preview.data}
-          onPress={() => void submit()}
-          variant="primary"
-          size="sm"
-        >
-          {importer.isPending ? (
-            <Spinner aria-label="Importing asset" size="sm" />
-          ) : null}
-          {importer.isPending ? 'Importing…' : 'Import and index'}
-        </Button>
-      </DialogFooter>
-    </DevventoryDialog>
+                {operationError && (
+                  <AssetOperationError message={operationError} />
+                )}
+              </Form>
+            </Modal.Body>
+            <Modal.Footer>
+              <Button
+                isDisabled={isBusy}
+                onPress={() => onOpenChange(false)}
+                variant="secondary"
+              >
+                Close
+              </Button>
+              <Button
+                isDisabled={isBusy || !preview.data}
+                onPress={() => void submit()}
+                variant="primary"
+              >
+                {importer.isPending ? (
+                  <Spinner aria-label="Importing asset" size="sm" />
+                ) : null}
+                {importer.isPending ? 'Importing…' : 'Import and index'}
+              </Button>
+            </Modal.Footer>
+          </Modal.Dialog>
+        </Modal.Container>
+      </Modal.Backdrop>
+    </Modal>
   );
 }
 

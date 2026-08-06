@@ -5,6 +5,7 @@ import {
   Form,
   Input,
   Label,
+  Modal,
   Spinner,
   TextArea,
   TextField,
@@ -13,12 +14,6 @@ import { IconAdjustments } from '@tabler/icons-react';
 import { useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { ICON_SIZE, ICON_STROKE } from '@/shared/constants/icon.constants';
-import {
-  DevventoryDialog,
-  DialogBody,
-  DialogFooter,
-  DialogHeader,
-} from '@/shared/ui';
 import {
   environmentFormSchema,
   type Environment,
@@ -70,72 +65,88 @@ export function EnvironmentFormModal({
   });
 
   return (
-    <DevventoryDialog isOpen={isOpen} onOpenChange={onOpenChange} size="sm">
-      <DialogHeader
-        icon={
-          <IconAdjustments
-            aria-hidden="true"
-            size={ICON_SIZE.button}
-            stroke={ICON_STROKE}
-          />
-        }
-        title={environment ? 'Edit environment' : 'Create environment'}
-      />
-      <DialogBody>
-        <Form
-          className="flex flex-col gap-3"
-          onSubmit={(event) => event.preventDefault()}
-          validationBehavior="aria"
-        >
-          <TextField
-            fullWidth
-            isInvalid={Boolean(errors.name)}
-            variant="secondary"
-          >
-            <Label>Environment name</Label>
-            <Input
-              autoFocus
-              disabled={isSaving}
-              placeholder="Development"
-              {...register('name')}
-            />
-            <FieldError>{errors.name?.message}</FieldError>
-          </TextField>
-          <TextField
-            fullWidth
-            isInvalid={Boolean(errors.description)}
-            variant="secondary"
-          >
-            <Label>Description (optional)</Label>
-            <TextArea
-              disabled={isSaving}
-              placeholder="Local development configuration"
-              rows={3}
-              {...register('description')}
-            />
-            <FieldError>{errors.description?.message}</FieldError>
-          </TextField>
-        </Form>
-      </DialogBody>
-      <DialogFooter>
-        <Button
-          isDisabled={isSaving}
-          onPress={() => onOpenChange(false)}
-          variant="secondary"
-          size="sm"
-        >
-          Cancel
-        </Button>
-        <Button
-          isDisabled={isSaving}
-          onPress={() => void submit()}
-          variant="primary"
-          size="sm"
-        >
-          {isSaving && <Spinner aria-label="Saving environment" size="sm" />}
-          {environment ? 'Save environment' : 'Create environment'}
-        </Button>
-      </DialogFooter>
-    </DevventoryDialog>
+    <Modal>
+      <Button aria-hidden="true" className="hidden">
+        Open environment form
+      </Button>
+      <Modal.Backdrop
+        isOpen={isOpen}
+        onOpenChange={onOpenChange}
+        variant="blur"
+      >
+        <Modal.Container size="sm">
+          <Modal.Dialog>
+            <Modal.CloseTrigger />
+            <Modal.Header>
+              <Modal.Icon>
+                <IconAdjustments
+                  aria-hidden="true"
+                  size={ICON_SIZE.button}
+                  stroke={ICON_STROKE}
+                />
+              </Modal.Icon>
+              <Modal.Heading>
+                {environment ? 'Edit environment' : 'Create environment'}
+              </Modal.Heading>
+            </Modal.Header>
+            <Modal.Body>
+              <Form
+                className="space-y-4"
+                onSubmit={(event) => event.preventDefault()}
+                validationBehavior="aria"
+              >
+                <TextField
+                  fullWidth
+                  isInvalid={Boolean(errors.name)}
+                  variant="secondary"
+                >
+                  <Label>Environment name</Label>
+                  <Input
+                    autoFocus
+                    disabled={isSaving}
+                    placeholder="Development"
+                    {...register('name')}
+                  />
+                  <FieldError>{errors.name?.message}</FieldError>
+                </TextField>
+                <TextField
+                  fullWidth
+                  isInvalid={Boolean(errors.description)}
+                  variant="secondary"
+                >
+                  <Label>Description (optional)</Label>
+                  <TextArea
+                    disabled={isSaving}
+                    placeholder="Local development configuration"
+                    rows={3}
+                    {...register('description')}
+                  />
+                  <FieldError>{errors.description?.message}</FieldError>
+                </TextField>
+              </Form>
+            </Modal.Body>
+            <Modal.Footer>
+              <Button
+                isDisabled={isSaving}
+                onPress={() => onOpenChange(false)}
+                variant="secondary"
+              >
+                Cancel
+              </Button>
+              <Button
+                isDisabled={isSaving}
+                onPress={() => void submit()}
+                variant="primary"
+              >
+                {isSaving && (
+                  <Spinner aria-label="Saving environment" size="sm" />
+                )}
+                {environment ? 'Save environment' : 'Create environment'}
+              </Button>
+            </Modal.Footer>
+          </Modal.Dialog>
+        </Modal.Container>
+      </Modal.Backdrop>
+    </Modal>
   );
 }
