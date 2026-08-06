@@ -33,7 +33,7 @@ export function AssetDropZone({
 
   return (
     <Surface
-      className="rounded-md border border-dashed border-divider p-5"
+      className="rounded-xl border border-dashed border-divider p-5"
       variant="secondary"
     >
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">

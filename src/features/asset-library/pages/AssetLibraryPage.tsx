@@ -90,21 +90,29 @@ export function AssetLibraryPage() {
   if (!activeProject || !projectId) return <AssetProjectUnavailable />;
 
   return (
-    <section className="mx-auto w-full max-w-7xl space-y-4">
-      <header className="border-b border-divider pb-3 space-y-1">
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <div className="flex items-center gap-2">
+    <section className="mx-auto w-full max-w-7xl space-y-6">
+      <header className="space-y-4">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+          <div className="flex items-start gap-3">
             <IconLibrary
               aria-hidden="true"
-              className="shrink-0 text-accent"
-              size={ICON_SIZE.navigation}
+              className="mt-1 shrink-0 text-accent"
+              size={ICON_SIZE.emptyState}
               stroke={ICON_STROKE}
             />
-            <h1 className="font-mono text-xl font-bold tracking-tight text-foreground sm:text-2xl">
-              Asset library
-            </h1>
+            <div>
+              <p className="text-sm font-medium text-muted">
+                {activeProject.name}
+              </p>
+              <h1 className="text-3xl font-semibold tracking-tight sm:text-4xl">
+                Asset library
+              </h1>
+              <p className="mt-2 max-w-3xl leading-7 text-muted">
+                Browse discovered files and import managed assets into approved
+                project locations.
+              </p>
+            </div>
           </div>
-
           <Button onPress={() => setImportOpen(true)} variant="primary">
             <IconPlus
               aria-hidden="true"
@@ -114,14 +122,6 @@ export function AssetLibraryPage() {
             Import asset
           </Button>
         </div>
-        <p className="text-xs text-muted max-w-3xl">
-          Browse discovered files and import managed assets into approved
-          locations for{' '}
-          <span className="font-mono font-medium text-foreground">
-            {activeProject.name}
-          </span>
-          .
-        </p>
       </header>
 
       <AssetDropZone
@@ -137,7 +137,6 @@ export function AssetLibraryPage() {
       />
 
       {assets.isPending && <AssetLibrarySkeleton />}
-
       {assets.isError && (
         <Alert role="alert" status="danger">
           <Alert.Indicator />
@@ -152,31 +151,27 @@ export function AssetLibraryPage() {
 
       {assets.data && (
         <>
-          <div className="flex items-center justify-between gap-4 py-1 font-mono text-xs text-muted">
-            <p aria-live="polite">
+          <div className="flex items-center justify-between gap-4">
+            <p aria-live="polite" className="text-sm text-muted">
               {assets.data.totalItems.toLocaleString()} asset
               {assets.data.totalItems === 1 ? '' : 's'}
             </p>
             {assets.isFetching && !assets.isPending && (
               <span
-                className="flex items-center gap-1.5 text-xs text-muted"
+                className="flex items-center gap-2 text-xs text-muted"
                 role="status"
               >
                 <Spinner size="sm" /> Refreshing…
               </span>
             )}
           </div>
-
-          <div className="rounded-md border border-divider bg-surface overflow-hidden">
-            <AssetTable
-              assets={assets.data.items}
-              hasFilters={hasAssetFilters(filters)}
-              onSortChange={changeSort}
-              sortBy={filters.sortBy}
-              sortDirection={filters.sortDirection}
-            />
-          </div>
-
+          <AssetTable
+            assets={assets.data.items}
+            hasFilters={hasAssetFilters(filters)}
+            onSortChange={changeSort}
+            sortBy={filters.sortBy}
+            sortDirection={filters.sortDirection}
+          />
           <AppPagination
             ariaLabel="Asset library pages"
             onPageChange={(page) =>

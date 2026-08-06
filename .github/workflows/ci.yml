@@ -19,8 +19,8 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  frontend:
-    name: Frontend checks
+  foundation:
+    name: Run checks
     runs-on: windows-latest
 
     steps:
@@ -89,14 +89,6 @@ jobs:
             npm exec commitlint -- --from "$mergeBase" --to HEAD --verbose
           }
 
-  rust:
-    name: Rust checks
-    runs-on: windows-latest
-
-    steps:
-      - name: Check out repository
-        uses: actions/checkout@v7
-
       - name: Install Rust quality components
         run: rustup component add clippy
 
@@ -130,20 +122,3 @@ jobs:
       - name: Audit Rust dependencies
         working-directory: src-tauri
         run: cargo audit
-
-  foundation:
-    name: Run checks
-    if: always()
-    needs:
-      - frontend
-      - rust
-    runs-on: ubuntu-latest
-
-    steps:
-      - name: Verify parallel checks
-        shell: bash
-        run: |
-          if [ "${{ needs.frontend.result }}" != "success" ] || [ "${{ needs.rust.result }}" != "success" ]; then
-            echo "One or more CI check groups failed."
-            exit 1
-          fi

@@ -97,8 +97,8 @@ export function FileInventoryPage() {
         className="space-y-3"
         role="status"
       >
-        <Skeleton className="h-14 w-full rounded-md" />
-        <Skeleton className="h-64 w-full rounded-md" />
+        <Skeleton className="h-14 w-full rounded-xl" />
+        <Skeleton className="h-64 w-full rounded-xl" />
       </div>
     );
   }
@@ -118,26 +118,29 @@ export function FileInventoryPage() {
   }
 
   return (
-    <section className="mx-auto w-full max-w-7xl space-y-4">
-      <header className="border-b border-divider pb-3 space-y-1">
-        <div className="flex items-center gap-2">
+    <section className="mx-auto w-full max-w-7xl space-y-6">
+      <header className="space-y-4">
+        <div className="flex items-start gap-3">
           <IconFiles
             aria-hidden="true"
-            className="shrink-0 text-accent"
-            size={ICON_SIZE.navigation}
+            className="mt-1 shrink-0 text-accent"
+            size={ICON_SIZE.emptyState}
             stroke={ICON_STROKE}
           />
-          <h1 className="font-mono text-xl font-bold tracking-tight text-foreground sm:text-2xl">
-            File inventory
-          </h1>
+          <div>
+            <p className="text-sm font-medium text-muted">
+              {activeProject.name}
+            </p>
+            <h1 className="text-3xl font-semibold tracking-tight sm:text-4xl">
+              File inventory
+            </h1>
+            <p className="mt-2 max-w-3xl leading-7 text-muted">
+              Search metadata discovered inside the project’s approved watched
+              locations. Devventory does not display or store file contents
+              here.
+            </p>
+          </div>
         </div>
-        <p className="text-xs text-muted max-w-3xl">
-          Metadata discovered inside approved watched locations for{' '}
-          <span className="font-mono font-medium text-foreground">
-            {activeProject.name}
-          </span>
-          .
-        </p>
       </header>
 
       <InventoryFilters
@@ -153,11 +156,10 @@ export function FileInventoryPage() {
           className="space-y-3"
           role="status"
         >
-          <Skeleton className="h-12 w-full rounded-md" />
-          <Skeleton className="h-64 w-full rounded-md" />
+          <Skeleton className="h-14 w-full rounded-xl" />
+          <Skeleton className="h-64 w-full rounded-xl" />
         </div>
       )}
-
       {inventory.isError && (
         <Alert role="alert" status="danger">
           <Alert.Indicator />
@@ -169,7 +171,6 @@ export function FileInventoryPage() {
           </Alert.Content>
         </Alert>
       )}
-
       {mutationError && (
         <Alert role="alert" status="danger">
           <Alert.Indicator />
@@ -191,32 +192,27 @@ export function FileInventoryPage() {
             onRescanProject={scanProject}
             scans={inventory.data.recentScans}
           />
-
-          <div className="flex items-center justify-between gap-4 py-1 font-mono text-xs text-muted">
-            <p aria-live="polite">
+          <div className="flex items-center justify-between gap-4">
+            <p className="text-sm text-muted" aria-live="polite">
               {inventory.data.totalItems.toLocaleString()} file
               {inventory.data.totalItems === 1 ? '' : 's'}
             </p>
             {inventory.isFetching && !inventory.isPending && (
               <span
-                className="flex items-center gap-1.5 text-xs text-muted"
+                className="flex items-center gap-2 text-xs text-muted"
                 role="status"
               >
                 <Spinner size="sm" /> Refreshing…
               </span>
             )}
           </div>
-
-          <div className="rounded-md border border-divider bg-surface overflow-hidden">
-            <InventoryTable
-              files={inventory.data.items}
-              hasFilters={hasFilters(filters)}
-              onSortChange={changeSort}
-              sortBy={filters.sortBy}
-              sortDirection={filters.sortDirection}
-            />
-          </div>
-
+          <InventoryTable
+            files={inventory.data.items}
+            hasFilters={hasFilters(filters)}
+            onSortChange={changeSort}
+            sortBy={filters.sortBy}
+            sortDirection={filters.sortDirection}
+          />
           <AppPagination
             ariaLabel="File inventory pages"
             onPageChange={changePage}

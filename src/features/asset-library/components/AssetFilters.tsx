@@ -71,7 +71,7 @@ export function AssetFilters({ onApply, onReset, values }: AssetFiltersProps) {
 
   return (
     <Form
-      className="rounded-md border border-divider bg-surface p-4 sm:p-5"
+      className="rounded-xl border border-divider bg-surface p-4 sm:p-5"
       onSubmit={submit}
       validationBehavior="aria"
     >
