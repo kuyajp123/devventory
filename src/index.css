@@ -8,6 +8,17 @@
   /* Global desktop radius scale overrides for HeroUI */
   --radius: 0.25rem;
   --field-radius: 0.25rem;
+
+  /* Modal-specific design tokens */
+  --modal-radius: 4px;
+  --modal-header-height: 44px;
+  --modal-footer-height: 52px;
+  --modal-padding: 16px;
+  --modal-gap-field: 12px;
+  --modal-gap-section: 16px;
+  --modal-input-height: 32px;
+  --modal-textarea-min-height: 72px;
+  --modal-button-radius: 4px;
 }
 
 /* Base Theme (Dark Default) */
