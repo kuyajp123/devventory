@@ -34,7 +34,6 @@ import {
 } from '../components/EnvironmentKeyDetails';
 import { EnvironmentMatrix } from '../components/EnvironmentMatrix';
 import { EnvironmentSourceManager } from '../components/EnvironmentSourceManager';
-// import { EnvironmentStatusLegend } from '../components/EnvironmentStatusLegend';
 import { InspectEnvironmentMatrix } from '../components/InspectEnvironmentMatrix';
 import {
   useCreateEnvironmentMutation,
@@ -208,8 +207,6 @@ export function EnvironmentTrackerPage() {
       const container = matrixContainerRef.current;
       if (!container) return;
 
-      // In inspect mode, find the source whose relativePath matches and build the cell-id
-      // In compare mode, find the environment id from the selection
       let cellId: string | null = null;
 
       if (view === 'inspect' && selectedSources.data) {
@@ -236,7 +233,6 @@ export function EnvironmentTrackerPage() {
         });
       }
 
-      // Also update the selection to reflect the clicked source
       if (view === 'inspect') {
         setSelection((prev) =>
           prev ? { ...prev, selectedSourcePath: relativePath } : prev,
@@ -245,6 +241,7 @@ export function EnvironmentTrackerPage() {
     },
     [selection, view, selectedSources.data],
   );
+
   const inspectMatrixPage = useMemo(() => {
     if (!inspectMatrix.data) return null;
     const totalPages = Math.ceil(
@@ -260,6 +257,7 @@ export function EnvironmentTrackerPage() {
       totalPages,
     };
   }, [inspectMatrix.data, page]);
+
   const activeMatrix = view === 'compare' ? compareMatrix : inspectMatrix;
   const matrixData =
     view === 'compare' ? compareMatrix.data : inspectMatrixPage;
@@ -281,8 +279,30 @@ export function EnvironmentTrackerPage() {
   }
 
   return (
-    <section className="mx-auto w-full max-w-[96rem] space-y-6">
+    <section className="mx-auto w-full max-w-[96rem] space-y-4">
+      <header className="border-b border-divider pb-3 space-y-1">
+        <div className="flex items-center gap-2">
+          <IconAdjustments
+            aria-hidden="true"
+            className="shrink-0 text-accent"
+            size={ICON_SIZE.navigation}
+            stroke={ICON_STROKE}
+          />
+          <h1 className="font-mono text-xl font-bold tracking-tight text-foreground sm:text-2xl">
+            Environment Tracker
+          </h1>
+        </div>
+        <p className="text-xs text-muted max-w-3xl">
+          Track structural variable keys across environment sources for{' '}
+          <span className="font-mono font-medium text-foreground">
+            {activeProject.name}
+          </span>
+          .
+        </p>
+      </header>
+
       {isLoading && <EnvironmentTrackerSkeleton />}
+
       {environments.isError || activeMatrix.isError ? (
         <Alert role="alert" status="danger">
           <Alert.Indicator />
@@ -296,7 +316,7 @@ export function EnvironmentTrackerPage() {
       ) : null}
 
       {!isLoading && !environments.isError && environmentItems.length === 0 ? (
-        <EmptyState className="rounded-xl border border-dashed border-divider bg-surface p-8 text-center">
+        <EmptyState className="rounded-md border border-dashed border-divider bg-surface p-8 text-center">
           <IconAdjustments
             aria-hidden="true"
             className="mx-auto text-muted"
@@ -306,7 +326,7 @@ export function EnvironmentTrackerPage() {
           <h2 className="mt-4 text-lg font-semibold">
             Create your first environment
           </h2>
-          <p className="mt-2 text-sm text-muted">
+          <p className="mt-2 text-xs text-muted max-w-md mx-auto">
             Start with Development, Staging, or Production, then add one
             configuration source. Additional sources are available for layered
             or service-specific setups.
@@ -329,7 +349,7 @@ export function EnvironmentTrackerPage() {
           >
             <div className="flex flex-col gap-3 sm:flex-row items-center sm:justify-between">
               <div className="flex flex-row flex-wrap items-center gap-3">
-                <TextField className="w-full sm:w-100" variant="secondary">
+                <TextField className="w-full sm:w-80" variant="secondary">
                   <div className="relative">
                     <IconSearch
                       aria-hidden="true"
@@ -338,7 +358,7 @@ export function EnvironmentTrackerPage() {
                       stroke={ICON_STROKE}
                     />
                     <Input
-                      className="pl-10 w-full"
+                      className="pl-10 w-full font-mono text-xs"
                       onChange={(event) => {
                         setSearch(event.target.value);
                         setSelection(null);
@@ -352,7 +372,7 @@ export function EnvironmentTrackerPage() {
 
                 <div
                   aria-label="Environment Tracker view"
-                  className="inline-flex rounded-xl border border-divider bg-surface p-1"
+                  className="inline-flex rounded-md border border-divider bg-surface p-1"
                   role="group"
                 >
                   <Button
@@ -388,10 +408,7 @@ export function EnvironmentTrackerPage() {
                       <Select
                         className="min-w-50"
                         onChange={(value: Key | null) => {
-                          if (value === null) {
-                            return;
-                          }
-
+                          if (value === null) return;
                           setSelectedEnvironmentId(String(value));
                           setSelection(null);
                           setPage(1);
@@ -484,7 +501,7 @@ export function EnvironmentTrackerPage() {
 
             {matrixData ? (
               <>
-                <p aria-live="polite" className="text-sm text-muted">
+                <p aria-live="polite" className="text-xs font-mono text-muted">
                   {matrixData.totalItems.toLocaleString()} key
                   {matrixData.totalItems === 1 ? '' : 's'}
                   {view === 'inspect' && selectedEnvironment
@@ -494,7 +511,10 @@ export function EnvironmentTrackerPage() {
                 <div
                   className={`grid items-start gap-5 ${selection ? 'xl:grid-cols-[minmax(0,1fr)_22rem]' : ''}`}
                 >
-                  <div ref={matrixContainerRef} className="min-w-0 rounded-xl">
+                  <div
+                    ref={matrixContainerRef}
+                    className="min-w-0 rounded-md border border-divider bg-surface overflow-hidden"
+                  >
                     {view === 'compare' ? (
                       <EnvironmentMatrix
                         isRefreshingId={
@@ -521,7 +541,7 @@ export function EnvironmentTrackerPage() {
                         sources={selectedSources.data}
                       />
                     ) : selectedSources.isPending ? (
-                      <div className="flex min-h-48 items-center justify-center rounded-xl border border-divider bg-surface">
+                      <div className="flex min-h-48 items-center justify-center rounded-md border border-divider bg-surface">
                         <Spinner aria-label="Loading environment sources" />
                       </div>
                     ) : (
@@ -587,9 +607,9 @@ function EnvironmentTrackerSkeleton() {
       className="space-y-3"
       role="status"
     >
-      <Skeleton className="h-24 w-full rounded-xl" />
-      <Skeleton className="h-48 w-full rounded-xl" />
-      <Skeleton className="h-64 w-full rounded-xl" />
+      <Skeleton className="h-24 w-full rounded-lg" />
+      <Skeleton className="h-48 w-full rounded-lg" />
+      <Skeleton className="h-64 w-full rounded-lg" />
     </div>
   );
 }

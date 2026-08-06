@@ -179,9 +179,7 @@ describe('environment selection indicators', () => {
     expect(firstDefinition).toHaveAttribute('aria-pressed', 'true');
     expect(firstDefinition).toHaveAttribute('data-selected', 'true');
     expect(
-      document.querySelectorAll(
-        '[data-definition-path][data-selected="true"]',
-      ),
+      document.querySelectorAll('[data-definition-path][data-selected="true"]'),
     ).toHaveLength(1);
 
     await user.click(secondDefinition!);
@@ -191,9 +189,7 @@ describe('environment selection indicators', () => {
     expect(secondDefinition).toHaveAttribute('aria-pressed', 'true');
     expect(secondDefinition).toHaveAttribute('data-selected', 'true');
     expect(
-      document.querySelectorAll(
-        '[data-definition-path][data-selected="true"]',
-      ),
+      document.querySelectorAll('[data-definition-path][data-selected="true"]'),
     ).toHaveLength(1);
     expect(onDefinitionClick).toHaveBeenLastCalledWith(
       secondSource.relativePath,
@@ -279,8 +275,6 @@ describe('environment selection indicators', () => {
     expect(screen.getByText('Absent')).toHaveClass('text-muted');
     expect(screen.getByText('Source issue')).toHaveClass('text-warning');
 
-    expect(
-      document.querySelectorAll('[data-legend-status]'),
-    ).toHaveLength(5);
+    expect(document.querySelectorAll('[data-legend-status]')).toHaveLength(5);
   });
 });

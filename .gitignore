@@ -35,3 +35,20 @@ test-results
 # Keep GitHub Actions workflows
 !.github/workflows/
 !.github/workflows/**
+
+.impeccable/
+
+.claude/settings.local.json
+.claude/scheduled_tasks.lock
+
+.impeccable/config.local.json
+.impeccable/hook.cache.json
+.impeccable/hook.pending.json
+
+.impeccable/live/server.json
+.impeccable/live/sessions/
+.impeccable/live/previews/
+.impeccable/live/annotations/
+.impeccable/live/cache/
+
+*.log
