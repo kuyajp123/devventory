@@ -2,6 +2,7 @@ import { useActiveProject } from '@/features/projects';
 import { ICON_SIZE, ICON_STROKE } from '@/shared/constants/icon.constants';
 import { TauriCommandError } from '@/shared/infrastructure/tauri/tauri-error';
 import { AppPagination } from '@/shared/ui/AppPagination';
+import { ConfirmDialog } from '@/shared/ui';
 import {
   Alert,
   Button,
@@ -70,6 +71,7 @@ export function EnvironmentTrackerPage() {
   const [editing, setEditing] = useState<Environment | null | 'new'>(null);
   const [sourceEnvironment, setSourceEnvironment] =
     useState<Environment | null>(null);
+  const [deleteConfirm, setDeleteConfirm] = useState<Environment | null>(null);
   const previousProjectId = useRef(projectId);
   const matrixContainerRef = useRef<HTMLDivElement>(null);
 
@@ -140,20 +142,22 @@ export function EnvironmentTrackerPage() {
   }
 
   function removeEnvironment(environment: Environment) {
-    if (
-      !window.confirm(`Delete ${environment.name} and its configured sources?`)
-    )
-      return;
-    deleteEnvironment.mutate(environment.id, {
+    setDeleteConfirm(environment);
+  }
+
+  function confirmDelete() {
+    if (!deleteConfirm) return;
+    deleteEnvironment.mutate(deleteConfirm.id, {
       onError: (error) =>
         toast.danger(
           errorMessage(error, 'The environment could not be deleted.'),
         ),
       onSuccess: () => {
-        if (sourceEnvironment?.id === environment.id)
+        if (sourceEnvironment?.id === deleteConfirm.id)
           setSourceEnvironment(null);
-        if (selection?.environment.id === environment.id) setSelection(null);
+        if (selection?.environment.id === deleteConfirm.id) setSelection(null);
         toast.success('Environment deleted');
+        setDeleteConfirm(null);
       },
     });
   }
@@ -595,6 +599,19 @@ export function EnvironmentTrackerPage() {
           if (!isOpen) setSourceEnvironment(null);
         }}
         projectId={projectId}
+      />
+      <ConfirmDialog
+        body={
+          deleteConfirm
+            ? `Delete ${deleteConfirm.name} and its configured sources?`
+            : undefined
+        }
+        isOpen={deleteConfirm !== null}
+        onOpenChange={(isOpen) => {
+          if (!isOpen) setDeleteConfirm(null);
+        }}
+        onConfirm={confirmDelete}
+        title="Delete environment"
       />
     </section>
   );
