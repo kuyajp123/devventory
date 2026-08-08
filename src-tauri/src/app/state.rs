@@ -7,11 +7,13 @@ use crate::features::asset_library::{AssetService, LocalAssetFilesystem, SqliteA
 use crate::features::backups::repository::{
     BackupRecordDraft, BackupRepository, SqliteBackupRepository,
 };
+use crate::features::dashboard::{DashboardService, SqliteDashboardRepository};
 use crate::features::environment_tracker::{EnvironmentService, SqliteEnvironmentRepository};
 use crate::features::file_inventory::{
     FileInventoryService, InventoryRuntime, SqliteFileInventoryRepository,
 };
 use crate::features::projects::{LocalProjectFilesystem, ProjectService, SqliteProjectRepository};
+use crate::features::search::{SearchService, SqliteSearchRepository};
 use crate::features::settings::repository::{SettingsRepository, SqliteSettingsRepository};
 use crate::features::validation_center::{
     LocalManifestFilesystem, SqliteValidationRepository, ValidationService,
@@ -121,6 +123,14 @@ impl AppState {
             SqliteProjectRepository::new(self.database.pool().clone()),
             LocalProjectFilesystem,
         )
+    }
+
+    pub(crate) fn search_service(&self) -> SearchService {
+        SearchService::new(SqliteSearchRepository::new(self.database.pool().clone()))
+    }
+
+    pub(crate) fn dashboard_service(&self) -> DashboardService {
+        DashboardService::new(SqliteDashboardRepository::new(self.database.pool().clone()))
     }
 
     pub(crate) fn agent_usage_service(&self) -> AgentUsageService {

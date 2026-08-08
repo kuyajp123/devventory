@@ -14,6 +14,7 @@ interface MockDatabase {
   inventoryScans: Record<string, Array<Record<string, unknown>>>;
   managedAssets: Array<Record<string, unknown>>;
   projects: Project[];
+  searchHistory: Array<Record<string, unknown>>;
   settings: Record<string, string>;
   variantIdsByAsset: Record<string, string[]>;
 }
@@ -246,6 +247,145 @@ export function installTauriBrowserMocks() {
       return projects.find(
         (project) => project.id === commandArguments(args).projectId,
       );
+    }
+    if (command === 'delete_project') {
+      const projectId = commandArguments(args).projectId as string;
+      const index = projects.findIndex((project) => project.id === projectId);
+      if (index >= 0) projects.splice(index, 1);
+      delete inventoryScans[projectId];
+      delete environmentsByProject[projectId];
+      database.managedAssets = managedAssets.filter(
+        (asset) => asset.projectId !== projectId,
+      );
+      database.searchHistory = database.searchHistory.filter(
+        (entry) => entry.projectId !== projectId,
+      );
+      persist();
+      return null;
+    }
+    if (command === 'search_metadata') {
+      const request = commandArguments(args).request as {
+        page: number;
+        pageSize: number;
+        projectId: string | null;
+        query: string;
+      };
+      const normalizedQuery = request.query.trim().toLowerCase();
+      const candidates = projects
+        .filter(
+          (project) => !request.projectId || project.id === request.projectId,
+        )
+        .flatMap((project) => [
+          {
+            category: 'source',
+            extension: 'ts',
+            id: 'd63f9ad6-0817-4b8b-ad88-ec19881295b8',
+            modifiedAtMs: 1_775_257_200_000,
+            name: 'main.ts',
+            note: null,
+            origin: 'discovered',
+            projectId: project.id,
+            projectName: project.name,
+            relativePath: 'src/main.ts',
+            resultType: 'file',
+            status: 'active',
+            tags: [],
+          },
+        ])
+        .filter(
+          (item) =>
+            !normalizedQuery ||
+            item.name.toLowerCase().includes(normalizedQuery) ||
+            item.relativePath.toLowerCase().includes(normalizedQuery),
+        );
+      const offset = (request.page - 1) * request.pageSize;
+      return {
+        hasMore: offset + request.pageSize < candidates.length,
+        items: candidates.slice(offset, offset + request.pageSize),
+        page: request.page,
+        pageSize: request.pageSize,
+        totalItems: candidates.length,
+        totalPages: Math.ceil(candidates.length / request.pageSize),
+      };
+    }
+    if (command === 'record_search_history') {
+      const request = commandArguments(args).request as Record<string, unknown>;
+      if (!String(request.query ?? '').trim()) return null;
+      const requestJson = JSON.stringify(request);
+      database.searchHistory = database.searchHistory.filter(
+        (entry) => JSON.stringify(entry.request) !== requestJson,
+      );
+      const entry = {
+        createdAt: '2026-08-09T00:00:00.000Z',
+        id: '8162f1bc-009c-4c40-8ebd-303682446e6e',
+        projectId: request.projectId ?? null,
+        request,
+      };
+      database.searchHistory.unshift(entry);
+      database.searchHistory.splice(20);
+      persist();
+      return entry;
+    }
+    if (command === 'list_search_history') {
+      return database.searchHistory.map((entry) => ({
+        createdAt: entry.createdAt,
+        id: entry.id,
+        request: entry.request,
+      }));
+    }
+    if (command === 'delete_search_history') {
+      const historyId = commandArguments(args).historyId as string;
+      database.searchHistory = database.searchHistory.filter(
+        (entry) => entry.id !== historyId,
+      );
+      persist();
+      return null;
+    }
+    if (command === 'clear_search_history') {
+      database.searchHistory = [];
+      persist();
+      return null;
+    }
+    if (command === 'get_project_dashboard') {
+      const projectId = commandArguments(args).projectId as string;
+      if (!projects.some((project) => project.id === projectId)) {
+        throw new Error('Missing mock dashboard project');
+      }
+      const environments = environmentsByProject[projectId] ?? [];
+      const issues = validationIssuesByProject[projectId] ?? [];
+      const scans = inventoryScans[projectId] ?? [];
+      const assets = managedAssets.filter(
+        (asset) => asset.projectId === projectId,
+      );
+      return {
+        environmentCoverage: environments.map((environment) => ({
+          coveragePercent: 100,
+          environmentId: environment.id,
+          knownKeys: 1,
+          name: environment.name,
+          presentKeys: 1,
+          unavailableSources: 0,
+        })),
+        fileCategories: [{ category: 'source', count: 1 }],
+        metrics: {
+          environmentKeys: environments.length ? 1 : 0,
+          environments: environments.length,
+          indexedFiles: 1 + assets.length,
+          lastScanAt: (scans[0]?.startedAt as string | undefined) ?? null,
+          managedAssets: assets.length,
+          missingFiles: 0,
+          openValidationIssues: issues.filter(
+            (issue) => issue.status === 'open',
+          ).length,
+          watchedLocations: 1,
+          watcherStatus: 'unavailable',
+        },
+        projectId,
+        recentScans: scans.slice(0, 8),
+        validationSeverities: issues.some((issue) => issue.status === 'open')
+          ? [{ count: 1, severity: 'error' }]
+          : [],
+      };
     }
     if (command === 'list_project_files') {
       const input = commandArguments(args).input as {
@@ -789,6 +929,7 @@ function loadDatabase(): MockDatabase {
     inventoryScans: {},
     managedAssets: [],
     projects: [],
+    searchHistory: [],
     settings: {},
     variantIdsByAsset: {},
   };
@@ -805,6 +946,7 @@ function loadDatabase(): MockDatabase {
       environmentsByProject: parsed.environmentsByProject ?? {},
       managedAssets: parsed.managedAssets ?? [],
       projects: parsed.projects ?? [],
+      searchHistory: parsed.searchHistory ?? [],
       settings: parsed.settings ?? {},
       variantIdsByAsset: parsed.variantIdsByAsset ?? {},
     };

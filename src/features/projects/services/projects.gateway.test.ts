@@ -37,4 +37,17 @@ describe('projectsGateway', () => {
 
     await expect(projectsGateway.list()).rejects.toThrow();
   });
+
+  it('deletes only the requested project registration', async () => {
+    mockIPC((command, args) => {
+      expect(command).toBe('delete_project');
+      expect(args).toEqual({
+        projectId: '30af17bd-2dd6-4b89-a5e7-8517191815a7',
+      });
+    });
+
+    await expect(
+      projectsGateway.delete('30af17bd-2dd6-4b89-a5e7-8517191815a7'),
+    ).resolves.toBeUndefined();
+  });
 });

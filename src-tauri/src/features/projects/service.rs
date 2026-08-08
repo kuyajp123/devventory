@@ -112,6 +112,16 @@ impl ProjectService {
             .ok_or(ProjectError::ProjectNotFound)
     }
 
+    pub(crate) async fn delete(&self, id: &str) -> Result<(), ProjectError> {
+        let id = Uuid::parse_str(id).map_err(|_| ProjectError::InvalidProjectId)?;
+        if !self.repository.delete(id).await? {
+            return Err(ProjectError::ProjectNotFound);
+        }
+
+        tracing::info!(project_id = %id, "removed local project registration");
+        Ok(())
+    }
+
     pub(crate) async fn scan_target(&self, id: Uuid) -> Result<ProjectScanTarget, ProjectError> {
         self.repository
             .find_scan_target(id)

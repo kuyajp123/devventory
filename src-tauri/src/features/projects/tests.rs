@@ -100,6 +100,77 @@ async fn service_persists_projects_and_rejects_a_duplicate_canonical_root() {
     assert!(matches!(duplicate, Err(ProjectError::DuplicateRoot)));
 }
 
+#[tokio::test]
+async fn deleting_a_project_removes_owned_metadata_without_touching_the_project_folder() {
+    let workspace = tempdir().expect("temporary workspace");
+    let root = workspace.path().join("project");
+    fs::create_dir_all(&root).expect("project root");
+    fs::write(root.join("README.md"), "Devventory").expect("project file");
+
+    let initialization = initialize_database(&DatabasePaths::new(workspace.path().join("data")))
+        .await
+        .expect("database initialization");
+    let service = ProjectService::new(
+        SqliteProjectRepository::new(initialization.database.pool().clone()),
+        LocalProjectFilesystem,
+    );
+    let project = service
+        .create(CreateProject {
+            name: "Disposable project".to_owned(),
+            description: None,
+            project_type: ProjectType::Desktop,
+            root_path: root.to_string_lossy().into_owned(),
+            watched_locations: vec![".".to_owned()],
+            exclusions: vec!["target/".to_owned()],
+        })
+        .await
+        .expect("project creation");
+    sqlx::query(
+        "INSERT INTO search_history (id, project_id, query_text, request_json)
+         VALUES (?, ?, 'project query', ?)",
+    )
+    .bind(uuid::Uuid::new_v4().to_string())
+    .bind(project.id.to_string())
+    .bind(format!(
+        "{{\"query\":\"project query\",\"projectId\":\"{}\"}}",
+        project.id
+    ))
+    .execute(initialization.database.pool())
+    .await
+    .expect("project search history");
+
+    service
+        .delete(&project.id.to_string())
+        .await
+        .expect("project deletion");
+
+    assert!(matches!(
+        service.get(&project.id.to_string()).await,
+        Err(ProjectError::ProjectNotFound)
+    ));
+    let owned_rows: i64 = sqlx::query_scalar(
+        "SELECT
+            (SELECT COUNT(*) FROM watched_locations WHERE project_id = ?)
+          + (SELECT COUNT(*) FROM project_exclusions WHERE project_id = ?)
+          + (SELECT COUNT(*) FROM initial_scan_summaries WHERE project_id = ?)",
+    )
+    .bind(project.id.to_string())
+    .bind(project.id.to_string())
+    .bind(project.id.to_string())
+    .fetch_one(initialization.database.pool())
+    .await
+    .expect("owned row count");
+    assert_eq!(owned_rows, 0);
+    let search_history_rows: i64 =
+        sqlx::query_scalar("SELECT COUNT(*) FROM search_history WHERE project_id = ?")
+            .bind(project.id.to_string())
+            .fetch_one(initialization.database.pool())
+            .await
+            .expect("search history count");
+    assert_eq!(search_history_rows, 0);
+    assert!(root.join("README.md").is_file());
+}
+
 #[test]
 fn scan_configuration_keeps_only_relative_inputs() {
     let input = ScanConfiguration {

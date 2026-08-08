@@ -1,6 +1,7 @@
 import { listen } from '@tauri-apps/api/event';
 import { useQueryClient } from '@tanstack/react-query';
 import { useEffect } from 'react';
+import { invalidateDerivedProjectQueries } from '@/shared/query/derived-query-keys';
 import { validationKeys } from '../hooks/use-validation-center';
 import { validationChangedPayloadSchema } from '../models/validation';
 
@@ -18,6 +19,10 @@ export function ValidationEventSync() {
         void queryClient.invalidateQueries({
           queryKey: validationKeys.project(payload.data.projectId),
         });
+        void invalidateDerivedProjectQueries(
+          queryClient,
+          payload.data.projectId,
+        );
       },
     ).catch(() => undefined);
     return () => {

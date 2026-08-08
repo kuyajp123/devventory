@@ -36,6 +36,10 @@ vi.mock('@/features/agent-usage', () => ({
   AgentUsagePage: () => <h1>Agent Usage</h1>,
 }));
 
+vi.mock('./LazyDashboardRoute', () => ({
+  LazyDashboardRoute: () => <h1>Add your first project</h1>,
+}));
+
 describe('application routes', () => {
   it('redirects the root dashboard and navigates to diagnostics', async () => {
     const router = createMemoryRouter(appRoutes, { initialEntries: ['/'] });

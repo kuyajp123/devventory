@@ -1,6 +1,7 @@
 import { listen } from '@tauri-apps/api/event';
 import { useQueryClient } from '@tanstack/react-query';
 import { useEffect } from 'react';
+import { invalidateDerivedProjectQueries } from '@/shared/query/derived-query-keys';
 import { fileInventoryKeys } from '../hooks/use-file-inventory';
 import { inventoryChangedPayloadSchema } from '../models/file-inventory';
 
@@ -19,6 +20,10 @@ export function InventoryEventSync() {
         void queryClient.invalidateQueries({
           queryKey: fileInventoryKeys.project(payload.data.projectId),
         });
+        void invalidateDerivedProjectQueries(
+          queryClient,
+          payload.data.projectId,
+        );
       },
     ).catch(() => undefined);
 

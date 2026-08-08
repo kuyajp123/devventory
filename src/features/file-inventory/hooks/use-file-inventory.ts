@@ -1,4 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { invalidateDerivedProjectQueries } from '@/shared/query/derived-query-keys';
 import type { InventoryFilters } from '../models/file-inventory';
 import { fileInventoryGateway } from '../services/file-inventory.gateway';
 
@@ -28,6 +29,7 @@ export function useRescanProjectMutation(projectId: string) {
       await queryClient.invalidateQueries({
         queryKey: fileInventoryKeys.project(projectId),
       });
+      await invalidateDerivedProjectQueries(queryClient, projectId);
     },
   });
 }
@@ -41,6 +43,7 @@ export function useRescanWatchedLocationMutation(projectId: string) {
       await queryClient.invalidateQueries({
         queryKey: fileInventoryKeys.project(projectId),
       });
+      await invalidateDerivedProjectQueries(queryClient, projectId);
     },
   });
 }

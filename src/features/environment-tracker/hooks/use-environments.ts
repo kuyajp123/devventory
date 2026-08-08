@@ -4,6 +4,7 @@ import {
   useQuery,
   useQueryClient,
 } from '@tanstack/react-query';
+import { invalidateDerivedProjectQueries } from '@/shared/query/derived-query-keys';
 import type { EnvironmentPageFilters } from '../models/environment';
 import { environmentTrackerGateway } from '../services/environment-tracker.gateway';
 
@@ -37,9 +38,12 @@ export const environmentKeys = {
 function useProjectInvalidation(projectId: string) {
   const queryClient = useQueryClient();
   return () =>
-    queryClient.invalidateQueries({
-      queryKey: environmentKeys.project(projectId),
-    });
+    Promise.all([
+      queryClient.invalidateQueries({
+        queryKey: environmentKeys.project(projectId),
+      }),
+      invalidateDerivedProjectQueries(queryClient, projectId),
+    ]);
 }
 
 export function useEnvironmentsQuery(projectId: string) {

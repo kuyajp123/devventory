@@ -83,3 +83,21 @@ pub(crate) async fn get_project(
         .map(ProjectDto::from)
         .map_err(Into::into)
 }
+
+#[tauri::command]
+pub(crate) async fn delete_project(
+    state: State<'_, AppState>,
+    project_id: String,
+) -> Result<(), CommandError> {
+    state
+        .project_service()
+        .delete(&project_id)
+        .await
+        .map_err(CommandError::from)?;
+
+    if let Err(error) = state.refresh_inventory_watchers().await {
+        tracing::warn!(project_id = %project_id, error = %error, "project watcher refresh failed after deletion");
+    }
+
+    Ok(())
+}

@@ -1,6 +1,7 @@
 import { listen } from '@tauri-apps/api/event';
 import { useQueryClient } from '@tanstack/react-query';
 import { useEffect } from 'react';
+import { invalidateDerivedProjectQueries } from '@/shared/query/derived-query-keys';
 import { environmentKeys } from '../hooks/use-environments';
 import { environmentChangedPayloadSchema } from '../models/environment';
 
@@ -20,6 +21,10 @@ export function EnvironmentEventSync() {
         void queryClient.invalidateQueries({
           queryKey: environmentKeys.project(payload.data.projectId),
         });
+        void invalidateDerivedProjectQueries(
+          queryClient,
+          payload.data.projectId,
+        );
       },
     ).catch(() => undefined);
     return () => {

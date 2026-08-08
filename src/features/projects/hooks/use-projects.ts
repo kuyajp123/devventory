@@ -1,4 +1,8 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import {
+  derivedQueryKeys,
+  invalidateDerivedProjectQueries,
+} from '@/shared/query/derived-query-keys';
 import type { Project } from '../models/project';
 import { folderPickerGateway } from '../services/folder-picker.gateway';
 import { projectsGateway } from '../services/projects.gateway';
@@ -51,7 +55,35 @@ export function useCreateProjectMutation() {
         project,
         ...current.filter((item) => item.id !== project.id),
       ]);
-      await queryClient.invalidateQueries({ queryKey: projectKeys.all });
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: projectKeys.all }),
+        invalidateDerivedProjectQueries(queryClient, project.id),
+      ]);
+    },
+  });
+}
+
+export function useDeleteProjectMutation() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (projectId: string) => projectsGateway.delete(projectId),
+    onSuccess: async (_, projectId) => {
+      queryClient.setQueryData<Project[]>(projectKeys.all, (current = []) =>
+        current.filter((project) => project.id !== projectId),
+      );
+      queryClient.removeQueries({
+        exact: true,
+        queryKey: projectKeys.detail(projectId),
+      });
+      queryClient.removeQueries({
+        exact: true,
+        queryKey: derivedQueryKeys.dashboard(projectId),
+      });
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: projectKeys.all }),
+        queryClient.invalidateQueries({ queryKey: derivedQueryKeys.search }),
+      ]);
     },
   });
 }

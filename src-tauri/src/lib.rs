@@ -15,6 +15,7 @@ use features::asset_library::commands::{
     preview_asset_import, resolve_asset_variant_path, run_asset_action, update_asset_metadata,
     update_asset_variants,
 };
+use features::dashboard::commands::get_project_dashboard;
 use features::environment_tracker::commands::{
     add_environment_source, create_environment, delete_environment, delete_environment_source,
     get_environment_matrix, list_environment_source_candidates, list_environment_sources,
@@ -25,7 +26,12 @@ use features::file_inventory::commands::{
     list_project_files, rescan_project, rescan_watched_location,
 };
 use features::projects::commands::{
-    create_project, get_project, list_projects, scan_project_root, validate_project_root,
+    create_project, delete_project, get_project, list_projects, scan_project_root,
+    validate_project_root,
+};
+use features::search::commands::{
+    clear_search_history, delete_search_history, list_search_history, record_search_history,
+    search_metadata,
 };
 use features::settings::commands::{get_last_opened_project_id, save_last_opened_project_id};
 use features::validation_center::commands::{
@@ -66,8 +72,15 @@ pub fn run() {
             validate_project_root,
             scan_project_root,
             create_project,
+            delete_project,
             list_projects,
             get_project,
+            search_metadata,
+            record_search_history,
+            list_search_history,
+            delete_search_history,
+            clear_search_history,
+            get_project_dashboard,
             get_last_opened_project_id,
             save_last_opened_project_id,
             list_project_files,

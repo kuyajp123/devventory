@@ -10,6 +10,7 @@ use super::model::{
 #[allow(async_fn_in_trait)]
 pub(super) trait ProjectRepository: Send + Sync {
     async fn create(&self, record: NewProjectRecord) -> Result<Project, ProjectError>;
+    async fn delete(&self, id: Uuid) -> Result<bool, ProjectError>;
     async fn exists_by_root_key(&self, root_key: &str) -> Result<bool, ProjectError>;
     async fn find_all(&self) -> Result<Vec<Project>, ProjectError>;
     async fn find_by_id(&self, id: Uuid) -> Result<Option<Project>, ProjectError>;
@@ -209,6 +210,14 @@ impl ProjectRepository for SqliteProjectRepository {
         self.find_by_id(id)
             .await?
             .ok_or(ProjectError::InvalidPersistedData)
+    }
+
+    async fn delete(&self, id: Uuid) -> Result<bool, ProjectError> {
+        let result = query("DELETE FROM projects WHERE id = ?")
+            .bind(id.to_string())
+            .execute(&self.pool)
+            .await?;
+        Ok(result.rows_affected() == 1)
     }
 
     async fn exists_by_root_key(&self, root_key: &str) -> Result<bool, ProjectError> {

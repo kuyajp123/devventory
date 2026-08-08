@@ -18,7 +18,7 @@ import {
 import { useRef } from 'react';
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router';
 import { ProjectSelector, useActiveProject } from '@/features/projects';
-import { CommandPalette } from '@/shared/components/CommandPalette';
+import { GlobalCommandPalette } from '@/features/global-search';
 import { ICON_SIZE, ICON_STROKE } from '@/shared/constants/icon.constants';
 import { useAppUiStore } from '../stores/app-ui.store';
 import { WorkbenchContextSidebar } from './WorkbenchContextSidebar';
@@ -55,6 +55,12 @@ const navigationItems = [
     label: 'Validation Center',
     requiresProject: true,
     to: '/validation',
+  },
+  {
+    icon: IconSearch,
+    label: 'Global Search',
+    requiresProject: false,
+    to: '/search',
   },
   {
     icon: IconRobot,
@@ -308,7 +314,7 @@ export function AppLayout() {
       <WorkbenchStatusBar />
 
       {/* Command Palette Overlay */}
-      <CommandPalette />
+      <GlobalCommandPalette />
     </div>
   );
 }

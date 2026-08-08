@@ -5,7 +5,6 @@ import { FileInventoryPage } from '@/features/file-inventory';
 import { EnvironmentTrackerPage } from '@/features/environment-tracker';
 import { ValidationCenterPage } from '@/features/validation-center';
 import {
-  DashboardPage,
   LegacyProjectRedirect,
   ProjectOnboardingPage,
   ProjectRequiredRoute,
@@ -13,6 +12,8 @@ import {
 import { AppLayout } from '../layouts/AppLayout';
 import { NotFoundPage } from '../pages/NotFoundPage';
 import { LazyAssetDetailsPage, LazyAssetLibraryPage } from './LazyAssetRoutes';
+import { LazyDashboardRoute } from './LazyDashboardRoute';
+import { LazyGlobalSearchRoute } from './LazyGlobalSearchRoute';
 
 export const appRoutes: RouteObject[] = [
   {
@@ -20,8 +21,9 @@ export const appRoutes: RouteObject[] = [
     Component: AppLayout,
     children: [
       { index: true, element: <Navigate replace to="/dashboard" /> },
-      { path: 'dashboard', Component: DashboardPage },
+      { path: 'dashboard', Component: LazyDashboardRoute },
       { path: 'agent-usage', Component: AgentUsagePage },
+      { path: 'search', Component: LazyGlobalSearchRoute },
       { path: 'projects/new', Component: ProjectOnboardingPage },
       {
         element: <ProjectRequiredRoute />,

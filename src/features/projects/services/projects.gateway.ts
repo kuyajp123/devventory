@@ -37,4 +37,8 @@ export const projectsGateway = {
     const response = await invokeCommand<unknown>('get_project', { projectId });
     return projectSchema.parse(response);
   },
+
+  async delete(projectId: string) {
+    await invokeCommand<void>('delete_project', { projectId });
+  },
 };

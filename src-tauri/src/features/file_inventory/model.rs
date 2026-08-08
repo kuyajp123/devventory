@@ -77,7 +77,7 @@ impl TryFrom<&str> for FileSourceType {
 }
 
 impl FileStatus {
-    pub(super) fn as_str(self) -> &'static str {
+    pub(crate) fn as_str(self) -> &'static str {
         match self {
             Self::Active => "active",
             Self::Missing => "missing",

@@ -1,9 +1,12 @@
 export { ProjectRequiredRoute } from './components/ProjectRequiredRoute';
 export { ProjectSelector } from './components/ProjectSelector';
+export { ProjectDeleteControl } from './components/ProjectDeleteControl';
+export { ProjectConfigurationPanel } from './components/ProjectConfigurationPanel';
+export { ScanSummaryCard } from './components/ScanSummaryCard';
 export { useActiveProject } from './hooks/use-active-project';
 export { useProjectQuery } from './hooks/use-projects';
+export { useDeleteProjectMutation } from './hooks/use-projects';
 export type { Project } from './models/project';
-export { DashboardPage } from './pages/DashboardPage';
 export { LegacyProjectRedirect } from './pages/LegacyProjectRedirect';
 export { ProjectOnboardingPage } from './pages/ProjectOnboardingPage';
 export { ActiveProjectProvider } from './providers/ActiveProjectProvider';

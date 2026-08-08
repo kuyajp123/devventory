@@ -4,6 +4,7 @@ import {
   useQuery,
   useQueryClient,
 } from '@tanstack/react-query';
+import { invalidateDerivedProjectQueries } from '@/shared/query/derived-query-keys';
 import type {
   ValidationIssueFilters,
   ValidationIssueStatus,
@@ -25,9 +26,12 @@ export const validationKeys = {
 function useValidationInvalidation(projectId: string) {
   const queryClient = useQueryClient();
   return () =>
-    queryClient.invalidateQueries({
-      queryKey: validationKeys.project(projectId),
-    });
+    Promise.all([
+      queryClient.invalidateQueries({
+        queryKey: validationKeys.project(projectId),
+      }),
+      invalidateDerivedProjectQueries(queryClient, projectId),
+    ]);
 }
 
 export function useValidationRulesQuery(projectId: string) {

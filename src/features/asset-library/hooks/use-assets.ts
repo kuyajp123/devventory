@@ -5,6 +5,7 @@ import {
   useQueryClient,
 } from '@tanstack/react-query';
 import { fileInventoryKeys } from '@/features/file-inventory';
+import { invalidateDerivedProjectQueries } from '@/shared/query/derived-query-keys';
 import type {
   AssetFilters,
   ImportAssetInput,
@@ -108,6 +109,7 @@ export function useImportAssetMutation(projectId: string) {
         queryClient.invalidateQueries({
           queryKey: fileInventoryKeys.project(projectId),
         }),
+        invalidateDerivedProjectQueries(queryClient, projectId),
       ]);
     },
   });
@@ -120,9 +122,12 @@ export function useUpdateAssetMetadataMutation(projectId: string) {
       assetLibraryGateway.updateMetadata({ ...input, projectId }),
     onSuccess: async (asset) => {
       queryClient.setQueryData(assetKeys.detail(projectId, asset.id), asset);
-      await queryClient.invalidateQueries({
-        queryKey: assetKeys.project(projectId),
-      });
+      await Promise.all([
+        queryClient.invalidateQueries({
+          queryKey: assetKeys.project(projectId),
+        }),
+        invalidateDerivedProjectQueries(queryClient, projectId),
+      ]);
     },
   });
 }
@@ -155,9 +160,12 @@ export function useUpdateAssetVariantsMutation(projectId: string) {
       assetLibraryGateway.updateVariants({ ...input, projectId }),
     onSuccess: async (asset) => {
       queryClient.setQueryData(assetKeys.detail(projectId, asset.id), asset);
-      await queryClient.invalidateQueries({
-        queryKey: assetKeys.project(projectId),
-      });
+      await Promise.all([
+        queryClient.invalidateQueries({
+          queryKey: assetKeys.project(projectId),
+        }),
+        invalidateDerivedProjectQueries(queryClient, projectId),
+      ]);
     },
   });
 }
