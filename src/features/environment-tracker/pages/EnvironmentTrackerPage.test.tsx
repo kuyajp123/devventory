@@ -76,7 +76,7 @@ describe('EnvironmentTrackerPage', () => {
     renderWithProviders(<EnvironmentTrackerPage />);
 
     expect(
-      await screen.findByRole('heading', { name: 'Environment tracker' }),
+      await screen.findByText('Create your first environment'),
     ).toBeVisible();
     await user.click(
       screen.getAllByRole('button', { name: 'Create environment' })[0],
@@ -219,7 +219,7 @@ describe('EnvironmentTrackerPage', () => {
     );
 
     expect(
-      await screen.findByText('Comparing source files inside Development'),
+      await screen.findByText('2 active definitions across this environment'),
     ).toBeVisible();
     expect(screen.getAllByText('.env.local').length).toBeGreaterThan(0);
     expect(

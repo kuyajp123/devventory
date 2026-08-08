@@ -1,5 +1,7 @@
-import { Alert, Button, Card, Chip, Spinner, toast } from '@heroui/react';
+import { Alert, Button, Chip, Spinner, toast } from '@heroui/react';
+import { IconActivityHeartbeat } from '@tabler/icons-react';
 import { useState } from 'react';
+import { ICON_SIZE, ICON_STROKE } from '@/shared/constants/icon.constants';
 import { appHealthGateway } from '../services/app-health.gateway';
 
 type HealthStatus =
@@ -36,24 +38,35 @@ export function AppHealthPage() {
   }
 
   return (
-    <section className="mx-auto w-full max-w-3xl space-y-8">
-      <header className="space-y-2">
-        <p className="text-sm font-medium text-muted">Foundation check</p>
-        <h1 className="text-3xl font-semibold tracking-tight">Diagnostics</h1>
-        <p className="max-w-2xl text-muted">
+    <section className="mx-auto w-full max-w-3xl space-y-6">
+      <header className="border-b border-divider pb-3 space-y-1">
+        <div className="flex items-center gap-2">
+          <IconActivityHeartbeat
+            aria-hidden="true"
+            className="shrink-0 text-accent"
+            size={ICON_SIZE.navigation}
+            stroke={ICON_STROKE}
+          />
+          <h1 className="font-mono text-xl font-bold tracking-tight text-foreground sm:text-2xl">
+            Diagnostics
+          </h1>
+        </div>
+        <p className="text-xs text-muted max-w-2xl">
           Verify that the React interface can reach the local Rust command
           layer. No network or cloud service is involved.
         </p>
       </header>
 
-      <Card>
-        <Card.Content className="flex flex-col gap-5 sm:flex-row sm:items-center sm:justify-between">
+      <div className="rounded-md border border-divider bg-surface p-5 space-y-4">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div className="space-y-1">
             <div className="flex flex-wrap items-center gap-2">
-              <h2 className="text-lg font-semibold">Desktop backend</h2>
+              <h2 className="font-mono text-sm font-semibold text-foreground">
+                Desktop backend
+              </h2>
               <HealthStatusChip state={status.state} />
             </div>
-            <p aria-live="polite" className="text-sm text-muted">
+            <p aria-live="polite" className="font-mono text-xs text-muted">
               {status.message}
             </p>
           </div>
@@ -71,8 +84,8 @@ export function AppHealthPage() {
               'Check desktop connection'
             )}
           </Button>
-        </Card.Content>
-      </Card>
+        </div>
+      </div>
 
       {status.state === 'error' && (
         <Alert status="danger">
@@ -101,7 +114,7 @@ function HealthStatusChip({ state }: { state: HealthStatus['state'] }) {
 
   return (
     <Chip color={color} size="sm" variant="soft">
-      <Chip.Label>{label}</Chip.Label>
+      <Chip.Label className="font-mono text-[10px]">{label}</Chip.Label>
     </Chip>
   );
 }

@@ -9,3 +9,6 @@ src-tauri/capabilities
 src-tauri/gen
 src-tauri/tauri.conf.json
 src-tauri/target
+.agents/
+.claude/skills/
+.github/skills/

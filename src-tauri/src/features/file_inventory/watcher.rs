@@ -12,8 +12,8 @@ use tokio::sync::mpsc;
 use tokio::time::{sleep_until, Instant};
 use uuid::Uuid;
 
-use crate::features::projects::ResolvedProjectScanTarget;
 use crate::features::environment_tracker::EnvironmentService;
+use crate::features::projects::ResolvedProjectScanTarget;
 
 use super::error::FileInventoryError;
 use super::model::{ScanRun, ScanType};

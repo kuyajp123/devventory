@@ -1,31 +1,33 @@
+import { useActiveProject } from '@/features/projects';
+import { ICON_SIZE, ICON_STROKE } from '@/shared/constants/icon.constants';
+import { TauriCommandError } from '@/shared/infrastructure/tauri/tauri-error';
+import { AppPagination } from '@/shared/ui/AppPagination';
+import { ConfirmDialog } from '@/shared/ui';
 import {
   Alert,
   Button,
-  Chip,
   EmptyState,
   Input,
   Label,
+  ListBox,
+  Select,
   Skeleton,
   Spinner,
   TextField,
   toast,
+  Tooltip,
+  type Key,
 } from '@heroui/react';
 import {
   IconAdjustments,
   IconColumns3,
   IconFiles,
-  IconInfoCircle,
   IconPlus,
   IconRefresh,
   IconSearch,
   IconSettings,
-  IconWorld,
 } from '@tabler/icons-react';
-import { useEffect, useMemo, useRef, useState } from 'react';
-import { useActiveProject } from '@/features/projects';
-import { ICON_SIZE, ICON_STROKE } from '@/shared/constants/icon.constants';
-import { TauriCommandError } from '@/shared/infrastructure/tauri/tauri-error';
-import { AppPagination } from '@/shared/ui/AppPagination';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { EnvironmentFormModal } from '../components/EnvironmentFormModal';
 import {
   EnvironmentKeyDetails,
@@ -33,7 +35,6 @@ import {
 } from '../components/EnvironmentKeyDetails';
 import { EnvironmentMatrix } from '../components/EnvironmentMatrix';
 import { EnvironmentSourceManager } from '../components/EnvironmentSourceManager';
-import { EnvironmentStatusLegend } from '../components/EnvironmentStatusLegend';
 import { InspectEnvironmentMatrix } from '../components/InspectEnvironmentMatrix';
 import {
   useCreateEnvironmentMutation,
@@ -70,7 +71,9 @@ export function EnvironmentTrackerPage() {
   const [editing, setEditing] = useState<Environment | null | 'new'>(null);
   const [sourceEnvironment, setSourceEnvironment] =
     useState<Environment | null>(null);
+  const [deleteConfirm, setDeleteConfirm] = useState<Environment | null>(null);
   const previousProjectId = useRef(projectId);
+  const matrixContainerRef = useRef<HTMLDivElement>(null);
 
   const environments = useEnvironmentsQuery(projectId ?? '');
   const environmentItems = environments.data ?? [];
@@ -139,20 +142,22 @@ export function EnvironmentTrackerPage() {
   }
 
   function removeEnvironment(environment: Environment) {
-    if (
-      !window.confirm(`Delete ${environment.name} and its configured sources?`)
-    )
-      return;
-    deleteEnvironment.mutate(environment.id, {
+    setDeleteConfirm(environment);
+  }
+
+  function confirmDelete() {
+    if (!deleteConfirm) return;
+    deleteEnvironment.mutate(deleteConfirm.id, {
       onError: (error) =>
         toast.danger(
           errorMessage(error, 'The environment could not be deleted.'),
         ),
       onSuccess: () => {
-        if (sourceEnvironment?.id === environment.id)
+        if (sourceEnvironment?.id === deleteConfirm.id)
           setSourceEnvironment(null);
-        if (selection?.environment.id === environment.id) setSelection(null);
+        if (selection?.environment.id === deleteConfirm.id) setSelection(null);
         toast.success('Environment deleted');
+        setDeleteConfirm(null);
       },
     });
   }
@@ -198,6 +203,49 @@ export function EnvironmentTrackerPage() {
   }
 
   const isSaving = createEnvironment.isPending || updateEnvironment.isPending;
+
+  const handleDefinitionClick = useCallback(
+    (relativePath: string) => {
+      if (!selection) return;
+
+      const container = matrixContainerRef.current;
+      if (!container) return;
+
+      let cellId: string | null = null;
+
+      if (view === 'inspect' && selectedSources.data) {
+        const source = selectedSources.data.find(
+          (s) => s.relativePath === relativePath,
+        );
+        if (source) {
+          cellId = `${selection.keyName}:${source.id}`;
+        }
+      } else {
+        cellId = `${selection.keyName}:${selection.environment.id}`;
+      }
+
+      if (!cellId) return;
+
+      const cell = container.querySelector(
+        `[data-cell-id="${CSS.escape(cellId)}"]`,
+      );
+      if (cell) {
+        cell.scrollIntoView({
+          behavior: 'smooth',
+          block: 'center',
+          inline: 'center',
+        });
+      }
+
+      if (view === 'inspect') {
+        setSelection((prev) =>
+          prev ? { ...prev, selectedSourcePath: relativePath } : prev,
+        );
+      }
+    },
+    [selection, view, selectedSources.data],
+  );
+
   const inspectMatrixPage = useMemo(() => {
     if (!inspectMatrix.data) return null;
     const totalPages = Math.ceil(
@@ -213,6 +261,7 @@ export function EnvironmentTrackerPage() {
       totalPages,
     };
   }, [inspectMatrix.data, page]);
+
   const activeMatrix = view === 'compare' ? compareMatrix : inspectMatrix;
   const matrixData =
     view === 'compare' ? compareMatrix.data : inspectMatrixPage;
@@ -234,60 +283,30 @@ export function EnvironmentTrackerPage() {
   }
 
   return (
-    <section className="mx-auto w-full max-w-[96rem] space-y-6">
-      <header className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-        <div className="flex items-start gap-3">
+    <section className="mx-auto w-full max-w-[96rem] space-y-4">
+      <header className="border-b border-divider pb-3 space-y-1">
+        <div className="flex items-center gap-2">
           <IconAdjustments
             aria-hidden="true"
-            className="mt-1 shrink-0 text-accent"
-            size={ICON_SIZE.emptyState}
+            className="shrink-0 text-accent"
+            size={ICON_SIZE.navigation}
             stroke={ICON_STROKE}
           />
-          <div>
-            <p className="text-sm font-medium text-muted">
-              {activeProject.name}
-            </p>
-            <h1 className="text-3xl font-semibold tracking-tight sm:text-4xl">
-              Environment tracker
-            </h1>
-            <p className="mt-2 max-w-3xl leading-7 text-muted">
-              {view === 'compare'
-                ? 'Compare configuration-key coverage across environments.'
-                : 'Inspect how keys are distributed across source files inside one environment.'}{' '}
-              Devventory records key names and safe metadata only—never
-              configuration values.
-            </p>
-          </div>
+          <h1 className="font-mono text-xl font-bold tracking-tight text-foreground sm:text-2xl">
+            Environment Tracker
+          </h1>
         </div>
-        <div className="flex flex-wrap gap-2">
-          <Button
-            isDisabled={refreshProject.isPending}
-            onPress={refreshAll}
-            variant="secondary"
-          >
-            {refreshProject.isPending ? (
-              <Spinner aria-label="Refreshing sources" size="sm" />
-            ) : (
-              <IconRefresh
-                aria-hidden="true"
-                size={ICON_SIZE.button}
-                stroke={ICON_STROKE}
-              />
-            )}{' '}
-            Refresh sources
-          </Button>
-          <Button onPress={() => setEditing('new')} variant="primary">
-            <IconPlus
-              aria-hidden="true"
-              size={ICON_SIZE.button}
-              stroke={ICON_STROKE}
-            />
-            Create environment
-          </Button>
-        </div>
+        <p className="text-xs text-muted max-w-3xl">
+          Track structural variable keys across environment sources for{' '}
+          <span className="font-mono font-medium text-foreground">
+            {activeProject.name}
+          </span>
+          .
+        </p>
       </header>
 
       {isLoading && <EnvironmentTrackerSkeleton />}
+
       {environments.isError || activeMatrix.isError ? (
         <Alert role="alert" status="danger">
           <Alert.Indicator />
@@ -301,7 +320,7 @@ export function EnvironmentTrackerPage() {
       ) : null}
 
       {!isLoading && !environments.isError && environmentItems.length === 0 ? (
-        <EmptyState className="rounded-xl border border-dashed border-divider bg-surface p-8 text-center">
+        <EmptyState className="rounded-md border border-dashed border-divider bg-surface p-8 text-center">
           <IconAdjustments
             aria-hidden="true"
             className="mx-auto text-muted"
@@ -311,7 +330,7 @@ export function EnvironmentTrackerPage() {
           <h2 className="mt-4 text-lg font-semibold">
             Create your first environment
           </h2>
-          <p className="mt-2 text-sm text-muted">
+          <p className="mt-2 text-xs text-muted max-w-md mx-auto">
             Start with Development, Staging, or Production, then add one
             configuration source. Additional sources are available for layered
             or service-specific setups.
@@ -328,161 +347,178 @@ export function EnvironmentTrackerPage() {
 
       {environmentItems.length > 0 && !environments.isError ? (
         <>
-          <div
-            aria-label="Environment Tracker view"
-            className="inline-flex rounded-xl border border-divider bg-surface p-1"
-            role="group"
-          >
-            <Button
-              onPress={() => changeView('compare')}
-              variant={view === 'compare' ? 'primary' : 'ghost'}
-            >
-              <IconColumns3
-                aria-hidden="true"
-                size={ICON_SIZE.button}
-                stroke={ICON_STROKE}
-              />
-              Compare environments
-            </Button>
-            <Button
-              onPress={() => changeView('inspect')}
-              variant={view === 'inspect' ? 'primary' : 'ghost'}
-            >
-              <IconFiles
-                aria-hidden="true"
-                size={ICON_SIZE.button}
-                stroke={ICON_STROKE}
-              />
-              Inspect environment
-            </Button>
-          </div>
-
-          {view === 'compare' ? (
-            <>
-              <EnvironmentStatusLegend />
-              <div className="flex gap-3 rounded-xl border border-accent/30 bg-accent/5 p-4 text-sm leading-6 text-muted">
-                <IconInfoCircle
-                  aria-hidden="true"
-                  className="mt-0.5 shrink-0 text-accent"
-                  size={ICON_SIZE.button}
-                  stroke={ICON_STROKE}
-                />
-                <p>
-                  An environment may contain multiple source files when the same
-                  runtime intentionally uses base, secrets, override, or
-                  service-specific files. Multiple definitions are calculated
-                  inside each environment—not between Local and Staging.
-                </p>
-              </div>
-            </>
-          ) : selectedEnvironment ? (
-            <section
-              className="space-y-4"
-              aria-label="Inspect environment controls"
-            >
-              <div className="flex flex-col gap-3 rounded-xl border border-divider border-t-2 border-t-accent/40 bg-surface p-4 shadow-sm shadow-black/5 sm:flex-row sm:items-end sm:justify-between">
-                <label className="flex min-w-64 flex-col gap-1.5 text-sm font-medium">
-                  <span className="flex items-center gap-1.5">
-                    <IconWorld
-                      aria-hidden="true"
-                      size={ICON_SIZE.small}
-                      stroke={ICON_STROKE}
-                      className="text-accent"
-                    />
-                    Environment
-                  </span>
-                  <select
-                    className="h-10 rounded-lg border border-divider bg-surface-secondary px-3 text-sm outline-none transition-colors duration-200 focus:border-accent focus:ring-2 focus:ring-accent/30 hover:border-accent/50"
-                    onChange={(event) => {
-                      setSelectedEnvironmentId(event.target.value);
-                      setSelection(null);
-                      setPage(1);
-                    }}
-                    value={selectedEnvironment.id}
-                  >
-                    {environmentItems.map((environment) => (
-                      <option key={environment.id} value={environment.id}>
-                        {environment.name}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <div className="flex flex-wrap items-center gap-2">
-                  <Chip size="sm" variant="soft">
-                    <Chip.Label>
-                      {selectedSources.isPending
-                        ? 'Loading sources'
-                        : `${selectedSources.data?.length ?? 0} source file${selectedSources.data?.length === 1 ? '' : 's'}`}
-                    </Chip.Label>
-                  </Chip>
-                  <Button
-                    onPress={() => setSourceEnvironment(selectedEnvironment)}
-                    variant="secondary"
-                  >
-                    <IconSettings
-                      aria-hidden="true"
-                      size={ICON_SIZE.button}
-                      stroke={ICON_STROKE}
-                    />
-                    Manage sources
-                  </Button>
-                </div>
-              </div>
-              <EnvironmentStatusLegend />
-            </section>
-          ) : null}
-
           <section
             aria-labelledby="environment-matrix-heading"
             className="space-y-4"
           >
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-              <div>
-                <h2
-                  className="text-xl font-semibold"
-                  id="environment-matrix-heading"
+            <div className="flex flex-col gap-3 sm:flex-row items-center sm:justify-between">
+              <div className="flex flex-row flex-wrap items-center gap-3">
+                <TextField className="w-full sm:w-80" variant="secondary">
+                  <div className="relative">
+                    <IconSearch
+                      aria-hidden="true"
+                      className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted"
+                      size={ICON_SIZE.button}
+                      stroke={ICON_STROKE}
+                    />
+                    <Input
+                      className="pl-10 w-full font-mono text-xs"
+                      onChange={(event) => {
+                        setSearch(event.target.value);
+                        setSelection(null);
+                        setPage(1);
+                      }}
+                      placeholder="Search key name"
+                      value={search}
+                    />
+                  </div>
+                </TextField>
+
+                <div
+                  aria-label="Environment Tracker view"
+                  className="inline-flex rounded-md border border-divider bg-surface p-1"
+                  role="group"
                 >
-                  {view === 'compare' ? 'Key comparison' : 'Source breakdown'}
-                </h2>
-                <p className="mt-1 text-sm text-muted">
-                  {view === 'compare'
-                    ? 'Select a cell to see why a key is present, commented, missing, or actively defined more than once.'
-                    : `Compare each key across the source files configured for ${selectedEnvironment?.name ?? 'the selected environment'}.`}
-                </p>
+                  <Button
+                    onPress={() => changeView('compare')}
+                    variant={view === 'compare' ? 'secondary' : 'ghost'}
+                  >
+                    <IconColumns3
+                      aria-hidden="true"
+                      size={ICON_SIZE.button}
+                      stroke={ICON_STROKE}
+                    />
+                    Compare environments
+                  </Button>
+                  <Button
+                    onPress={() => changeView('inspect')}
+                    variant={view === 'inspect' ? 'secondary' : 'ghost'}
+                  >
+                    <IconFiles
+                      aria-hidden="true"
+                      size={ICON_SIZE.button}
+                      stroke={ICON_STROKE}
+                    />
+                    Inspect environment
+                  </Button>
+                </div>
+
+                {view === 'inspect' && selectedEnvironment ? (
+                  <section
+                    aria-label="Inspect environment controls"
+                    className="space-y-4"
+                  >
+                    <div className="flex flex-row items-center gap-4">
+                      <Select
+                        className="min-w-50"
+                        onChange={(value: Key | null) => {
+                          if (value === null) return;
+                          setSelectedEnvironmentId(String(value));
+                          setSelection(null);
+                          setPage(1);
+                        }}
+                        value={selectedEnvironment.id}
+                        variant="secondary"
+                      >
+                        <Select.Trigger>
+                          <Select.Value />
+                          <Select.Indicator />
+                        </Select.Trigger>
+
+                        <Select.Popover>
+                          <ListBox>
+                            {environmentItems.map((environment) => (
+                              <ListBox.Item
+                                id={environment.id}
+                                key={environment.id}
+                                textValue={environment.name}
+                              >
+                                <Label>{environment.name}</Label>
+                                <ListBox.ItemIndicator />
+                              </ListBox.Item>
+                            ))}
+                          </ListBox>
+                        </Select.Popover>
+                      </Select>
+
+                      <div className="flex flex-wrap items-center gap-2">
+                        <Tooltip delay={0}>
+                          <Button
+                            onPress={() =>
+                              setSourceEnvironment(selectedEnvironment)
+                            }
+                            variant="secondary"
+                          >
+                            <IconSettings
+                              aria-hidden="true"
+                              size={ICON_SIZE.button}
+                              stroke={ICON_STROKE}
+                            />
+                          </Button>
+                          <Tooltip.Content placement="bottom">
+                            <p>Manage environment sources</p>
+                          </Tooltip.Content>
+                        </Tooltip>
+                      </div>
+                    </div>
+                  </section>
+                ) : null}
               </div>
-              <TextField className="w-full sm:w-80" variant="secondary">
-                <Label className="sr-only">
-                  Search configuration key names
-                </Label>
-                <Input
-                  onChange={(event) => {
-                    setSearch(event.target.value);
-                    setSelection(null);
-                    setPage(1);
-                  }}
-                  placeholder="Search key name"
-                  value={search}
-                />
-                <IconSearch
-                  aria-hidden="true"
-                  className="text-muted"
-                  size={ICON_SIZE.button}
-                  stroke={ICON_STROKE}
-                />
-              </TextField>
+
+              <div className="flex flex-col items-center gap-2 sm:flex-row">
+                <div className="order-2 sm:order-1">
+                  <Button onPress={() => setEditing('new')} variant="primary">
+                    <IconPlus
+                      aria-hidden="true"
+                      size={ICON_SIZE.button}
+                      stroke={ICON_STROKE}
+                    />
+                    Create environment
+                  </Button>
+                </div>
+
+                <div className="order-1 sm:order-2">
+                  <Tooltip delay={0}>
+                    <Button
+                      isDisabled={refreshProject.isPending}
+                      onPress={refreshAll}
+                      variant="secondary"
+                    >
+                      {refreshProject.isPending ? (
+                        <Spinner aria-label="Refreshing sources" size="sm" />
+                      ) : (
+                        <IconRefresh
+                          aria-hidden="true"
+                          size={ICON_SIZE.button}
+                          stroke={ICON_STROKE}
+                        />
+                      )}
+                    </Button>
+
+                    <Tooltip.Content placement="bottom">
+                      <p>Refresh all environments</p>
+                    </Tooltip.Content>
+                  </Tooltip>
+                </div>
+              </div>
             </div>
 
             {matrixData ? (
               <>
-                <p aria-live="polite" className="text-sm text-muted">
+                <p aria-live="polite" className="text-xs font-mono text-muted">
                   {matrixData.totalItems.toLocaleString()} key
                   {matrixData.totalItems === 1 ? '' : 's'}
                   {view === 'inspect' && selectedEnvironment
                     ? ` found in ${selectedEnvironment.name}`
                     : ''}
                 </p>
-                <div className="grid items-start gap-5 xl:grid-cols-[minmax(0,1fr)_22rem]">
-                  <div className="min-w-0">
+                <div
+                  className={`grid items-start gap-5 ${selection ? 'xl:grid-cols-[minmax(0,1fr)_22rem]' : ''}`}
+                >
+                  <div
+                    ref={matrixContainerRef}
+                    className="min-w-0 rounded-md border border-divider bg-surface overflow-hidden"
+                  >
                     {view === 'compare' ? (
                       <EnvironmentMatrix
                         isRefreshingId={
@@ -509,7 +545,7 @@ export function EnvironmentTrackerPage() {
                         sources={selectedSources.data}
                       />
                     ) : selectedSources.isPending ? (
-                      <div className="flex min-h-48 items-center justify-center rounded-xl border border-divider bg-surface">
+                      <div className="flex min-h-48 items-center justify-center rounded-md border border-divider bg-surface">
                         <Spinner aria-label="Loading environment sources" />
                       </div>
                     ) : (
@@ -524,10 +560,13 @@ export function EnvironmentTrackerPage() {
                       </Alert>
                     )}
                   </div>
-                  <EnvironmentKeyDetails
-                    onClose={() => setSelection(null)}
-                    selection={selection}
-                  />
+                  {selection ? (
+                    <EnvironmentKeyDetails
+                      onClose={() => setSelection(null)}
+                      onDefinitionClick={handleDefinitionClick}
+                      selection={selection}
+                    />
+                  ) : null}
                 </div>
                 <AppPagination
                   ariaLabel="Environment matrix pages"
@@ -561,6 +600,19 @@ export function EnvironmentTrackerPage() {
         }}
         projectId={projectId}
       />
+      <ConfirmDialog
+        body={
+          deleteConfirm
+            ? `Delete ${deleteConfirm.name} and its configured sources?`
+            : undefined
+        }
+        isOpen={deleteConfirm !== null}
+        onOpenChange={(isOpen) => {
+          if (!isOpen) setDeleteConfirm(null);
+        }}
+        onConfirm={confirmDelete}
+        title="Delete environment"
+      />
     </section>
   );
 }
@@ -572,9 +624,9 @@ function EnvironmentTrackerSkeleton() {
       className="space-y-3"
       role="status"
     >
-      <Skeleton className="h-24 w-full rounded-xl" />
-      <Skeleton className="h-48 w-full rounded-xl" />
-      <Skeleton className="h-64 w-full rounded-xl" />
+      <Skeleton className="h-24 w-full rounded-lg" />
+      <Skeleton className="h-48 w-full rounded-lg" />
+      <Skeleton className="h-64 w-full rounded-lg" />
     </div>
   );
 }
