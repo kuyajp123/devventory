@@ -137,9 +137,9 @@ pub(crate) struct EnvironmentMatrixPage {
 
 #[derive(Debug, Clone)]
 pub(crate) struct CreateEnvironment {
-    pub(super) project_id: Uuid,
-    pub(super) name: String,
-    pub(super) description: Option<String>,
+    pub(crate) project_id: Uuid,
+    pub(crate) name: String,
+    pub(crate) description: Option<String>,
 }
 
 #[derive(Debug, Clone)]

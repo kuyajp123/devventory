@@ -13,9 +13,11 @@ pub(crate) use categorization::{
 };
 pub(crate) use error::FileInventoryError;
 pub(crate) use model::FileCategory;
+pub(crate) use model::ScanRun;
 pub(crate) use model::ScanType;
 pub(crate) use repository::SqliteFileInventoryRepository;
 pub(crate) use service::FileInventoryService;
+pub(crate) use watcher::emit_inventory_changed;
 pub(crate) use watcher::InventoryRuntime;
 
 #[cfg(test)]

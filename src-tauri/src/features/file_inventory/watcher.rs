@@ -14,6 +14,7 @@ use uuid::Uuid;
 
 use crate::features::environment_tracker::EnvironmentService;
 use crate::features::projects::ResolvedProjectScanTarget;
+use crate::features::validation_center::{events::emit_validation_changed, ValidationService};
 
 use super::error::FileInventoryError;
 use super::model::{ScanRun, ScanType};
@@ -161,6 +162,7 @@ impl InventoryRuntime {
         app: AppHandle,
         service: FileInventoryService,
         environment_service: EnvironmentService,
+        validation_service: ValidationService,
     ) -> Result<(), FileInventoryError> {
         let mut receiver_guard = self.receiver.lock().await;
         let mut receiver = receiver_guard
@@ -172,6 +174,7 @@ impl InventoryRuntime {
         let worker_app = app.clone();
         let worker_service = service.clone();
         let worker_environment_service = environment_service.clone();
+        let worker_validation_service = validation_service.clone();
         let worker = tauri::async_runtime::spawn(async move {
             while let Some(first) = receiver.recv().await {
                 let mut coalescer = EventCoalescer::default();
@@ -209,6 +212,7 @@ impl InventoryRuntime {
                             refresh_environment_sources(
                                 &worker_app,
                                 &worker_environment_service,
+                                &worker_validation_service,
                                 project_id,
                             )
                             .await;
@@ -235,8 +239,13 @@ impl InventoryRuntime {
         tauri::async_runtime::spawn(async move {
             for scan in service.reconcile_all(ScanType::Startup).await {
                 emit_inventory_changed(&startup_app, &scan);
-                refresh_environment_sources(&startup_app, &environment_service, scan.project_id)
-                    .await;
+                refresh_environment_sources(
+                    &startup_app,
+                    &environment_service,
+                    &validation_service,
+                    scan.project_id,
+                )
+                .await;
             }
         });
         Ok(())
@@ -337,10 +346,21 @@ impl InventoryRuntime {
 async fn refresh_environment_sources(
     app: &AppHandle,
     service: &EnvironmentService,
+    validation_service: &ValidationService,
     project_id: Uuid,
 ) {
     match service.refresh_project_sources(project_id, false).await {
-        Ok(refreshed) if refreshed > 0 => emit_environment_changed(app, project_id),
+        Ok(refreshed) if refreshed > 0 => {
+            emit_environment_changed(app, project_id);
+            match validation_service.validate(project_id).await {
+                Ok(_) => emit_validation_changed(app, project_id),
+                Err(error) => tracing::warn!(
+                    project_id = %project_id,
+                    error = %error,
+                    "environment metadata revalidation failed"
+                ),
+            }
+        }
         Ok(_) => {}
         Err(error) => tracing::warn!(
             project_id = %project_id,
@@ -382,7 +402,7 @@ struct InventoryChangedPayload {
     status: super::model::ScanStatus,
 }
 
-fn emit_inventory_changed(app: &AppHandle, scan: &ScanRun) {
+pub(crate) fn emit_inventory_changed(app: &AppHandle, scan: &ScanRun) {
     let payload = InventoryChangedPayload {
         project_id: scan.project_id.to_string(),
         scan_id: scan.id.to_string(),

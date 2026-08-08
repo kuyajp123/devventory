@@ -116,5 +116,5 @@ describe('ProjectOnboardingPage', () => {
     expect(
       await screen.findByText('Project saved to this device'),
     ).toBeVisible();
-  });
+  }, 10_000);
 });

@@ -11,6 +11,7 @@ import {
   IconLibrary,
   IconMoon,
   IconSearch,
+  IconShieldCheck,
   IconSun,
 } from '@tabler/icons-react';
 import { useRef } from 'react';
@@ -47,6 +48,12 @@ const navigationItems = [
     label: 'Environment Tracker',
     requiresProject: true,
     to: '/environments',
+  },
+  {
+    icon: IconShieldCheck,
+    label: 'Validation Center',
+    requiresProject: true,
+    to: '/validation',
   },
   {
     icon: IconActivityHeartbeat,

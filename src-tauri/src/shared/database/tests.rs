@@ -24,6 +24,18 @@ async fn index_exists(pool: &sqlx::SqlitePool, index_name: &str) -> bool {
     .expect("index lookup should succeed")
 }
 
+async fn observed_name_column_exists(pool: &sqlx::SqlitePool) -> bool {
+    query_scalar::<_, bool>(
+        "SELECT EXISTS(
+            SELECT 1 FROM pragma_table_info('environment_key_occurrences')
+            WHERE name = 'observed_name'
+        )",
+    )
+    .fetch_one(pool)
+    .await
+    .expect("environment occurrence column lookup should succeed")
+}
+
 async fn create_unmigrated_database(paths: &DatabasePaths) {
     std::fs::create_dir_all(paths.data_directory()).expect("test data directory should exist");
 
@@ -94,6 +106,24 @@ async fn initializes_the_foundation_schema_without_a_first_run_backup() {
         )
         .await
     );
+    assert!(table_exists(initialization.database.pool(), "environment_key_rules").await);
+    assert!(
+        table_exists(
+            initialization.database.pool(),
+            "environment_key_rule_targets"
+        )
+        .await
+    );
+    assert!(table_exists(initialization.database.pool(), "validation_issues").await);
+    assert!(table_exists(initialization.database.pool(), "project_validation_state").await);
+    assert!(observed_name_column_exists(initialization.database.pool()).await);
+    assert!(
+        index_exists(
+            initialization.database.pool(),
+            "validation_issues_project_status_severity_idx"
+        )
+        .await
+    );
     assert!(table_exists(initialization.database.pool(), "_sqlx_migrations").await);
 
     let journal_mode: String = query_scalar("PRAGMA journal_mode")
@@ -129,7 +159,7 @@ async fn snapshots_an_existing_database_before_applying_pending_migrations() {
     assert!(snapshot.file_path.starts_with(paths.backups_directory()));
     assert!(snapshot.file_path.is_file());
     assert_eq!(snapshot.from_version, 0);
-    assert_eq!(snapshot.to_version, 6);
+    assert_eq!(snapshot.to_version, 7);
 
     let backup_options = SqliteConnectOptions::new()
         .filename(&snapshot.file_path)
@@ -183,6 +213,22 @@ async fn upgrades_a_database_that_already_applied_the_immutable_asset_migration(
         .execute(initial.database.pool())
         .await
         .expect("later optimization index should be absent from the version 4 fixture");
+    query("DROP TABLE IF EXISTS project_validation_state")
+        .execute(initial.database.pool())
+        .await
+        .expect("validation state should be absent from the version 4 fixture");
+    query("DROP TABLE IF EXISTS validation_issues")
+        .execute(initial.database.pool())
+        .await
+        .expect("validation issues should be absent from the version 4 fixture");
+    query("DROP TABLE IF EXISTS environment_key_rule_targets")
+        .execute(initial.database.pool())
+        .await
+        .expect("validation rule targets should be absent from the version 4 fixture");
+    query("DROP TABLE IF EXISTS environment_key_rules")
+        .execute(initial.database.pool())
+        .await
+        .expect("validation rules should be absent from the version 4 fixture");
     query("DROP TABLE IF EXISTS environment_key_occurrences")
         .execute(initial.database.pool())
         .await
@@ -219,16 +265,16 @@ async fn upgrades_a_database_that_already_applied_the_immutable_asset_migration(
     let snapshot = upgraded
         .pre_migration_backup
         .as_ref()
-        .expect("the existing database should be backed up before version 6");
+        .expect("the existing database should be backed up before the latest migration");
     let latest_applied: i64 = query_scalar("SELECT MAX(version) FROM _sqlx_migrations")
         .fetch_one(upgraded.database.pool())
         .await
         .expect("latest migration version should load");
 
     assert_eq!(snapshot.from_version, 4);
-    assert_eq!(snapshot.to_version, 6);
+    assert_eq!(snapshot.to_version, 7);
     assert!(snapshot.file_path.is_file());
-    assert_eq!(latest_applied, 6);
+    assert_eq!(latest_applied, 7);
     assert!(index_exists(upgraded.database.pool(), "indexed_files_project_size_idx").await);
     assert!(
         index_exists(

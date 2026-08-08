@@ -24,6 +24,12 @@ use features::projects::commands::{
     create_project, get_project, list_projects, scan_project_root, validate_project_root,
 };
 use features::settings::commands::{get_last_opened_project_id, save_last_opened_project_id};
+use features::validation_center::commands::{
+    delete_validation_rule, export_environment_manifest, get_validation_summary,
+    list_validation_issues, list_validation_rules, preview_environment_manifest,
+    reorder_validation_rules, run_project_validation, save_validation_rule,
+    set_validation_issue_status,
+};
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -78,7 +84,17 @@ pub fn run() {
             list_environment_source_candidates,
             get_environment_matrix,
             refresh_environment,
-            refresh_project_environment_sources
+            refresh_project_environment_sources,
+            list_validation_rules,
+            save_validation_rule,
+            delete_validation_rule,
+            reorder_validation_rules,
+            list_validation_issues,
+            get_validation_summary,
+            run_project_validation,
+            set_validation_issue_status,
+            preview_environment_manifest,
+            export_environment_manifest
         ])
         .run(tauri::generate_context!())
         .expect("error while running Devventory");

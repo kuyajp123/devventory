@@ -34,6 +34,14 @@ export function installTauriBrowserMocks() {
   const environmentSourcesByEnvironment =
     database.environmentSourcesByEnvironment;
   const managedAssets = database.managedAssets;
+  const validationRulesByProject: Record<
+    string,
+    Array<Record<string, unknown>>
+  > = {};
+  const validationIssuesByProject: Record<
+    string,
+    Array<Record<string, unknown>>
+  > = {};
   const variantIdsByAsset = new Map<string, string[]>(
     Object.entries(database.variantIdsByAsset),
   );
@@ -332,6 +340,165 @@ export function installTauriBrowserMocks() {
     ) {
       return command === 'refresh_project_environment_sources' ? 1 : null;
     }
+    if (command === 'list_validation_rules') {
+      const input = commandArguments(args).input as { projectId: string };
+      return validationRulesByProject[input.projectId] ?? [];
+    }
+    if (command === 'save_validation_rule') {
+      const input = commandArguments(args).input as {
+        description?: string;
+        enabled: boolean;
+        environmentIds: string[];
+        keyName: string;
+        projectId: string;
+        ruleId?: string;
+        ruleType: string;
+        severity: string;
+      };
+      const rules = validationRulesByProject[input.projectId] ?? [];
+      const rule = {
+        createdAt: '2026-08-08T00:00:00.000Z',
+        description: input.description || null,
+        enabled: input.enabled,
+        environmentIds: input.environmentIds,
+        id: input.ruleId ?? 'c4373b86-1c32-4f96-a315-f5d17089966f',
+        keyName: input.keyName,
+        projectId: input.projectId,
+        ruleType: input.ruleType,
+        severity: input.severity,
+        sortOrder: Math.max(0, rules.length),
+        updatedAt: '2026-08-08T00:00:00.000Z',
+      };
+      const existing = rules.findIndex((item) => item.id === rule.id);
+      if (existing >= 0) rules[existing] = rule;
+      else rules.push(rule);
+      validationRulesByProject[input.projectId] = rules;
+      validationIssuesByProject[input.projectId] = [
+        validationIssueResponse(
+          input.projectId,
+          input.environmentIds[0] as string,
+        ),
+      ];
+      return rule;
+    }
+    if (command === 'delete_validation_rule') {
+      const input = commandArguments(args).input as {
+        projectId: string;
+        ruleId: string;
+      };
+      validationRulesByProject[input.projectId] = (
+        validationRulesByProject[input.projectId] ?? []
+      ).filter((rule) => rule.id !== input.ruleId);
+      return null;
+    }
+    if (command === 'reorder_validation_rules') {
+      const input = commandArguments(args).input as {
+        projectId: string;
+        ruleIds: string[];
+      };
+      const rules = validationRulesByProject[input.projectId] ?? [];
+      validationRulesByProject[input.projectId] = input.ruleIds.map(
+        (id, sortOrder) => ({
+          ...rules.find((rule) => rule.id === id),
+          sortOrder,
+        }),
+      );
+      return null;
+    }
+    if (command === 'list_validation_issues') {
+      const input = commandArguments(args).input as {
+        page: number;
+        pageSize: number;
+        projectId: string;
+        status?: string;
+      };
+      const items = (validationIssuesByProject[input.projectId] ?? []).filter(
+        (issue) => !input.status || issue.status === input.status,
+      );
+      return {
+        items,
+        page: input.page,
+        pageSize: input.pageSize,
+        totalItems: items.length,
+        totalPages: items.length ? 1 : 0,
+      };
+    }
+    if (command === 'get_validation_summary') {
+      const input = commandArguments(args).input as { projectId: string };
+      const issues = validationIssuesByProject[input.projectId] ?? [];
+      const open = issues.filter((issue) => issue.status === 'open');
+      return {
+        errorIssues: open.filter((issue) => issue.severity === 'error').length,
+        health: open.length ? 'error' : 'healthy',
+        ignoredIssues: issues.filter((issue) => issue.status === 'ignored')
+          .length,
+        infoIssues: 0,
+        lastSuccessfulAt: '2026-08-08T00:00:00.000Z',
+        openIssues: open.length,
+        resolvedIssues: 0,
+        warningIssues: 0,
+      };
+    }
+    if (command === 'run_project_validation') {
+      const input = commandArguments(args).input as { projectId: string };
+      const issues = validationIssuesByProject[input.projectId] ?? [];
+      return {
+        issuesDetected: issues.length,
+        issuesResolved: 0,
+        summary: {
+          errorIssues: issues.filter((issue) => issue.status === 'open').length,
+          health: issues.some((issue) => issue.status === 'open')
+            ? 'error'
+            : 'healthy',
+          ignoredIssues: issues.filter((issue) => issue.status === 'ignored')
+            .length,
+          infoIssues: 0,
+          lastSuccessfulAt: '2026-08-08T00:00:00.000Z',
+          openIssues: issues.filter((issue) => issue.status === 'open').length,
+          resolvedIssues: 0,
+          warningIssues: 0,
+        },
+      };
+    }
+    if (command === 'set_validation_issue_status') {
+      const input = commandArguments(args).input as {
+        issueId: string;
+        projectId: string;
+        status: string;
+      };
+      const issue = (validationIssuesByProject[input.projectId] ?? []).find(
+        (item) => item.id === input.issueId,
+      );
+      if (!issue) throw new Error('Missing mock validation issue');
+      issue.status = input.status;
+      return issue;
+    }
+    if (command === 'preview_environment_manifest') {
+      const input = commandArguments(args).input as {
+        projectId: string;
+        relativePath: string;
+      };
+      const keys = (validationRulesByProject[input.projectId] ?? [])
+        .map((rule) => rule.keyName as string)
+        .sort();
+      return {
+        content: keys.map((key) => `${key}=\n`).join(''),
+        exists: false,
+        keyCount: keys.length,
+        relativePath: input.relativePath,
+      };
+    }
+    if (command === 'export_environment_manifest') {
+      const input = commandArguments(args).input as {
+        projectId: string;
+        relativePath: string;
+      };
+      return {
+        keyCount: (validationRulesByProject[input.projectId] ?? []).length,
+        relativePath: input.relativePath,
+        replaced: false,
+      };
+    }
     if (command === 'rescan_project' || command === 'rescan_watched_location') {
       const commandArgs = commandArguments(args);
       const projectId = commandArgs.projectId as string;
@@ -559,6 +726,28 @@ function environmentSourceResponse(
     relativePath: input.relativePath,
     sortOrder,
     updatedAt: '2026-08-05T00:00:00.000Z',
+  };
+}
+
+function validationIssueResponse(projectId: string, environmentId: string) {
+  return {
+    environmentId,
+    environmentName: 'Development',
+    firstSeenAt: '2026-08-08T00:00:00.000Z',
+    id: 'f5443f4c-f04c-4ccf-850b-fbe53d24fcba',
+    issueType: 'required_missing',
+    keyName: 'DATABASE_URL',
+    lastSeenAt: '2026-08-08T00:00:00.000Z',
+    lineNumber: null,
+    message: "Required key 'DATABASE_URL' is missing.",
+    observedName: null,
+    projectId,
+    resolvedAt: null,
+    ruleId: 'c4373b86-1c32-4f96-a315-f5d17089966f',
+    severity: 'error',
+    sourcePath: null,
+    status: 'open',
+    updatedAt: '2026-08-08T00:00:00.000Z',
   };
 }
 

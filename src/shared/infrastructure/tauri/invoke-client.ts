@@ -21,6 +21,10 @@ const safeMessages: Record<string, string> = {
   FILESYSTEM_UNAVAILABLE:
     'The selected folder cannot be read. Check its permissions and try again.',
   INVALID_INPUT: 'The request contains invalid data.',
+  MANIFEST_CONFLICT:
+    'A file already exists at that destination. Confirm replacement to continue.',
+  MANIFEST_PATH_INVALID:
+    'The manifest destination must stay inside the project root and use existing folders.',
   NOT_FOUND: 'The requested project could not be found.',
   OPERATION_UNAVAILABLE: 'That file action is unavailable on this device.',
   PATH_OUTSIDE_ROOT:
@@ -31,6 +35,8 @@ const safeMessages: Record<string, string> = {
   STORAGE_UNAVAILABLE: 'Local application data is unavailable.',
   WATCHED_LOCATION_INVALID:
     'A watched location is missing, unreadable, or not a folder.',
+  VALIDATION_CONFLICT:
+    'A rule of that type already exists for this environment key.',
 };
 
 function normalizeCommandError(

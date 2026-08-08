@@ -305,6 +305,20 @@ export function WorkbenchContextSidebar({
             </>
           )}
 
+          {location.pathname === '/validation' && (
+            <>
+              <SidebarSection title="Validation Safety">
+                <div className="rounded border border-divider bg-workspace p-2 font-mono text-[11px] text-muted space-y-1">
+                  <p className="font-semibold text-foreground">Metadata only</p>
+                  <p>
+                    Rules, key names, source paths, and issue lifecycle are
+                    local. Values are never persisted.
+                  </p>
+                </div>
+              </SidebarSection>
+            </>
+          )}
+
           {location.pathname === '/diagnostics' && (
             <>
               <SidebarSection title="System Diagnostics">

@@ -12,6 +12,9 @@ use crate::features::file_inventory::{
 };
 use crate::features::projects::{LocalProjectFilesystem, ProjectService, SqliteProjectRepository};
 use crate::features::settings::repository::{SettingsRepository, SqliteSettingsRepository};
+use crate::features::validation_center::{
+    LocalManifestFilesystem, SqliteValidationRepository, ValidationService,
+};
 use crate::shared::database::{initialize_database, Database, DatabasePaths};
 use crate::shared::errors::AppError;
 
@@ -21,6 +24,7 @@ pub(crate) struct AppState {
     file_inventory_service: FileInventoryService,
     asset_service: AssetService,
     environment_service: EnvironmentService,
+    validation_service: ValidationService,
     inventory_runtime: InventoryRuntime,
 }
 
@@ -78,11 +82,21 @@ impl AppState {
                 LocalProjectFilesystem,
             ),
         );
+        let validation_service = ValidationService::new(
+            SqliteValidationRepository::new(database.pool().clone()),
+            ProjectService::new(
+                SqliteProjectRepository::new(database.pool().clone()),
+                LocalProjectFilesystem,
+            ),
+            file_inventory_service.clone(),
+            LocalManifestFilesystem,
+        );
 
         Ok(Self {
             database,
             asset_service,
             environment_service,
+            validation_service,
             file_inventory_service,
             inventory_runtime: InventoryRuntime::new(),
         })
@@ -120,6 +134,10 @@ impl AppState {
         self.environment_service.clone()
     }
 
+    pub(crate) fn validation_service(&self) -> ValidationService {
+        self.validation_service.clone()
+    }
+
     pub(crate) async fn start_inventory_runtime(
         &self,
         app: AppHandle,
@@ -130,6 +148,7 @@ impl AppState {
                 app,
                 self.file_inventory_service(),
                 self.environment_service(),
+                self.validation_service(),
             )
             .await
     }

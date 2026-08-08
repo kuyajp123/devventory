@@ -352,8 +352,8 @@ impl SqliteEnvironmentRepository {
             sqlx::query(
                 "INSERT INTO environment_key_occurrences (
                     id, project_id, environment_id, source_id, key_definition_id, line_number,
-                    is_commented, is_duplicate, parse_status
-                 ) VALUES (?, ?, ?, ?, ?, ?, ?, 0, 'recognized')",
+                    is_commented, is_duplicate, parse_status, observed_name
+                 ) VALUES (?, ?, ?, ?, ?, ?, ?, 0, 'recognized', ?)",
             )
             .bind(Uuid::new_v4().to_string())
             .bind(source.project_id.to_string())
@@ -362,6 +362,7 @@ impl SqliteEnvironmentRepository {
             .bind(key_id)
             .bind(i64::from(occurrence.line_number))
             .bind(occurrence.is_commented)
+            .bind(&occurrence.name)
             .execute(&mut *transaction)
             .await?;
         }

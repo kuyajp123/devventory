@@ -9,6 +9,8 @@ enum CommandErrorCode {
     EnvironmentConflict,
     FilesystemUnavailable,
     InvalidInput,
+    ManifestConflict,
+    ManifestPathInvalid,
     NotFound,
     OperationUnavailable,
     PathOutsideRoot,
@@ -23,6 +25,7 @@ enum CommandErrorCode {
     VariantNotIndexed,
     VariantPathOutsideRoot,
     VariantSelfReference,
+    ValidationConflict,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -66,6 +69,22 @@ impl CommandError {
         }
     }
 
+    pub(crate) fn manifest_conflict() -> Self {
+        Self {
+            code: CommandErrorCode::ManifestConflict,
+            message: "A file already exists at that manifest destination.",
+            recoverable: true,
+        }
+    }
+
+    pub(crate) fn manifest_path_invalid() -> Self {
+        Self {
+            code: CommandErrorCode::ManifestPathInvalid,
+            message: "The manifest destination must stay inside the project root and use existing folders.",
+            recoverable: true,
+        }
+    }
+
     pub(crate) fn not_found(message: &'static str) -> Self {
         Self {
             code: CommandErrorCode::NotFound,
@@ -77,6 +96,14 @@ impl CommandError {
     pub(crate) fn operation_unavailable(message: &'static str) -> Self {
         Self {
             code: CommandErrorCode::OperationUnavailable,
+            message,
+            recoverable: true,
+        }
+    }
+
+    pub(crate) fn validation_conflict(message: &'static str) -> Self {
+        Self {
+            code: CommandErrorCode::ValidationConflict,
             message,
             recoverable: true,
         }
@@ -184,6 +211,8 @@ impl CommandError {
             CommandErrorCode::EnvironmentConflict => "ENVIRONMENT_CONFLICT",
             CommandErrorCode::FilesystemUnavailable => "FILESYSTEM_UNAVAILABLE",
             CommandErrorCode::InvalidInput => "INVALID_INPUT",
+            CommandErrorCode::ManifestConflict => "MANIFEST_CONFLICT",
+            CommandErrorCode::ManifestPathInvalid => "MANIFEST_PATH_INVALID",
             CommandErrorCode::NotFound => "NOT_FOUND",
             CommandErrorCode::OperationUnavailable => "OPERATION_UNAVAILABLE",
             CommandErrorCode::PathOutsideRoot => "PATH_OUTSIDE_ROOT",
@@ -198,6 +227,7 @@ impl CommandError {
             CommandErrorCode::VariantNotIndexed => "VARIANT_NOT_INDEXED",
             CommandErrorCode::VariantPathOutsideRoot => "VARIANT_PATH_OUTSIDE_ROOT",
             CommandErrorCode::VariantSelfReference => "VARIANT_SELF_REFERENCE",
+            CommandErrorCode::ValidationConflict => "VALIDATION_CONFLICT",
         }
     }
 }

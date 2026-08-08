@@ -5,3 +5,4 @@ pub(crate) mod environment_tracker;
 pub(crate) mod file_inventory;
 pub(crate) mod projects;
 pub(crate) mod settings;
+pub(crate) mod validation_center;
