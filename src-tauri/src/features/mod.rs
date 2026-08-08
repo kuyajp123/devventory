@@ -1,3 +1,4 @@
+pub(crate) mod agent_usage;
 pub(crate) mod app_health;
 pub(crate) mod asset_library;
 pub(crate) mod backups;

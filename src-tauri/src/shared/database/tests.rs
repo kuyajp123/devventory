@@ -159,7 +159,7 @@ async fn snapshots_an_existing_database_before_applying_pending_migrations() {
     assert!(snapshot.file_path.starts_with(paths.backups_directory()));
     assert!(snapshot.file_path.is_file());
     assert_eq!(snapshot.from_version, 0);
-    assert_eq!(snapshot.to_version, 7);
+    assert_eq!(snapshot.to_version, 8);
 
     let backup_options = SqliteConnectOptions::new()
         .filename(&snapshot.file_path)
@@ -213,6 +213,18 @@ async fn upgrades_a_database_that_already_applied_the_immutable_asset_migration(
         .execute(initial.database.pool())
         .await
         .expect("later optimization index should be absent from the version 4 fixture");
+    query("DROP TABLE IF EXISTS agent_reminders")
+        .execute(initial.database.pool())
+        .await
+        .expect("agent reminders should be absent from the version 4 fixture");
+    query("DROP TABLE IF EXISTS agent_quota_windows")
+        .execute(initial.database.pool())
+        .await
+        .expect("agent quotas should be absent from the version 4 fixture");
+    query("DROP TABLE IF EXISTS agent_accounts")
+        .execute(initial.database.pool())
+        .await
+        .expect("agent accounts should be absent from the version 4 fixture");
     query("DROP TABLE IF EXISTS project_validation_state")
         .execute(initial.database.pool())
         .await
@@ -272,9 +284,9 @@ async fn upgrades_a_database_that_already_applied_the_immutable_asset_migration(
         .expect("latest migration version should load");
 
     assert_eq!(snapshot.from_version, 4);
-    assert_eq!(snapshot.to_version, 7);
+    assert_eq!(snapshot.to_version, 8);
     assert!(snapshot.file_path.is_file());
-    assert_eq!(latest_applied, 7);
+    assert_eq!(latest_applied, 8);
     assert!(index_exists(upgraded.database.pool(), "indexed_files_project_size_idx").await);
     assert!(
         index_exists(

@@ -2,6 +2,7 @@ use std::path::Path;
 
 use tauri::AppHandle;
 
+use crate::features::agent_usage::{AgentUsageService, SqliteAgentUsageRepository};
 use crate::features::asset_library::{AssetService, LocalAssetFilesystem, SqliteAssetRepository};
 use crate::features::backups::repository::{
     BackupRecordDraft, BackupRepository, SqliteBackupRepository,
@@ -21,6 +22,7 @@ use crate::shared::errors::AppError;
 #[derive(Debug)]
 pub(crate) struct AppState {
     database: Database,
+    agent_usage_service: AgentUsageService,
     file_inventory_service: FileInventoryService,
     asset_service: AssetService,
     environment_service: EnvironmentService,
@@ -59,6 +61,8 @@ impl AppState {
         }
 
         let database = initialization.database;
+        let agent_usage_service =
+            AgentUsageService::new(SqliteAgentUsageRepository::new(database.pool().clone()));
         let project_service = ProjectService::new(
             SqliteProjectRepository::new(database.pool().clone()),
             LocalProjectFilesystem,
@@ -94,6 +98,7 @@ impl AppState {
 
         Ok(Self {
             database,
+            agent_usage_service,
             asset_service,
             environment_service,
             validation_service,
@@ -116,6 +121,10 @@ impl AppState {
             SqliteProjectRepository::new(self.database.pool().clone()),
             LocalProjectFilesystem,
         )
+    }
+
+    pub(crate) fn agent_usage_service(&self) -> AgentUsageService {
+        self.agent_usage_service.clone()
     }
 
     pub(crate) fn settings_repository(&self) -> SqliteSettingsRepository {

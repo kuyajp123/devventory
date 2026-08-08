@@ -10,6 +10,7 @@ import {
   IconLayoutSidebarLeftExpand,
   IconLibrary,
   IconMoon,
+  IconRobot,
   IconSearch,
   IconShieldCheck,
   IconSun,
@@ -54,6 +55,12 @@ const navigationItems = [
     label: 'Validation Center',
     requiresProject: true,
     to: '/validation',
+  },
+  {
+    icon: IconRobot,
+    label: 'Agent Usage',
+    requiresProject: false,
+    to: '/agent-usage',
   },
   {
     icon: IconActivityHeartbeat,

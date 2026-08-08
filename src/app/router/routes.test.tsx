@@ -32,6 +32,10 @@ vi.mock('@/features/projects/hooks/use-active-project', () => ({
   useActiveProject: createActiveProjectContext,
 }));
 
+vi.mock('@/features/agent-usage', () => ({
+  AgentUsagePage: () => <h1>Agent Usage</h1>,
+}));
+
 describe('application routes', () => {
   it('redirects the root dashboard and navigates to diagnostics', async () => {
     const router = createMemoryRouter(appRoutes, { initialEntries: ['/'] });
@@ -61,6 +65,22 @@ describe('application routes', () => {
     expect(screen.getByRole('link', { name: 'Return home' })).toHaveAttribute(
       'href',
       '/',
+    );
+  });
+
+  it('keeps Agent Usage available without an active project', async () => {
+    const router = createMemoryRouter(appRoutes, {
+      initialEntries: ['/agent-usage'],
+    });
+
+    renderWithProviders(<RouterProvider router={router} />);
+
+    expect(
+      await screen.findByRole('heading', { name: 'Agent Usage' }),
+    ).toBeVisible();
+    expect(screen.getByRole('link', { name: 'Agent Usage' })).toHaveAttribute(
+      'href',
+      '/agent-usage',
     );
   });
 });

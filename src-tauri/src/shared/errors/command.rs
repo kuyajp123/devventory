@@ -5,6 +5,7 @@ use super::AppError;
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 enum CommandErrorCode {
+    AgentUsageConflict,
     AssetConflict,
     EnvironmentConflict,
     FilesystemUnavailable,
@@ -37,6 +38,14 @@ pub(crate) struct CommandError {
 }
 
 impl CommandError {
+    pub(crate) fn agent_usage_conflict(message: &'static str) -> Self {
+        Self {
+            code: CommandErrorCode::AgentUsageConflict,
+            message,
+            recoverable: true,
+        }
+    }
+
     pub(crate) fn asset_conflict(message: &'static str) -> Self {
         Self {
             code: CommandErrorCode::AssetConflict,
@@ -207,6 +216,7 @@ impl CommandError {
 
     pub(crate) fn code(&self) -> &'static str {
         match self.code {
+            CommandErrorCode::AgentUsageConflict => "AGENT_USAGE_CONFLICT",
             CommandErrorCode::AssetConflict => "ASSET_CONFLICT",
             CommandErrorCode::EnvironmentConflict => "ENVIRONMENT_CONFLICT",
             CommandErrorCode::FilesystemUnavailable => "FILESYSTEM_UNAVAILABLE",

@@ -4,6 +4,7 @@ import {
   IconFolder,
   IconLayoutSidebarLeftCollapse,
   IconLibrary,
+  IconRobot,
   IconShield,
 } from '@tabler/icons-react';
 import { useEffect } from 'react';
@@ -160,6 +161,35 @@ export function WorkbenchContextSidebar({
                     </ul>
                   </SidebarSection>
                 )}
+            </>
+          )}
+
+          {location.pathname === '/agent-usage' && (
+            <>
+              <SidebarSection title="Global Tracking">
+                <div className="rounded-md border border-divider bg-workspace p-2.5">
+                  <div className="flex items-center gap-2 text-xs font-medium text-foreground">
+                    <IconRobot
+                      aria-hidden="true"
+                      className="text-accent"
+                      size={ICON_SIZE.small}
+                      stroke={ICON_STROKE}
+                    />
+                    Coding-agent availability
+                  </div>
+                  <p className="mt-2 text-xs leading-relaxed text-muted">
+                    Accounts, reset windows, and reminders are global. Switching
+                    the active project does not change this data.
+                  </p>
+                </div>
+              </SidebarSection>
+              <SidebarSection title="Tracking Policy">
+                <p className="rounded-md border border-divider bg-panel p-2.5 text-xs leading-relaxed text-muted">
+                  Manual tracking is always available. Devventory does not read
+                  provider credentials, cookies, or private authentication
+                  files.
+                </p>
+              </SidebarSection>
             </>
           )}
 

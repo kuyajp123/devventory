@@ -15,6 +15,8 @@ export async function invokeCommand<TResponse>(
 }
 
 const safeMessages: Record<string, string> = {
+  AGENT_USAGE_CONFLICT:
+    'That Agent Usage account or quota window is already being tracked.',
   ASSET_CONFLICT:
     'A file already exists at that destination. Choose how to continue.',
   ENVIRONMENT_CONFLICT: 'That environment configuration already exists.',

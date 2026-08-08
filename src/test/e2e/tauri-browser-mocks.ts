@@ -5,6 +5,7 @@ const MOCK_DATABASE_KEY = 'devventory.e2e.database';
 const LAST_OPENED_PROJECT_KEY = 'workspace.last_opened_project_id';
 
 interface MockDatabase {
+  agentAccounts: Array<Record<string, unknown>>;
   environmentSourcesByEnvironment: Record<
     string,
     Array<Record<string, unknown>>
@@ -28,6 +29,7 @@ const scanSummary = {
 
 export function installTauriBrowserMocks() {
   const database = loadDatabase();
+  const agentAccounts = database.agentAccounts;
   const projects = database.projects;
   const inventoryScans = database.inventoryScans;
   const environmentsByProject = database.environmentsByProject;
@@ -72,6 +74,125 @@ export function installTauriBrowserMocks() {
   mockIPC((command, args) => {
     if (command === 'health_check') {
       return 'Devventory Rust backend is running';
+    }
+    if (command === 'list_agent_accounts') {
+      return agentAccounts;
+    }
+    if (command === 'save_agent_account') {
+      const input = commandArguments(args).input as {
+        customPlatform: string | null;
+        defaultTimezone: string;
+        id?: string;
+        identifier: string;
+        platform: string;
+        signInMethod: string;
+        trackingMode: string;
+      };
+      const existing = input.id
+        ? agentAccounts.find((account) => account.id === input.id)
+        : undefined;
+      const account = {
+        availability: existing?.availability ?? 'unknown',
+        createdAt: existing?.createdAt ?? '2026-08-08T00:00:00.000Z',
+        customPlatform: input.customPlatform,
+        defaultTimezone: input.defaultTimezone,
+        id: input.id ?? '76b07ab4-ad48-4fd1-80da-fc3067f0a6cd',
+        identifier: input.identifier,
+        nextResetAt: existing?.nextResetAt ?? null,
+        platform: input.platform,
+        quotas: existing?.quotas ?? [],
+        signInMethod: input.signInMethod,
+        trackingMode: input.trackingMode,
+        updatedAt: '2026-08-08T00:00:00.000Z',
+      };
+      const index = agentAccounts.findIndex((item) => item.id === account.id);
+      if (index >= 0) agentAccounts[index] = account;
+      else agentAccounts.push(account);
+      persist();
+      return account;
+    }
+    if (command === 'delete_agent_account') {
+      const input = commandArguments(args).input as { id: string };
+      const index = agentAccounts.findIndex(
+        (account) => account.id === input.id,
+      );
+      if (index >= 0) agentAccounts.splice(index, 1);
+      persist();
+      return null;
+    }
+    if (command === 'preview_agent_reset') {
+      const input = commandArguments(args).input as {
+        method: string;
+        timezone: string;
+      };
+      return {
+        hadExplicitTimezone: false,
+        interpretation: '2026-08-14 15:00 +08',
+        method: input.method,
+        resetAt: '2026-08-14T07:00:00Z',
+        timezone: input.timezone,
+      };
+    }
+    if (command === 'save_agent_quota') {
+      const input = commandArguments(args).input as {
+        accountId: string;
+        id?: string;
+        label: string;
+        remainingPercent: number | null;
+        reminders: Record<string, boolean>;
+        resetAt: string;
+        timezone: string;
+        trackingSource: string;
+      };
+      const account = agentAccounts.find(
+        (candidate) => candidate.id === input.accountId,
+      );
+      if (!account) throw new Error('Missing mock Agent Usage account');
+      const quotas = account.quotas as Array<Record<string, unknown>>;
+      const quota = {
+        accountId: input.accountId,
+        createdAt: '2026-08-08T00:00:00.000Z',
+        id: input.id ?? '4f60f8ec-8ad2-431c-b3d3-adc63effc438',
+        label: input.label,
+        remainingPercent: input.remainingPercent,
+        reminders: input.reminders,
+        resetAt: input.resetAt,
+        resetReachedAt: null,
+        resetTiming: 'future',
+        status: input.remainingPercent === 0 ? 'exhausted' : 'unknown',
+        timezone: input.timezone,
+        trackingSource: input.trackingSource,
+        updatedAt: '2026-08-08T00:00:00.000Z',
+        usageIsStale: false,
+        usageUpdatedAt:
+          input.remainingPercent == null ? null : '2026-08-08T00:00:00.000Z',
+      };
+      const quotaIndex = quotas.findIndex((item) => item.id === quota.id);
+      if (quotaIndex >= 0) quotas[quotaIndex] = quota;
+      else quotas.push(quota);
+      account.nextResetAt = input.resetAt;
+      account.availability = quota.status;
+      persist();
+      return quota;
+    }
+    if (command === 'delete_agent_quota') {
+      const input = commandArguments(args).input as {
+        accountId: string;
+        quotaId: string;
+      };
+      const account = agentAccounts.find(
+        (candidate) => candidate.id === input.accountId,
+      );
+      if (account) {
+        account.quotas = (
+          account.quotas as Array<Record<string, unknown>>
+        ).filter((quota) => quota.id !== input.quotaId);
+      }
+      persist();
+      return null;
+    }
+    if (command === 'take_due_agent_reminders') {
+      return [];
     }
     if (command === 'plugin:dialog|open') {
       return 'C:\\workspace\\browser-project';
@@ -662,6 +783,7 @@ export function installTauriBrowserMocks() {
 
 function loadDatabase(): MockDatabase {
   const empty: MockDatabase = {
+    agentAccounts: [],
     environmentSourcesByEnvironment: {},
     environmentsByProject: {},
     inventoryScans: {},
@@ -676,6 +798,7 @@ function loadDatabase(): MockDatabase {
   try {
     const parsed = JSON.parse(stored) as Partial<MockDatabase>;
     return {
+      agentAccounts: parsed.agentAccounts ?? [],
       inventoryScans: parsed.inventoryScans ?? {},
       environmentSourcesByEnvironment:
         parsed.environmentSourcesByEnvironment ?? {},
