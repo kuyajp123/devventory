@@ -3,9 +3,9 @@ import { Chip, EmptyState, Table } from '@heroui/react';
 import {
   IconChevronRight,
   IconFileCode,
-  IconInfoCircle,
   IconTableOff,
 } from '@tabler/icons-react';
+import { memo, useMemo } from 'react';
 import {
   sourceStatusLabel,
   type Environment,
@@ -28,8 +28,9 @@ export function InspectEnvironmentMatrix({
   selection: EnvironmentKeySelection | null;
   sources: EnvironmentSource[];
 }) {
-  const environmentIndex = matrix.environments.findIndex(
-    (item) => item.id === environment.id,
+  const environmentIndex = useMemo(
+    () => matrix.environments.findIndex((item) => item.id === environment.id),
+    [environment.id, matrix.environments],
   );
 
   if (sources.length === 0) {
@@ -54,7 +55,7 @@ export function InspectEnvironmentMatrix({
 
   return (
     <div className="space-y-4">
-      <div className="rounded-xl border border-accent/30 bg-accent/5 p-4">
+      {/* <div className="rounded-xl border border-accent/30 bg-accent/5 p-4">
         <div className="flex gap-3">
           <IconInfoCircle
             aria-hidden="true"
@@ -73,7 +74,7 @@ export function InspectEnvironmentMatrix({
             </p>
           </div>
         </div>
-      </div>
+      </div> */}
 
       {/* i intentionally remove the cards here. do not bring the cards back! update the test if its failed */}
 
@@ -94,16 +95,27 @@ export function InspectEnvironmentMatrix({
         </EmptyState>
       ) : (
         <Table variant="secondary">
-          <Table.ScrollContainer>
+          <Table.ScrollContainer
+            className="max-h-[70vh] overflow-auto overscroll-contain"
+            data-testid="inspect-environment-matrix-scroll"
+          >
             <Table.Content
               aria-label={`${environment.name} source-file key matrix`}
             >
-              <Table.Header>
-                <Table.Column isRowHeader id="key">
+              <Table.Header className="sticky top-0 z-40 bg-surface">
+                <Table.Column
+                  className="sticky left-0 top-0 z-50 min-w-64 bg-surface"
+                  isRowHeader
+                  id="key"
+                >
                   Configuration key
                 </Table.Column>
                 {sources.map((source) => (
-                  <Table.Column id={source.id} key={source.id}>
+                  <Table.Column
+                    className="sticky top-0 z-40 bg-surface"
+                    id={source.id}
+                    key={source.id}
+                  >
                     <div className="min-w-48">
                       <p className="font-mono text-sm">{source.relativePath}</p>
                       <p className="text-xs font-normal text-muted">
@@ -114,19 +126,31 @@ export function InspectEnvironmentMatrix({
                   </Table.Column>
                 ))}
               </Table.Header>
-              <Table.Body items={matrix.rows}>
+              <Table.Body
+                dependencies={[
+                  selection?.keyName,
+                  selection?.environment.id,
+                  selection?.selectedSourcePath,
+                ]}
+                items={matrix.rows}
+              >
                 {(row) => {
                   const environmentCell =
                     environmentIndex >= 0
                       ? row.cells[environmentIndex]
                       : undefined;
-                  const activeCount =
-                    environmentCell?.sourceDetails.filter(
-                      (detail) => !detail.isCommented,
-                    ).length ?? 0;
+                  const allDetails = environmentCell?.sourceDetails ?? [];
+                  const detailsBySource = groupDetailsBySource(allDetails);
+                  const activeCount = allDetails.filter(
+                    (detail) => !detail.isCommented,
+                  ).length;
+
                   return (
-                    <Table.Row id={row.keyName}>
-                      <Table.Cell className="sticky left-0 z-10 min-w-64 bg-surface">
+                    <Table.Row
+                      className="even:bg-surface-secondary/40"
+                      id={row.keyName}
+                    >
+                      <Table.Cell className="sticky left-0 z-30 min-w-64 bg-surface">
                         <p className="font-mono text-sm font-medium">
                           {row.keyName}
                         </p>
@@ -139,24 +163,21 @@ export function InspectEnvironmentMatrix({
                       </Table.Cell>
                       {sources.map((source) => {
                         const details =
-                          environmentCell?.sourceDetails.filter(
-                            (detail) =>
-                              detail.relativePath === source.relativePath,
-                          ) ?? [];
+                          detailsBySource.get(source.relativePath) ?? [];
+                        const isCellSelected =
+                          selection?.keyName === row.keyName &&
+                          selection.environment.id === environment.id &&
+                          selection.selectedSourcePath === source.relativePath;
+
                         return (
                           <Table.Cell
-                            className="p-0"
+                            className="p-1"
                             key={`${row.keyName}:${source.id}`}
                           >
                             <SourceMatrixCell
-                              allDetails={environmentCell?.sourceDetails ?? []}
+                              allDetails={allDetails}
                               environment={environment}
-                              isSelected={
-                                selection?.keyName === row.keyName &&
-                                selection?.environment.id === environment.id &&
-                                selection?.selectedSourcePath ===
-                                  source.relativePath
-                              }
+                              isSelected={isCellSelected}
                               keyName={row.keyName}
                               onSelect={onSelect}
                               source={source}
@@ -177,7 +198,7 @@ export function InspectEnvironmentMatrix({
   );
 }
 
-function SourceMatrixCell({
+const SourceMatrixCell = memo(function SourceMatrixCell({
   allDetails,
   environment,
   isSelected,
@@ -202,9 +223,12 @@ function SourceMatrixCell({
   return (
     <button
       aria-label={`${keyName} in ${source.relativePath}: ${status}`}
-      className={`flex min-h-16 w-full min-w-48 items-center justify-between gap-3 p-3 text-left transition hover:bg-surface-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent ${
-        isSelected ? 'bg-accent/10 ring-1 ring-inset ring-accent' : ''
+      aria-pressed={isSelected}
+      className={`flex min-h-16 w-full min-w-48 items-center justify-between gap-3 rounded-lg border border-transparent p-3 text-left transition-colors hover:bg-surface-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent ${
+        isSelected ? 'relative z-10 border-accent bg-accent/15 shadow-sm' : ''
       }`}
+      data-cell-id={`${keyName}:${source.id}`}
+      data-selected={isSelected ? 'true' : undefined}
       onClick={() =>
         onSelect({
           environment,
@@ -237,6 +261,23 @@ function SourceMatrixCell({
       />
     </button>
   );
+});
+
+function groupDetailsBySource(
+  details: EnvironmentMatrixSourceDetail[],
+): Map<string, EnvironmentMatrixSourceDetail[]> {
+  const grouped = new Map<string, EnvironmentMatrixSourceDetail[]>();
+
+  for (const detail of details) {
+    const sourceDetails = grouped.get(detail.relativePath);
+    if (sourceDetails) {
+      sourceDetails.push(detail);
+    } else {
+      grouped.set(detail.relativePath, [detail]);
+    }
+  }
+
+  return grouped;
 }
 
 function sourceCellStatus(

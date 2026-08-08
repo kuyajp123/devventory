@@ -5,6 +5,7 @@ import {
   IconInfoCircle,
   IconX,
 } from '@tabler/icons-react';
+import { useMemo, useState } from 'react';
 import { ICON_SIZE, ICON_STROKE } from '@/shared/constants/icon.constants';
 import type {
   Environment,
@@ -20,47 +21,67 @@ export interface EnvironmentKeySelection {
 
 export function EnvironmentKeyDetails({
   onClose,
+  onDefinitionClick,
   selection,
 }: {
   onClose: () => void;
+  onDefinitionClick?: (relativePath: string) => void;
   selection: EnvironmentKeySelection | null;
 }) {
   if (!selection) {
-    return (
-      <aside className="rounded-xl border border-dashed border-divider bg-surface p-5 xl:sticky xl:top-6 xl:h-fit">
-        <div className="flex items-start gap-3">
-          <IconInfoCircle
-            aria-hidden="true"
-            className="mt-0.5 shrink-0 text-muted"
-            size={ICON_SIZE.button}
-            stroke={ICON_STROKE}
-          />
-          <div>
-            <h2 className="font-semibold">Key details</h2>
-            <p className="mt-1 text-sm leading-6 text-muted">
-              Select a matrix cell to see every definition, its source file,
-              line number, and whether it is active or commented.
-            </p>
-          </div>
-        </div>
-      </aside>
-    );
+    return null;
   }
 
-  const activeDetails = selection.sourceDetails.filter(
-    (detail) => !detail.isCommented,
+  return (
+    <EnvironmentKeyDetailsContent
+      key={`${selection.environment.id}:${selection.keyName}:${selection.selectedSourcePath ?? 'environment'}`}
+      onClose={onClose}
+      onDefinitionClick={onDefinitionClick}
+      selection={selection}
+    />
   );
-  const commentedDetails = selection.sourceDetails.filter(
-    (detail) => detail.isCommented,
+}
+
+function EnvironmentKeyDetailsContent({
+  onClose,
+  onDefinitionClick,
+  selection,
+}: {
+  onClose: () => void;
+  onDefinitionClick?: (relativePath: string) => void;
+  selection: EnvironmentKeySelection;
+}) {
+  const [selectedDefinitionPath, setSelectedDefinitionPath] = useState<
+    string | null
+  >(selection.selectedSourcePath ?? null);
+
+  const activeDetails = useMemo(
+    () => selection.sourceDetails.filter((detail) => !detail.isCommented),
+    [selection.sourceDetails],
   );
-  const selectedSourceDetails = selection.selectedSourcePath
-    ? selection.sourceDetails.filter(
-        (detail) => detail.relativePath === selection.selectedSourcePath,
-      )
-    : selection.sourceDetails;
-  const status = selection.selectedSourcePath
+  const commentedDetails = useMemo(
+    () => selection.sourceDetails.filter((detail) => detail.isCommented),
+    [selection.sourceDetails],
+  );
+  const effectiveSelectedSourcePath =
+    selection.selectedSourcePath ?? selectedDefinitionPath;
+  const selectedSourceDetails = useMemo(
+    () =>
+      effectiveSelectedSourcePath
+        ? selection.sourceDetails.filter(
+            (detail) => detail.relativePath === effectiveSelectedSourcePath,
+          )
+        : selection.sourceDetails,
+    [effectiveSelectedSourcePath, selection.sourceDetails],
+  );
+  const status = effectiveSelectedSourcePath
     ? sourceStatus(selectedSourceDetails)
     : environmentStatus(activeDetails.length, commentedDetails.length);
+
+  function handleDefinitionClick(relativePath: string) {
+    setSelectedDefinitionPath(relativePath);
+    onDefinitionClick?.(relativePath);
+  }
 
   return (
     <aside className="rounded-xl border border-divider bg-surface xl:sticky xl:top-6 xl:h-fit">
@@ -71,8 +92,8 @@ export function EnvironmentKeyDetails({
           </p>
           <p className="mt-1 text-sm text-muted">
             {selection.environment.name}
-            {selection.selectedSourcePath
-              ? ` · ${selection.selectedSourcePath}`
+            {effectiveSelectedSourcePath
+              ? ` · ${effectiveSelectedSourcePath}`
               : ' environment'}
           </p>
         </div>
@@ -97,7 +118,7 @@ export function EnvironmentKeyDetails({
             Status
           </p>
           <div className="mt-2 flex items-center gap-2">
-            {activeDetails.length > 1 && !selection.selectedSourcePath ? (
+            {activeDetails.length > 1 && !effectiveSelectedSourcePath ? (
               <IconAlertTriangle
                 aria-hidden="true"
                 className="text-warning"
@@ -108,10 +129,10 @@ export function EnvironmentKeyDetails({
             <p className="font-semibold">{status}</p>
           </div>
           <p className="mt-2 text-sm leading-6 text-muted">
-            {selection.selectedSourcePath
+            {effectiveSelectedSourcePath
               ? sourceExplanation(
                   selectedSourceDetails,
-                  selection.selectedSourcePath,
+                  effectiveSelectedSourcePath,
                 )
               : environmentExplanation(
                   activeDetails.length,
@@ -132,43 +153,54 @@ export function EnvironmentKeyDetails({
             <ul className="mt-3 space-y-2">
               {selection.sourceDetails.map((detail, index) => {
                 const isSelected =
-                  selection.selectedSourcePath === detail.relativePath;
+                  effectiveSelectedSourcePath === detail.relativePath;
+
                 return (
                   <li
-                    className={`rounded-xl border p-3 ${
-                      isSelected
-                        ? 'border-accent bg-accent/5'
-                        : 'border-divider bg-surface-secondary'
-                    }`}
                     key={`${detail.relativePath}:${detail.lineNumber ?? 'unknown'}:${index}`}
                   >
-                    <div className="flex items-start gap-3">
-                      <IconFileCode
-                        aria-hidden="true"
-                        className="mt-0.5 shrink-0 text-muted"
-                        size={ICON_SIZE.button}
-                        stroke={ICON_STROKE}
-                      />
-                      <div className="min-w-0 flex-1">
-                        <p className="truncate font-mono text-sm">
-                          {detail.relativePath}
-                        </p>
-                        <p className="mt-1 text-xs text-muted">
-                          {detail.lineNumber
-                            ? `Line ${detail.lineNumber}`
-                            : 'Line unavailable'}
-                        </p>
+                    <button
+                      aria-pressed={isSelected}
+                      className={`w-full rounded-xl border p-3 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent ${
+                        isSelected ? 'relative z-10 shadow-sm' : ''
+                      } ${
+                        onDefinitionClick
+                          ? 'cursor-pointer hover:border-accent/60 hover:bg-accent/5'
+                          : 'cursor-default'
+                      }`}
+                      data-definition-path={detail.relativePath}
+                      data-selected={isSelected ? 'true' : undefined}
+                      onClick={() => handleDefinitionClick(detail.relativePath)}
+                      type="button"
+                    >
+                      <div className="flex items-start gap-3">
+                        <IconFileCode
+                          aria-hidden="true"
+                          className="mt-0.5 shrink-0 text-muted"
+                          size={ICON_SIZE.button}
+                          stroke={ICON_STROKE}
+                        />
+                        <div className="min-w-0 flex-1">
+                          <p className="truncate font-mono text-sm">
+                            {detail.relativePath}
+                          </p>
+                          <p className="mt-1 text-xs text-muted">
+                            {detail.lineNumber
+                              ? `Line ${detail.lineNumber}`
+                              : 'Line unavailable'}
+                          </p>
+                        </div>
+                        <Chip
+                          color={detail.isCommented ? 'default' : 'success'}
+                          size="sm"
+                          variant="soft"
+                        >
+                          <Chip.Label>
+                            {detail.isCommented ? 'Commented' : 'Active'}
+                          </Chip.Label>
+                        </Chip>
                       </div>
-                      <Chip
-                        color={detail.isCommented ? 'default' : 'success'}
-                        size="sm"
-                        variant="soft"
-                      >
-                        <Chip.Label>
-                          {detail.isCommented ? 'Commented' : 'Active'}
-                        </Chip.Label>
-                      </Chip>
-                    </div>
+                    </button>
                   </li>
                 );
               })}

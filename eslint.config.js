@@ -6,7 +6,18 @@ import tseslint from 'typescript-eslint';
 
 export default tseslint.config(
   {
-    ignores: ['dist', 'coverage', 'docs', 'node_modules', 'src-tauri/target'],
+    ignores: [
+      'dist',
+      'coverage',
+      'docs',
+      'node_modules',
+      'src-tauri/target',
+
+      // Third-party AI agent skills
+      '.agents/',
+      '.claude/skills/',
+      '.github/skills/',
+    ],
   },
   js.configs.recommended,
   ...tseslint.configs.recommended,

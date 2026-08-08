@@ -66,7 +66,7 @@ export function InventoryFilters({
 
   return (
     <Form
-      className="rounded-xl border border-divider bg-surface p-4 sm:p-5"
+      className="rounded-md border border-divider bg-surface p-4 sm:p-5"
       onSubmit={submit}
       validationBehavior="aria"
     >
