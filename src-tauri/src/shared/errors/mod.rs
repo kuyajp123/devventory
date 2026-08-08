@@ -18,7 +18,6 @@ pub(crate) enum AppError {
 
     // #[error("filesystem operation failed")]
     // Filesystem(#[from] io::Error),
-
     #[error("database operation failed: {0}")]
     Database(#[from] sqlx::Error),
 
