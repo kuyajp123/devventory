@@ -64,30 +64,23 @@ jobs:
         shell: pwsh
         run: |
           $baseRef = "${{ github.event.pull_request.base.ref }}"
-          $baseSha = "${{ github.event.pull_request.base.sha }}"
-          $headSha = "${{ github.event.pull_request.head.sha }}"
+          $pullRequestNumber = "${{ github.event.pull_request.number }}"
+          $headRef = "refs/remotes/origin/pull-request-head"
 
-          git fetch --no-tags origin "$baseRef"
-
-          $hasBaseSha = $false
-          $hasHeadSha = $false
-
-          git cat-file -e "$baseSha^{commit}" 2>$null
-          if ($LASTEXITCODE -eq 0) {
-            $hasBaseSha = $true
+          if ((git rev-parse --is-shallow-repository).Trim() -eq "true") {
+            git fetch --no-tags --unshallow origin
           }
 
-          git cat-file -e "$headSha^{commit}" 2>$null
-          if ($LASTEXITCODE -eq 0) {
-            $hasHeadSha = $true
+          git fetch --no-tags origin "+refs/heads/${baseRef}:refs/remotes/origin/${baseRef}"
+          git fetch --no-tags origin "+refs/pull/${pullRequestNumber}/head:${headRef}"
+
+          $mergeBase = git merge-base "refs/remotes/origin/${baseRef}" "$headRef"
+
+          if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($mergeBase)) {
+            throw "Unable to determine the pull request merge base."
           }
 
-          if ($hasBaseSha -and $hasHeadSha) {
-            npm exec commitlint -- --from "$baseSha" --to "$headSha" --verbose
-          } else {
-            $mergeBase = git merge-base "origin/$baseRef" HEAD
-            npm exec commitlint -- --from "$mergeBase" --to HEAD --verbose
-          }
+          npm exec commitlint -- --from "$mergeBase" --to "$headRef" --verbose
 
   rust:
     name: Rust checks
