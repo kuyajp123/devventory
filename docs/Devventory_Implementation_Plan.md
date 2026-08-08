@@ -23,10 +23,13 @@ Devventory provides developers with a centralized interface for organizing, inde
 - Project folder metadata
 - Environment definitions
 - Validation rules
+- Coding-agent accounts, quota windows, usage snapshots, reset schedules, and reminders
 
 A developer selects an existing project folder. Devventory then indexes selected folders and files, stores searchable metadata in SQLite, monitors configured locations for changes, and provides tools for importing assets directly into the project.
 
-The first version will work completely offline. Cloud synchronization, authentication, and encrypted secret-value storage will be introduced in future versions.
+Devventory also includes a global **Agent Usage** module that is not tied to the selected project. It helps developers track which coding-agent account is currently usable, how much quota remains when known, and when each tracked quota window resets.
+
+The first version's core workflows will work completely offline. Manual Agent Usage tracking must also work offline. Optional coding-agent connectors may use verified local CLI/application interfaces or provider APIs and may require internet access. Cloud synchronization, Devventory account authentication, and encrypted secret-value storage will be introduced in future versions.
 
 ---
 
@@ -34,15 +37,17 @@ The first version will work completely offline. Cloud synchronization, authentic
 
 ### 2.1 Offline-first
 
-The complete MVP must work without:
+The complete local MVP must work without:
 
 - Internet access
-- Authentication
+- Devventory authentication
 - Supabase
-- A hosted API
+- A hosted Devventory API
 - A cloud database
 
 SQLite will store structured application data, while actual project files remain inside the developer’s project folders.
+
+The Agent Usage module must remain useful in fully manual mode without internet access. Automatic provider synchronization is an optional enhancement and may require a local coding-agent installation, provider authentication that already exists on the device, or internet access to an official provider API.
 
 ### 2.2 Project files remain the source of truth
 
@@ -122,6 +127,57 @@ SUPABASE_ANON_KEY
 ```
 
 It must not store or log their values.
+
+### 2.5 Agent Usage is manual-first and connector-assisted
+
+Agent Usage is a global developer-resource feature and is not scoped to the currently selected project.
+
+The universal baseline is manual tracking. A developer can add any coding-agent platform and account without requiring a connector.
+
+Each tracked account records:
+
+- Coding-agent platform
+- Sign-in method
+- Full account identifier
+- One or more quota windows
+- Optional usage remaining
+- Reset date and time
+- Timezone
+- Tracking source
+- Last updated time
+
+Supported sign-in-method choices should include:
+
+```text
+Google
+GitHub
+Microsoft
+Apple
+Email
+Phone number
+Organization / SSO
+Other
+```
+
+The account identifier should be shown in full because its purpose is to help the developer distinguish the exact account to use. Examples include an email address, GitHub username, Microsoft account, phone number, organization identity, or another provider-specific identifier.
+
+Do not add a second display-name field such as `Personal`, `Account A`, or `Account B` in the MVP. The real account identifier is the primary account label.
+
+Default timezone:
+
+```text
+Asia/Manila
+```
+
+The timezone must still be stored as an IANA timezone identifier rather than a fixed UTC offset so the feature can expand later.
+
+Usage remaining is optional. A quota window may be tracked with only a reset date/time.
+
+When a manually tracked reset time is reached, Devventory may consider that quota window reset because the timestamp was supplied from the coding-agent platform. Devventory must not invent a new usage percentage after the reset. If the previous usage snapshot is stale, clear or mark it as not updated rather than assuming `100% remaining`.
+
+Automatic connectors are optional. They must use documented or otherwise stable provider-supported integration surfaces. Devventory must not scrape private dashboards, read browser cookies, copy OAuth tokens, become a credential manager, or silently switch provider accounts.
+
+Before implementing any automatic connector, the coding agent implementing this phase must independently verify the provider's current official capabilities and decide whether the connector is safe and stable enough to ship. Providers without a verified connector remain fully usable through manual tracking.
 
 ---
 
@@ -287,6 +343,9 @@ TanStack Query should manage:
 - Environment definitions
 - Environment-key matrices
 - Validation issues
+- Coding-agent accounts
+- Coding-agent quota windows
+- Agent usage snapshots and reminder state
 - Dashboard metrics
 - Search results
 - Scan history
@@ -369,13 +428,15 @@ Local operations should use Tauri IPC:
 invoke<Project[]>("get_projects");
 ```
 
-Axios should be introduced when Devventory adds:
+Axios should be introduced when Devventory adds a concrete HTTP responsibility, such as:
 
 - Cloud synchronization endpoints
 - Supabase Edge Functions
 - Custom REST services
 - Update metadata services
-- External integrations
+- Verified external integrations
+
+Phase 8 Agent Usage does not automatically require Axios. Local coding-agent integrations should remain behind Rust connector adapters when that is the safer fit. If Codex verifies that a provider's supported integration is an HTTP API and a frontend HTTP client is appropriate, Axios may be introduced for that verified connector. Do not install it only in anticipation of possible integrations.
 
 Future structure:
 
@@ -422,6 +483,7 @@ React Hook Form should manage larger forms such as:
 - Asset import
 - Environment creation
 - Environment-rule configuration
+- Coding-agent account and quota-window forms
 - Settings
 - Restore-backup confirmation
 
@@ -435,6 +497,7 @@ TanStack Table is recommended for:
 - Asset inventory
 - Environment matrix
 - Validation issues
+- Coding-agent accounts and quota windows when a table is the clearest presentation
 - Scan history
 - Search results
 
@@ -543,6 +606,7 @@ devventory/
 │   │   ├── environment-tracker/
 │   │   ├── environment-comparison/
 │   │   ├── validation-center/
+│   │   ├── agent-usage/
 │   │   ├── global-search/
 │   │   ├── dashboard/
 │   │   ├── backup-restore/
@@ -787,6 +851,7 @@ src-tauri/
 │   │   │   ├── dto.rs
 │   │   │   └── mod.rs
 │   │   │
+│   │   ├── agent_usage/
 │   │   ├── search/
 │   │   ├── dashboard/
 │   │   ├── backups/
@@ -862,6 +927,8 @@ Examples:
 - Import an asset
 - Parse an environment file
 - Compare environments
+- Track a coding-agent quota window
+- Synchronize a verified coding-agent connector
 - Create a backup
 
 A service may use multiple repositories or infrastructure adapters.
@@ -1152,7 +1219,230 @@ dnd-kit may be used to reorder:
 
 The updated order must be persisted through a TanStack Query mutation.
 
-### 11.10 Global search
+### 11.10 Agent Usage and coding-agent availability
+
+Agent Usage is a global module. It must remain visible and consistent regardless of which development project is selected.
+
+The module answers three primary questions:
+
+1. Which coding-agent account can I use now?
+2. Which unavailable account resets next?
+3. Which accounts are approaching a reset or have reset today?
+
+Built-in platform choices should initially include:
+
+```text
+Codex
+Claude Code
+Devin
+GitHub Copilot
+Cursor
+Kiro
+Antigravity
+Gemini CLI
+Windsurf
+Other / Custom
+```
+
+The built-in list is a convenience, not a restriction. `Other / Custom` must allow manual tracking for coding agents that Devventory does not know about yet.
+
+#### Account identity
+
+Each account should contain:
+
+- Coding-agent platform
+- Sign-in method
+- Full account identifier
+- Tracking mode: manual or automatic when a verified connector exists
+- Default timezone, initially `Asia/Manila`
+- Optional account note only if a real use case is later identified
+
+Do not require a paid plan. Free-plan accounts must work the same way in manual tracking.
+
+Do not require or store:
+
+- Passwords
+- API-key values merely for account labeling
+- Browser cookies
+- OAuth refresh tokens copied from another application
+- Coding-agent session tokens
+- Provider credentials that are not explicitly required by a verified connector
+
+#### Quota windows
+
+One account may have one or more quota windows because coding-agent providers may expose multiple independent limits.
+
+Examples:
+
+```text
+5-hour
+Daily
+Weekly
+Monthly
+Credits
+Other
+```
+
+A quota window may contain:
+
+- Label or window type
+- Optional usage remaining percentage
+- Reset date and time
+- Timezone
+- Availability state
+- Tracking source
+- Last updated timestamp
+
+Usage remaining is optional. Reset tracking must still work when no percentage is known.
+
+If an automatic connector reports `usedPercent`, Devventory may derive `remainingPercent = 100 - usedPercent` for presentation as long as the provider's semantics are verified.
+
+If multiple quota windows can independently block an account, the account should remain unavailable while any known blocking quota is still exhausted.
+
+When a manually tracked reset timestamp is reached:
+
+- Treat that quota window as reset/available.
+- Do not require a separate "Confirm Available" action.
+- Do not automatically assume a new remaining percentage.
+- Mark the previous usage snapshot stale, unknown, or cleared until the user updates it or a connector refreshes it.
+
+#### Reset-date input
+
+Support three reset-entry methods:
+
+1. **Exact date/time**
+   - Calendar date picker
+   - Time picker
+   - Timezone
+
+2. **Relative reset**
+   - `Reset in` days, hours, and minutes
+   - Compute the absolute reset timestamp from the current time
+
+3. **Paste reset information**
+   - Accept a pasted date, timestamp, or provider message
+   - Parse common formats such as an ISO timestamp, `Friday at 3:00 PM`, `August 14 at 3 PM`, or `reset in 6 days and 4 hours`
+   - Show the detected date/time and timezone before saving
+   - Do not use the word `ago` for future relative resets unless the pasted text itself explicitly refers to the past
+
+Natural-language parsing should be deterministic where practical. AI is not required for the MVP.
+
+#### Availability and reminders
+
+Useful states may include:
+
+```text
+Available
+Limited
+Exhausted
+Reset soon
+Unknown
+```
+
+The exact state model should be kept small and based on known data.
+
+Devventory should surface:
+
+- Available accounts
+- Accounts with low optional remaining usage
+- Exhausted accounts
+- Next reset across accounts
+- Resets occurring tomorrow
+- Resets occurring today
+- Reset timestamps that have just elapsed
+
+Support native or in-app reminders for:
+
+- One day before reset
+- Reset day
+- Reset time reached
+
+Reminder behavior must not require a provider connector.
+
+#### Tracking source and freshness
+
+Every usage/reset value should record its source where practical:
+
+```text
+Manual
+Pasted message
+Automatic connector
+```
+
+For manually entered usage, the UI should describe the value as a reported or last-updated snapshot rather than pretending it is continuously live.
+
+Example:
+
+```text
+30% remaining
+Updated 2 hours ago
+Source: Manual
+```
+
+#### Automatic connector verification gate
+
+Automatic connector support must be decided during Phase 8 implementation after Codex independently verifies current official documentation and supported local/API interfaces.
+
+Earlier product research found the following leads. These are **research notes, not implementation guarantees**:
+
+- **Codex** — appeared to expose structured current-account and rate-limit/reset information through a local Codex App Server or related supported interface. Strong candidate for automatic account, usage, reset, and multiple-window synchronization.
+- **Claude Code** — appeared to expose structured authentication/account information and structured rate-limit data in supported local interfaces, but with plan/session limitations. Candidate for automatic or partial synchronization after verification.
+- **Devin** — official usage/consumption/limit APIs appeared to exist for some plans, organizations, or enterprise contexts. Treat as a possible API connector, not a guaranteed local CLI quota connector.
+- **GitHub Copilot** — official GitHub billing/usage APIs appeared to expose AI-credit or Copilot-related usage for some personal, organization, or enterprise contexts. Reset semantics may differ from short-lived rate limits. Candidate API connector after verification.
+- **Cursor** — local CLI appeared capable of identifying the authenticated account, while usage automation appeared stronger for Teams/Enterprise/admin APIs than individual plans. Candidate partial connector.
+- **Kiro** — CLI appeared to provide structured account identity and an interactive usage view, but a stable machine-readable quota command was not confirmed. Candidate partial connector.
+- **Antigravity** — no stable structured account/quota/reset interface was confirmed. Manual tracking is the baseline.
+- **Gemini CLI** — Google API/project quota systems exist, but they are not necessarily equivalent to consumer Gemini CLI allowances. Manual or partial tracking until verified.
+- **Windsurf** — no stable structured connector was confirmed in the earlier research. Manual tracking until verified.
+- **Other / Custom** — manual tracking.
+
+Codex must re-check these findings against current official documentation and the current installed tool versions before implementation. The real connector matrix must be based on that verification, not on this planning document alone.
+
+For each provider, classify verified capabilities such as:
+
+```text
+Account detection
+Usage synchronization
+Reset synchronization
+Multiple quota windows
+Required local installation
+Required network access
+Required user-provided API credential
+Plan/account limitations
+```
+
+Implement only connectors that have a stable, supportable integration surface.
+
+Do not implement connectors by:
+
+- Scraping private web dashboards
+- Depending on undocumented private endpoints
+- Reading browser cookies
+- Copying provider OAuth/session tokens from unrelated applications
+- Modifying provider account files to switch accounts
+- Parsing unstable decorative terminal output when a supported structured interface is unavailable
+
+When a connector cannot be verified, keep the provider manual.
+
+#### Connector architecture
+
+If one or more connectors are verified, isolate them behind a feature-local connector boundary rather than scattering provider-specific conditionals across the application.
+
+Conceptually:
+
+```text
+Agent Usage service
+      ↓
+Agent connector interface
+      ↓
+Codex / Claude / Copilot / other verified adapters
+```
+
+Each connector should expose only the capabilities it actually supports.
+
+Manual tracking remains the universal fallback and source of truth for unsupported providers.
+
+### 11.11 Global search
 
 Search:
 
@@ -1178,7 +1468,7 @@ Filters:
 
 Search should be performed by the Rust and SQLite layer rather than loading the complete database into React.
 
-### 11.11 Backup and restore
+### 11.12 Backup and restore
 
 Support:
 
@@ -1211,6 +1501,7 @@ Each feature owns its related tables conceptually, but all migrations remain in 
 | Asset library | `file_tags`, `file_notes`, `asset_relations` |
 | Environment tracker | `environments`, `environment_sources`, `environment_key_definitions`, `environment_key_occurrences` |
 | Validation center | `environment_key_rules`, `validation_issues` |
+| Agent Usage | `agent_platforms`, `agent_accounts`, `agent_quota_windows`, `agent_usage_snapshots`, `agent_reminders` as actually needed |
 | Search | SQLite search-index or FTS tables |
 | Settings | `application_settings` |
 | Backup | `backup_records` |
@@ -1288,6 +1579,8 @@ Never log:
 
 - Environment values
 - Authentication tokens
+- Coding-agent OAuth/session tokens or browser cookies
+- Provider API credentials unless explicitly redacted and required by a verified connector
 - Encryption keys
 - Supabase secrets
 - File contents unless explicitly approved
@@ -1431,6 +1724,21 @@ Features should export only what other features need.
 - Use enums or constrained string unions for statuses.
 - Use Rust enums instead of unvalidated string status values internally.
 
+### 14.11 Provider connector boundaries
+
+Coding-agent integrations must remain behind the Agent Usage feature boundary.
+
+Avoid provider checks scattered across commands, components, and repositories:
+
+```rust
+if provider == "codex" { ... }
+else if provider == "claude" { ... }
+```
+
+Prefer a connector interface or equivalent capability-oriented boundary when automatic connectors are actually implemented.
+
+The connector abstraction must reflect verified current needs. Do not create a large generic plugin framework before at least one real connector requires it.
+
 ---
 
 ## 15. Testing Strategy
@@ -1449,6 +1757,10 @@ Test pure domain logic:
 - Path validation
 - Collision naming
 - Hash comparison
+- Agent quota reset calculations
+- Agent availability calculation across multiple quota windows
+- Relative reset-date calculation
+- Deterministic pasted reset-date parsing
 
 ### 15.2 Rust integration tests
 
@@ -1461,8 +1773,13 @@ Test:
 - Backup creation
 - Restore operations
 - Watched-location reconciliation
+- Agent account and quota-window persistence
+- Reminder scheduling state
+- Verified connector adapters with mocked provider processes or HTTP responses
 
 Use temporary directories and temporary SQLite databases.
+
+Live coding-agent accounts and real provider credentials must not be required for automated tests.
 
 ### 15.3 Frontend unit tests
 
@@ -1476,6 +1793,9 @@ Use Vitest and React Testing Library for:
 - Environment matrix rendering
 - Search filters
 - Validation indicators
+- Agent Usage account/quota rendering
+- Reset-date input and reminder states
+- Connector capability rendering
 - Drag-and-drop state transformations
 
 ### 15.4 Contract tests
@@ -1485,6 +1805,7 @@ Mock Tauri command responses and verify that:
 - Zod accepts valid command responses.
 - Zod rejects invalid responses.
 - Gateways normalize errors.
+- Agent connector DTOs reject malformed or unsafe provider data.
 - Query hooks invalidate the correct cache keys.
 
 ### 15.5 Playwright tests
@@ -1497,6 +1818,8 @@ Test flows such as:
 - Asset filtering
 - Environment comparison
 - Validation-rule creation
+- Manual coding-agent account and quota tracking
+- Reset-date entry and reminder states
 - Search
 - Backup confirmation
 - Sorting environment columns
@@ -1516,6 +1839,7 @@ Use WebdriverIO with Tauri support for native smoke tests such as:
 - Confirming SQLite persistence
 - Restarting the application
 - Confirming data remains available
+- Confirming manually tracked Agent Usage data survives restart
 
 The testing layers will therefore be:
 
@@ -1676,6 +2000,8 @@ scanner
 watcher
 assets
 environments
+agent-usage
+connectors
 search
 dashboard
 backup
@@ -1993,7 +2319,57 @@ Deliverables:
 - Project environment-health status
 - Safe manifest export
 
-### Phase 8: Search and dashboard
+### Phase 8: Agent Usage and coding-agent availability
+
+Implement:
+
+- Global Agent Usage module independent of selected projects
+- Built-in and custom coding-agent platforms
+- Sign-in-method selection
+- Full account identifier
+- Manual tracking baseline
+- One or more quota windows per account
+- Optional usage remaining
+- Exact reset date/time picker
+- Relative `Reset in` days/hours/minutes
+- Pasted reset-date/message parser with confirmation
+- `Asia/Manila` default timezone using an IANA timezone identifier
+- Availability calculation across quota windows
+- Reset-soon, tomorrow, today, and reset-time reminders
+- Tracking-source and last-updated metadata
+- Automatic clearing/staling of old manual usage snapshots after reset without assuming `100%`
+- Connector capability verification against current official provider interfaces
+- Verified automatic connectors only where a stable supported interface exists
+- Manual fallback for every provider
+
+Connector verification inputs from earlier research:
+
+- Codex: strong candidate for local structured account/rate-limit/reset synchronization
+- Claude Code: candidate for local structured account/rate-limit synchronization with possible plan/session limitations
+- Devin: candidate API connector where official usage/consumption/limit APIs are available
+- GitHub Copilot: candidate API connector for supported billing/AI-credit usage contexts
+- Cursor: likely partial connector; account detection may be easier than individual usage synchronization
+- Kiro: likely partial connector; structured account identity was found but structured quota synchronization was not confirmed
+- Antigravity: manual unless Codex verifies a supported structured interface
+- Gemini CLI: manual/partial until consumer allowance versus API/project quota behavior is verified
+- Windsurf: manual unless Codex verifies a supported structured interface
+- Other / Custom: manual
+
+Codex must independently verify the above findings at implementation time and make the final connector-support decision. Do not treat the research notes as authoritative API contracts.
+
+Deliverables:
+
+- Agent/account registry
+- Manual usage and reset tracking
+- Multiple quota-window support
+- Reset-date parsing and computation
+- Availability and next-reset view
+- Reminder experience
+- Connector capability matrix documented from current official sources
+- Implemented automatic connectors only for providers Codex verifies as stable and appropriate
+- Manual fallback for unsupported or partially supported providers
+
+### Phase 9: Search and dashboard
 
 Implement:
 
@@ -2012,7 +2388,7 @@ Deliverables:
 - Validation-severity chart
 - Environment-coverage chart
 
-### Phase 9: Backup, reliability, and release
+### Phase 10: Backup, reliability, and release
 
 Implement:
 
@@ -2032,7 +2408,7 @@ Deliverables:
 - Installable release
 - Recovery documentation
 
-### Phase 10: Future cloud support
+### Phase 11: Future cloud support
 
 Implement later:
 
@@ -2040,7 +2416,7 @@ Implement later:
 - Google login
 - Email and password
 - Cloud metadata synchronization
-- Axios HTTP client
+- Axios HTTP client for Devventory cloud APIs when needed
 - Sync queue
 - Device records
 - Conflict resolution
@@ -2081,10 +2457,26 @@ ESLint
 Prettier
 ```
 
-### Delay until cloud functionality
+### Conditional Phase 8 integration dependencies
+
+Do not preinstall provider integration libraries.
+
+During Phase 8, Codex must first verify each candidate connector against current official documentation and the actual supported interface.
+
+A verified connector may justify adding:
 
 ```text
-Axios
+A Rust process/IPC dependency for a documented local CLI or app-server interface
+A Rust HTTP client or Axios when an official provider API is the chosen boundary
+A Tauri notification capability for reset reminders
+Provider-specific parsing/transport dependencies only when required
+```
+
+Prefer existing Rust/Tauri capabilities when they already satisfy the use case. Do not install a generic connector framework.
+
+### Delay until Devventory cloud functionality
+
+```text
 Supabase JavaScript client
 Supabase Authentication
 Supabase Storage
@@ -2092,7 +2484,7 @@ Cloud synchronization dependencies
 Encryption synchronization tools
 ```
 
-Axios may be installed earlier only when the MVP receives a concrete HTTP integration. Avoid installing infrastructure that has no active responsibility.
+Axios is not automatically a cloud-only dependency anymore because a verified Phase 8 provider API might justify it. Add Axios only when there is a concrete HTTP responsibility. Avoid installing infrastructure that has no active responsibility.
 
 ---
 
@@ -2115,11 +2507,18 @@ The MVP is complete when a user can:
 13. Detect duplicate and missing keys.
 14. Define required, optional, and forbidden rules.
 15. View project-health metrics.
-16. Back up and restore Devventory metadata.
-17. Restart Devventory without losing data.
-18. Use every core feature without internet access.
-19. Run automated frontend, Rust, and native smoke tests.
-20. Generate releases automatically through Semantic Versioning.
+16. Track coding-agent accounts globally without tying them to a project.
+17. Identify each coding-agent account using a sign-in method and full account identifier.
+18. Track one or more quota windows with an optional usage-remaining value and reset date/time.
+19. Enter reset times through a date/time picker, relative `Reset in` input, or pasted date/message.
+20. See which coding-agent account is available, which reset is next, and which resets occur today or tomorrow.
+21. Use manual Agent Usage tracking for any provider even when no connector exists.
+22. Use verified automatic connectors only where current supported provider interfaces allow reliable account/usage/reset synchronization.
+23. Back up and restore Devventory metadata.
+24. Restart Devventory without losing data.
+25. Use all local core features, including manual Agent Usage tracking, without internet access. Automatic provider synchronization may require internet access.
+26. Run automated frontend, Rust, and native smoke tests.
+27. Generate releases automatically through Semantic Versioning.
 
 ---
 
@@ -2159,8 +2558,11 @@ Tabular interfaces
 Dashboard charts
 → Recharts
 
-Future HTTP APIs
-→ Axios through TanStack Query
+Coding-agent provider integrations
+→ Feature-local Rust connector adapters using only verified supported interfaces
+
+Future Devventory cloud HTTP APIs
+→ Axios through TanStack Query when a concrete frontend HTTP responsibility exists
 
 Frontend unit tests
 → Vitest and React Testing Library
@@ -2191,4 +2593,6 @@ Rust services
 Repositories and infrastructure
 ```
 
-Infrastructure must never control the product architecture. Features define the application, while React, Tauri, SQLite, Axios, and other libraries remain replaceable implementation details.
+Infrastructure must never control the product architecture. Features define the application, while React, Tauri, SQLite, Axios, provider CLIs, provider APIs, and other libraries remain replaceable implementation details.
+
+Agent Usage must remain functional without connectors. Provider integrations enhance the feature; they do not define its domain model.
