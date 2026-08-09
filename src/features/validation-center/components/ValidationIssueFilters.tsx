@@ -76,11 +76,11 @@ export function ValidationIssueFiltersPanel({
 
   return (
     <Form
-      className="border-b border-divider bg-workspace p-4"
+      className="border-b border-divider bg-workspace p-3"
       onSubmit={submit}
       validationBehavior="aria"
     >
-      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+      <div className="grid gap-2.5 sm:grid-cols-2 xl:grid-cols-5">
         <SearchField
           className="xl:col-span-2"
           fullWidth

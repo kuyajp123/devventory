@@ -114,7 +114,7 @@ export function GlobalSearchPage() {
             Global search
           </h1>
         </div>
-        <p className="mt-1 max-w-3xl text-xs leading-5 text-muted">
+        <p className="font-mono mt-1 max-w-3xl text-xs leading-5 text-muted">
           Search Devventory-owned metadata only. File contents, environment
           values, credentials, and Agent Usage identifiers are never searched.
         </p>

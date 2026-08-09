@@ -1,4 +1,11 @@
 import {
+  ProjectConfigurationPanel,
+  ProjectDeleteControl,
+  ScanSummaryCard,
+  useActiveProject,
+} from '@/features/projects';
+import { ICON_SIZE, ICON_STROKE } from '@/shared/constants/icon.constants';
+import {
   Alert,
   Button,
   buttonVariants,
@@ -8,13 +15,6 @@ import {
 } from '@heroui/react';
 import { IconFolder, IconPlus, IconRefresh } from '@tabler/icons-react';
 import { Link } from 'react-router';
-import {
-  ProjectConfigurationPanel,
-  ProjectDeleteControl,
-  ScanSummaryCard,
-  useActiveProject,
-} from '@/features/projects';
-import { ICON_SIZE, ICON_STROKE } from '@/shared/constants/icon.constants';
 import { DashboardCharts } from '../components/DashboardCharts';
 import { DashboardMetricCards } from '../components/DashboardMetricCards';
 import { RecentScansTable } from '../components/RecentScansTable';
@@ -44,35 +44,33 @@ export function DashboardPage() {
   if (!activeProject) return <EmptyDashboard />;
 
   return (
-    <section className="mx-auto w-full max-w-7xl space-y-6">
-      <header className="space-y-2 border-b border-divider pb-4">
-        <div className="flex items-center gap-2">
-          <Chip size="sm" variant="soft">
-            <Chip.Label className="font-mono text-[10px] capitalize text-accent">
-              {activeProject.projectType}
-            </Chip.Label>
-          </Chip>
-          <span className="font-mono text-xs text-muted">
-            Project dashboard
-          </span>
-        </div>
-        <div className="flex items-start gap-3">
-          <IconFolder
-            aria-hidden="true"
-            className="mt-1 shrink-0 text-accent"
-            size={ICON_SIZE.navigation}
-            stroke={ICON_STROKE}
-          />
-          <div className="min-w-0">
-            <h1 className="break-words font-mono text-2xl font-bold tracking-tight text-foreground sm:text-3xl">
-              {activeProject.name}
-            </h1>
-            {activeProject.description && (
-              <p className="mt-1 max-w-3xl text-xs leading-5 text-muted">
-                {activeProject.description}
-              </p>
-            )}
+    <section className="mx-auto w-full max-w-7xl space-y-4">
+      <header className="flex flex-col gap-3 pb-3 border-b border-divider sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <div className="flex items-center gap-2">
+            <Chip size="sm" variant="soft">
+              <Chip.Label className="font-mono text-[10px] capitalize text-accent">
+                {activeProject.projectType}
+              </Chip.Label>
+            </Chip>
+            <p className="font-mono text-xs text-muted">Project dashboard</p>
           </div>
+          <div className="mt-1 flex items-center gap-2.5">
+            <IconFolder
+              aria-hidden="true"
+              className="shrink-0 text-accent"
+              size={22}
+              stroke={ICON_STROKE}
+            />
+            <p className="font-mono break-words text-2xl font-semibold tracking-tight text-foreground">
+              {activeProject.name}
+            </p>
+          </div>
+          {activeProject.description && (
+            <p className="font-mono mt-1 max-w-3xl text-xs leading-relaxed text-muted">
+              {activeProject.description}
+            </p>
+          )}
         </div>
       </header>
 
@@ -137,11 +135,7 @@ function DashboardDataSkeleton() {
       className="space-y-4"
       role="status"
     >
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        {Array.from({ length: 7 }, (_, index) => (
-          <Skeleton className="h-24 rounded-md" key={index} />
-        ))}
-      </div>
+      <Skeleton className="h-20 w-full rounded-md" />
       <div className="grid gap-4 xl:grid-cols-3">
         {Array.from({ length: 3 }, (_, index) => (
           <Skeleton className="h-80 rounded-md" key={index} />

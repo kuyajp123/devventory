@@ -45,7 +45,7 @@ export function AgentUsageToolbar({
   const hasFilters =
     Boolean(search.trim()) || platform !== 'all' || status !== 'all';
   return (
-    <Card className="border border-divider bg-surface">
+    <Card className="border border-divider bg-surface rounded-[4px] shadow-none">
       <Card.Content className="grid gap-2 p-3 md:grid-cols-[minmax(15rem,1fr)_repeat(3,minmax(9rem,0.55fr))_auto]">
         <TextField fullWidth variant="secondary">
           <Label className="sr-only">Search account identifier</Label>

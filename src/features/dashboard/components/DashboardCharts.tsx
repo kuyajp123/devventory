@@ -190,10 +190,12 @@ function ChartCard({
   title: string;
 }) {
   return (
-    <Card className="border border-divider bg-surface">
-      <Card.Header>
-        <Card.Title className="text-sm">{title}</Card.Title>
-        <Card.Description className="text-xs">{description}</Card.Description>
+    <Card className="border border-divider bg-surface rounded-[4px] shadow-none">
+      <Card.Header className="pb-2">
+        <Card.Title className="text-sm font-semibold">{title}</Card.Title>
+        <Card.Description className="text-xs text-muted leading-relaxed">
+          {description}
+        </Card.Description>
       </Card.Header>
       <Card.Content className="space-y-3">{children}</Card.Content>
     </Card>

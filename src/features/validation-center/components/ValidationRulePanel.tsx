@@ -15,14 +15,14 @@ import {
   verticalListSortingStrategy,
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { Button, Card, EmptyState, Skeleton } from '@heroui/react';
+import { Button, Card, EmptyState, Skeleton, Tooltip } from '@heroui/react';
 import {
   IconArrowDown,
   IconArrowUp,
+  IconChecklist,
   IconEdit,
   IconGripVertical,
   IconPlus,
-  IconChecklist,
   IconTrash,
 } from '@tabler/icons-react';
 import { useMemo, useState } from 'react';
@@ -105,11 +105,13 @@ export function ValidationRulePanel({
   }
 
   return (
-    <Card className="border border-divider bg-surface">
-      <Card.Header className="flex flex-row items-start justify-between gap-3 border-b border-divider px-4 py-3">
+    <Card className="overflow-hidden border border-divider bg-surface rounded-[4px] shadow-none">
+      <Card.Header className="flex flex-row items-center justify-between gap-3 border-b border-divider px-4 py-3">
         <div>
-          <Card.Title>Validation rules</Card.Title>
-          <Card.Description>
+          <Card.Title className="text-sm font-semibold">
+            Validation rules
+          </Card.Title>
+          <Card.Description className="text-xs text-muted">
             Required, optional, and forbidden key placement by environment.
           </Card.Description>
         </div>
@@ -127,23 +129,25 @@ export function ValidationRulePanel({
           Add rule
         </Button>
       </Card.Header>
-      <Card.Content className="p-4">
+      <Card.Content className="p-0">
         {isLoading ? (
-          <div className="space-y-2">
+          <div className="space-y-2 p-4">
             {Array.from({ length: 3 }, (_, index) => (
-              <Skeleton className="h-20 rounded-md" key={index} />
+              <Skeleton className="h-12 rounded-[4px]" key={index} />
             ))}
           </div>
         ) : orderedRules.length === 0 ? (
-          <EmptyState className="rounded-md border border-dashed border-divider bg-workspace p-6 text-center">
+          <EmptyState className="m-4 rounded-[4px] border border-dashed border-divider bg-workspace p-6 text-center">
             <IconChecklist
               aria-hidden="true"
               className="mx-auto text-muted"
               size={ICON_SIZE.emptyState}
               stroke={ICON_STROKE}
             />
-            <h3 className="mt-3 font-semibold">No validation rules yet</h3>
-            <p className="mt-1 text-sm text-muted">
+            <h3 className="mt-3 text-sm font-semibold">
+              No validation rules yet
+            </h3>
+            <p className="mt-1 text-xs text-muted">
               Add a rule to make environment placement explicit. Unruled keys
               are not treated as unexpected.
             </p>
@@ -158,7 +162,7 @@ export function ValidationRulePanel({
               items={orderedRules.map((rule) => rule.id)}
               strategy={verticalListSortingStrategy}
             >
-              <div className="space-y-2" role="list">
+              <div className="divide-y divide-divider" role="list">
                 {orderedRules.map((rule, index) => (
                   <SortableRule
                     environmentNames={rule.environmentIds.map(
@@ -235,122 +239,151 @@ function SortableRule({
 
   return (
     <div
-      className={`flex items-start gap-2 rounded-md border border-divider bg-workspace p-3 ${rule.enabled ? '' : 'opacity-60'}`}
+      className={`flex items-center justify-between gap-3 px-3 py-2.5 transition-colors hover:bg-workspace-hover ${
+        rule.enabled ? '' : 'opacity-60'
+      }`}
       ref={setNodeRef}
       role="listitem"
       style={{ transform: CSS.Transform.toString(transform), transition }}
     >
-      <button
-        aria-label={`Reorder ${rule.keyName}`}
-        className="mt-1 cursor-grab rounded p-1 text-muted hover:bg-surface-secondary hover:text-foreground focus:outline-none focus:ring-1 focus:ring-accent"
-        type="button"
-        {...attributes}
-        {...listeners}
-      >
-        <IconGripVertical
-          aria-hidden="true"
-          size={ICON_SIZE.button}
-          stroke={ICON_STROKE}
-        />
-      </button>
-      <div className="min-w-0 flex-1">
-        <div className="flex flex-wrap items-center gap-2">
-          <span className="font-mono text-sm font-semibold">
-            {rule.keyName}
-          </span>
-          <SemanticStatusChip
-            dataStatus={rule.ruleType}
-            label={rule.ruleType}
-            labelClassName="capitalize"
-            tone={
-              rule.ruleType === 'forbidden'
-                ? 'danger'
-                : rule.ruleType === 'required'
-                  ? 'accent'
-                  : 'neutral'
-            }
+      <div className="flex items-center gap-2.5 min-w-0 flex-1">
+        <button
+          aria-label={`Reorder ${rule.keyName}`}
+          className="cursor-grab rounded p-0.5 text-muted hover:text-foreground focus:outline-none focus:ring-1 focus:ring-accent"
+          type="button"
+          {...attributes}
+          {...listeners}
+        >
+          <IconGripVertical
+            aria-hidden="true"
+            size={ICON_SIZE.small}
+            stroke={ICON_STROKE}
           />
-          <SemanticStatusChip
-            dataStatus={rule.severity}
-            label={rule.severity}
-            labelClassName="capitalize"
-            tone={
-              rule.severity === 'error'
-                ? 'danger'
-                : rule.severity === 'warning'
-                  ? 'warning'
-                  : 'neutral'
-            }
-          />
-          {!rule.enabled && (
-            <span className="text-xs text-muted">Disabled</span>
-          )}
+        </button>
+
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="font-mono text-xs font-semibold text-foreground">
+              {rule.keyName}
+            </span>
+            <SemanticStatusChip
+              dataStatus={rule.ruleType}
+              label={rule.ruleType}
+              labelClassName="capitalize font-mono text-[10px]"
+              tone={
+                rule.ruleType === 'forbidden'
+                  ? 'danger'
+                  : rule.ruleType === 'required'
+                    ? 'accent'
+                    : 'neutral'
+              }
+            />
+            <SemanticStatusChip
+              dataStatus={rule.severity}
+              label={rule.severity}
+              labelClassName="capitalize font-mono text-[10px]"
+              tone={
+                rule.severity === 'error'
+                  ? 'danger'
+                  : rule.severity === 'warning'
+                    ? 'warning'
+                    : 'neutral'
+              }
+            />
+            {!rule.enabled && (
+              <span className="font-mono text-[10px] text-muted">Disabled</span>
+            )}
+          </div>
+          <p
+            className="mt-0.5 truncate text-[11px] text-muted"
+            title={environmentNames.join(', ')}
+          >
+            {environmentNames.join(', ')}
+            {rule.description && (
+              <span className="ml-2 text-secondary">— {rule.description}</span>
+            )}
+          </p>
         </div>
-        <p
-          className="mt-1 truncate text-xs text-muted"
-          title={environmentNames.join(', ')}
-        >
-          {environmentNames.join(', ')}
-        </p>
-        {rule.description && (
-          <p className="mt-1 text-xs text-secondary">{rule.description}</p>
-        )}
       </div>
-      <div className="flex shrink-0 items-center gap-1">
-        <Button
-          aria-label={`Move ${rule.keyName} up`}
-          isDisabled={isBusy || isFirst}
-          isIconOnly
-          onPress={onMoveUp}
-          size="sm"
-          variant="ghost"
-        >
-          <IconArrowUp
-            aria-hidden="true"
-            size={ICON_SIZE.small}
-            stroke={ICON_STROKE}
-          />
-        </Button>
-        <Button
-          aria-label={`Move ${rule.keyName} down`}
-          isDisabled={isBusy || isLast}
-          isIconOnly
-          onPress={onMoveDown}
-          size="sm"
-          variant="ghost"
-        >
-          <IconArrowDown
-            aria-hidden="true"
-            size={ICON_SIZE.small}
-            stroke={ICON_STROKE}
-          />
-        </Button>
-        <Button
-          aria-label={`Edit ${rule.keyName}`}
-          isIconOnly
-          onPress={onEdit}
-          size="sm"
-          variant="ghost"
-        >
-          <IconEdit
-            aria-hidden="true"
-            size={ICON_SIZE.small}
-            stroke={ICON_STROKE}
-          />
-        </Button>
-        <Button
-          aria-label={`Delete ${rule.keyName}`}
-          isIconOnly
-          onPress={onDelete}
-          size="sm"
-          variant="ghost"
-        >
-          <IconTrash
-            aria-hidden="true"
-            size={ICON_SIZE.small}
-            stroke={ICON_STROKE}
-          />
-        </Button>
+
+      <div className="flex shrink-0 items-center gap-0.5">
+        <Tooltip delay={0}>
+          <Button
+            aria-label={`Move ${rule.keyName} up`}
+            isDisabled={isBusy || isFirst}
+            isIconOnly
+            onPress={onMoveUp}
+            size="sm"
+            variant="ghost"
+          >
+            <IconArrowUp
+              aria-hidden="true"
+              size={ICON_SIZE.small}
+              stroke={ICON_STROKE}
+            />
+          </Button>
+          <Tooltip.Content>
+            <p>Move up</p>
+          </Tooltip.Content>
+        </Tooltip>
+
+        <Tooltip delay={0}>
+          <Button
+            aria-label={`Move ${rule.keyName} down`}
+            isDisabled={isBusy || isLast}
+            isIconOnly
+            onPress={onMoveDown}
+            size="sm"
+            variant="ghost"
+          >
+            <IconArrowDown
+              aria-hidden="true"
+              size={ICON_SIZE.small}
+              stroke={ICON_STROKE}
+            />
+          </Button>
+          <Tooltip.Content>
+            <p>Move down</p>
+          </Tooltip.Content>
+        </Tooltip>
+
+        <Tooltip delay={0}>
+          <Button
+            aria-label={`Edit ${rule.keyName}`}
+            isIconOnly
+            onPress={onEdit}
+            size="sm"
+            variant="ghost"
+          >
+            <IconEdit
+              aria-hidden="true"
+              size={ICON_SIZE.small}
+              stroke={ICON_STROKE}
+            />
+          </Button>
+          <Tooltip.Content>
+            <p>Edit rule</p>
+          </Tooltip.Content>
+        </Tooltip>
+
+        <Tooltip delay={0}>
+          <Button
+            aria-label={`Delete ${rule.keyName}`}
+            isIconOnly
+            onPress={onDelete}
+            size="sm"
+            variant="ghost"
+          >
+            <IconTrash
+              aria-hidden="true"
+              size={ICON_SIZE.small}
+              stroke={ICON_STROKE}
+            />
+          </Button>
+          <Tooltip.Content>
+            <p>Delete rule</p>
+          </Tooltip.Content>
+        </Tooltip>
       </div>
       <span className="sr-only">Position {index + 1}</span>
     </div>

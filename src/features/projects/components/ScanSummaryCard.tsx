@@ -7,30 +7,36 @@ import {
   IconFolderOff,
 } from '@tabler/icons-react';
 import { ICON_SIZE, ICON_STROKE } from '@/shared/constants/icon.constants';
-import { SemanticStatusChip } from '@/shared/ui';
+import {
+  DevventoryMetricStrip,
+  type DevventoryMetricItem,
+  SemanticStatusChip,
+} from '@/shared/ui';
 import type { InitialScanSummary } from '../models/project';
 
 export function ScanSummaryCard({ summary }: { summary: InitialScanSummary }) {
-  const items = [
+  const items: DevventoryMetricItem[] = [
     {
       icon: IconFile,
       label: 'Files discovered',
-      value: summary.filesDiscovered,
+      value: summary.filesDiscovered.toLocaleString(),
     },
     {
       icon: IconFolder,
       label: 'Directories visited',
-      value: summary.directoriesVisited,
+      value: summary.directoriesVisited.toLocaleString(),
     },
     {
       icon: IconFolderOff,
       label: 'Entries excluded',
-      value: summary.entriesExcluded,
+      value: summary.entriesExcluded.toLocaleString(),
     },
     {
       icon: IconAlertTriangle,
       label: 'Entries unreadable',
-      value: summary.entriesUnreadable,
+      value: summary.entriesUnreadable.toLocaleString(),
+      valueClassName:
+        summary.entriesUnreadable > 0 ? 'text-warning' : 'text-foreground',
     },
     {
       icon: IconClock,
@@ -42,10 +48,10 @@ export function ScanSummaryCard({ summary }: { summary: InitialScanSummary }) {
   return (
     <div
       aria-labelledby="scan-summary-title"
-      className="rounded-md border border-divider bg-surface p-5 space-y-4"
+      className="rounded-[4px] border border-divider bg-surface p-4 space-y-3"
     >
       <div className="flex items-start justify-between gap-3">
-        <div className="flex items-start gap-3">
+        <div className="flex items-start gap-2.5">
           {summary.completed ? (
             <IconCircleCheck
               aria-hidden="true"
@@ -84,26 +90,7 @@ export function ScanSummaryCard({ summary }: { summary: InitialScanSummary }) {
         />
       </div>
 
-      <dl className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
-        {items.map((item) => (
-          <div
-            className="rounded border border-divider bg-workspace p-3"
-            key={item.label}
-          >
-            <dt className="flex items-center gap-1.5 font-mono text-[11px] text-muted">
-              <item.icon
-                aria-hidden="true"
-                size={ICON_SIZE.small}
-                stroke={ICON_STROKE}
-              />
-              <span>{item.label}</span>
-            </dt>
-            <dd className="mt-1 font-mono text-lg font-bold tabular-nums text-foreground">
-              {item.value}
-            </dd>
-          </div>
-        ))}
-      </dl>
+      <DevventoryMetricStrip columns={5} items={items} />
     </div>
   );
 }

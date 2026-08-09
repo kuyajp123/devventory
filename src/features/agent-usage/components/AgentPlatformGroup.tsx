@@ -84,7 +84,7 @@ export function AgentPlatformGroup({
   return (
     <Card
       aria-label={`${group.label} platform accounts`}
-      className="overflow-hidden border border-divider bg-surface"
+      className="overflow-hidden border border-divider bg-surface rounded-[4px] shadow-none"
       role="region"
     >
       <Disclosure isExpanded={isExpanded} onExpandedChange={onExpandedChange}>

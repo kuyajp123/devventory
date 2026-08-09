@@ -244,9 +244,9 @@ export function FileInventoryPage() {
             File inventory
           </h1>
         </div>
-        <p className="text-xs text-muted max-w-3xl">
+        <p className="font-mono text-xs text-muted max-w-3xl">
           Explore and manage files and folders discovered in{' '}
-          <span className="font-mono font-medium text-foreground">
+          <span className="font-mono text-foreground">
             {activeProject.name}
           </span>
           .

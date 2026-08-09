@@ -1,5 +1,10 @@
 export { ConfirmDialog } from './ConfirmDialog';
 export { DevventoryDialog } from './DevventoryDialog';
+export { DevventoryMetricStrip } from './DevventoryMetricStrip';
+export type {
+  DevventoryMetricItem,
+  DevventoryMetricStripProps,
+} from './DevventoryMetricStrip';
 export { DialogBody } from './DialogBody';
 export { DialogFooter } from './DialogFooter';
 export { DialogHeader } from './DialogHeader';

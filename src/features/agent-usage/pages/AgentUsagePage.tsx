@@ -179,15 +179,23 @@ export function AgentUsagePage() {
       aria-labelledby="agent-usage-title"
       className="mx-auto w-full max-w-7xl space-y-4"
     >
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+      <header className="flex flex-col gap-3 pb-3 border-b border-divider sm:flex-row sm:items-start sm:justify-between">
         <div>
-          <h1
-            className="text-2xl font-semibold tracking-tight"
-            id="agent-usage-title"
-          >
-            Agent Usage
-          </h1>
-          <p className="mt-1 max-w-2xl text-sm text-muted">
+          <div className="flex items-center gap-2">
+            <IconRobot
+              aria-hidden="true"
+              className="text-accent"
+              size={22}
+              stroke={ICON_STROKE}
+            />
+            <h1
+              className="font-mono text-2xl font-semibold tracking-tight text-foreground"
+              id="agent-usage-title"
+            >
+              Agent Usage
+            </h1>
+          </div>
+          <p className="font-mono mt-1 max-w-2xl text-xs leading-relaxed text-muted">
             Track quota availability across your AI agent accounts. All usage
             snapshots stay on this device.
           </p>
@@ -200,7 +208,7 @@ export function AgentUsagePage() {
           />
           Add account
         </Button>
-      </div>
+      </header>
 
       <AgentUsageSummary accounts={accountItems} />
       <AgentUsageToolbar

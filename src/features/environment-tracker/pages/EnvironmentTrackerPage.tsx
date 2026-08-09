@@ -262,9 +262,9 @@ export function EnvironmentTrackerPage() {
             Environment Tracker
           </h1>
         </div>
-        <p className="text-xs text-muted max-w-3xl">
+        <p className="font-mono text-xs text-muted max-w-3xl">
           Track structural variable keys across environment sources for{' '}
-          <span className="font-mono font-medium text-foreground">
+          <span className="font-mono text-foreground">
             {activeProject.name}
           </span>
           .

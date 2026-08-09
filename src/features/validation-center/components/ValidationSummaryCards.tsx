@@ -1,4 +1,4 @@
-import { Card, Skeleton } from '@heroui/react';
+import { Skeleton } from '@heroui/react';
 import {
   IconAlertCircle,
   IconAlertTriangle,
@@ -6,7 +6,11 @@ import {
   IconHelpCircle,
 } from '@tabler/icons-react';
 import { ICON_SIZE, ICON_STROKE } from '@/shared/constants/icon.constants';
-import { SemanticStatusChip } from '@/shared/ui';
+import {
+  DevventoryMetricStrip,
+  type DevventoryMetricItem,
+  SemanticStatusChip,
+} from '@/shared/ui';
 import type { ValidationSummary } from '../models/validation';
 
 export function ValidationSummaryCards({
@@ -17,13 +21,7 @@ export function ValidationSummaryCards({
   summary?: ValidationSummary;
 }) {
   if (isLoading) {
-    return (
-      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        {Array.from({ length: 4 }, (_, index) => (
-          <Skeleton className="h-24 rounded-md" key={index} />
-        ))}
-      </div>
-    );
+    return <Skeleton className="h-16 w-full rounded-[4px]" />;
   }
 
   const health = summary?.health ?? 'unknown';
@@ -51,70 +49,46 @@ export function ValidationSummaryCards({
   }[health];
   const HealthIcon = healthPresentation.icon;
 
-  return (
-    <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-      <Card className="border border-divider bg-surface">
-        <Card.Content className="p-4">
-          <div className="flex items-center justify-between gap-3">
-            <div>
-              <p className="font-mono text-[10px] uppercase tracking-wider text-muted">
-                Project health
-              </p>
-              <p className="mt-1 text-lg font-semibold">
-                {healthPresentation.label}
-              </p>
-            </div>
-            <SemanticStatusChip
-              dataStatus={health}
-              label={healthPresentation.label}
-              labelClassName="flex items-center gap-1.5"
-              leadingContent={
-                <HealthIcon
-                  aria-hidden="true"
-                  size={ICON_SIZE.small}
-                  stroke={ICON_STROKE}
-                />
-              }
-              tone={healthPresentation.tone}
-            />
-          </div>
-        </Card.Content>
-      </Card>
-      <MetricCard label="Open issues" value={summary?.openIssues ?? 0} />
-      <MetricCard
-        label="Errors / warnings"
-        value={`${summary?.errorIssues ?? 0} / ${summary?.warningIssues ?? 0}`}
-      />
-      <MetricCard
-        label="Last successful validation"
-        value={formatTimestamp(summary?.lastSuccessfulAt)}
-      />
-    </div>
-  );
-}
+  const items: DevventoryMetricItem[] = [
+    {
+      label: 'Project health',
+      value: (
+        <div className="flex items-center justify-between gap-2">
+          <span>{healthPresentation.label}</span>
+          <SemanticStatusChip
+            dataStatus={health}
+            label={healthPresentation.label}
+            labelClassName="flex items-center gap-1 font-mono text-[10px]"
+            leadingContent={
+              <HealthIcon
+                aria-hidden="true"
+                size={ICON_SIZE.small}
+                stroke={ICON_STROKE}
+              />
+            }
+            tone={healthPresentation.tone}
+          />
+        </div>
+      ),
+    },
+    {
+      label: 'Open issues',
+      value: summary?.openIssues ?? 0,
+      valueClassName:
+        (summary?.openIssues ?? 0) > 0 ? 'text-danger' : 'text-foreground',
+    },
+    {
+      label: 'Errors / warnings',
+      value: `${summary?.errorIssues ?? 0} / ${summary?.warningIssues ?? 0}`,
+    },
+    {
+      label: 'Last successful validation',
+      value: formatTimestamp(summary?.lastSuccessfulAt),
+      valueClassName: 'text-sm font-medium text-muted',
+    },
+  ];
 
-function MetricCard({
-  label,
-  value,
-}: {
-  label: string;
-  value: number | string;
-}) {
-  return (
-    <Card className="border border-divider bg-surface">
-      <Card.Content className="p-4">
-        <p className="font-mono text-[10px] uppercase tracking-wider text-muted">
-          {label}
-        </p>
-        <p
-          className="mt-1 truncate text-lg font-semibold"
-          title={String(value)}
-        >
-          {value}
-        </p>
-      </Card.Content>
-    </Card>
-  );
+  return <DevventoryMetricStrip columns={4} items={items} />;
 }
 
 function formatTimestamp(value?: string | null): string {

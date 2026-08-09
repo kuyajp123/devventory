@@ -107,8 +107,8 @@ export function ValidationCenterPage() {
   }
 
   return (
-    <div className="mx-auto max-w-[1500px] space-y-5">
-      <header className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+    <div className="mx-auto max-w-[1500px] space-y-4">
+      <header className="flex flex-col gap-3 pb-3 border-b border-divider sm:flex-row sm:items-start sm:justify-between">
         <div>
           <div className="flex items-center gap-2">
             <IconShieldCheck
@@ -117,11 +117,11 @@ export function ValidationCenterPage() {
               size={22}
               stroke={ICON_STROKE}
             />
-            <h1 className="text-xl font-semibold tracking-tight">
+            <h1 className="font-mono text-2xl font-semibold tracking-tight text-foreground">
               Validation Center
             </h1>
           </div>
-          <p className="mt-1 max-w-3xl text-sm text-muted">
+          <p className="font-mono mt-1 max-w-3xl text-xs leading-relaxed text-muted">
             Compare environment key metadata across configured sources. Values
             are never stored, displayed, exported, or logged.
           </p>
@@ -210,10 +210,12 @@ export function ValidationCenterPage() {
         rules={ruleItems}
       />
 
-      <Card className="overflow-hidden border border-divider bg-surface">
+      <Card className="overflow-hidden border border-divider bg-surface rounded-[4px] shadow-none">
         <Card.Header className="border-b border-divider px-4 py-3">
-          <Card.Title>Validation issues</Card.Title>
-          <Card.Description>
+          <Card.Title className="text-sm font-semibold">
+            Validation issues
+          </Card.Title>
+          <Card.Description className="text-xs text-muted">
             Search and filter persisted metadata findings. Resolved issues
             remain reviewable.
           </Card.Description>
