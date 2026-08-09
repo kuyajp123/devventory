@@ -1,5 +1,6 @@
 import { Alert, Button, Spinner } from '@heroui/react';
 import { useCallback, useMemo, useRef, useState } from 'react';
+import { AssetFileInspector } from '@/features/asset-library';
 import { AppPagination } from '@/shared/ui/AppPagination';
 import { useProjectDirectoryQuery } from '../hooks/use-file-inventory';
 import type {
@@ -10,7 +11,6 @@ import type {
   SortDirection,
 } from '../models/file-inventory';
 import { getFolderBreadcrumbs } from '../models/inventory-tree';
-import { FileDetailsPanel } from './FileDetailsPanel';
 import { FolderBreadcrumb } from './FolderBreadcrumb';
 import { FolderContentsTable } from './FolderContentsTable';
 import { ProjectTree } from './ProjectTree';
@@ -108,11 +108,11 @@ export function FileExplorer({
 
   return (
     <div
-      className="flex min-h-0 flex-1 overflow-hidden rounded-md border border-divider bg-surface"
+      className="flex min-h-0 flex-1 rounded-md border border-divider bg-surface"
       style={{ height: 'calc(100vh - 240px)', minHeight: '400px' }}
     >
       <div
-        className="flex shrink-0 flex-col overflow-hidden border-r border-divider bg-sidebar"
+        className="flex shrink-0 flex-col overflow-hidden border-r border-divider bg-sidebar rounded-l-md"
         style={{ width: treeWidth }}
       >
         <div className="flex h-8 items-center border-b border-divider px-3">
@@ -140,7 +140,7 @@ export function FileExplorer({
         role="separator"
       />
 
-      <div className="flex min-w-0 flex-1 flex-col">
+      <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
         <div className="border-b border-divider">
           <FolderBreadcrumb
             onNavigate={handleSelectFolder}
@@ -223,14 +223,14 @@ export function FileExplorer({
             )}
           </div>
         )}
-
-        {selectedFile && (
-          <FileDetailsPanel
-            file={selectedFile}
-            onClose={() => setSelectedFile(null)}
-          />
-        )}
       </div>
+
+      {selectedFile && (
+        <AssetFileInspector
+          file={selectedFile}
+          onClose={() => setSelectedFile(null)}
+        />
+      )}
     </div>
   );
 }

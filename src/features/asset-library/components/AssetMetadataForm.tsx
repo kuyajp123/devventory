@@ -29,7 +29,17 @@ import {
   type AssetMetadataFormValues,
 } from '../models/asset';
 
-export function AssetMetadataForm({ asset }: { asset: Asset }) {
+interface AssetMetadataFormProps {
+  asset: Asset;
+  embedded?: boolean;
+  onSaved?: (asset: Asset) => void;
+}
+
+export function AssetMetadataForm({
+  asset,
+  embedded = false,
+  onSaved,
+}: AssetMetadataFormProps) {
   const update = useUpdateAssetMetadataMutation(asset.projectId);
   const {
     control,
@@ -47,7 +57,7 @@ export function AssetMetadataForm({ asset }: { asset: Asset }) {
 
   const submit = handleSubmit(async (values) => {
     try {
-      await update.mutateAsync({
+      const updated = await update.mutateAsync({
         assetId: asset.id,
         favorite: values.favorite,
         note: values.note || undefined,
@@ -55,6 +65,7 @@ export function AssetMetadataForm({ asset }: { asset: Asset }) {
         variantIds: asset.variantIds,
       });
       toast.success('Asset metadata saved');
+      onSaved?.(updated);
     } catch (error) {
       toast.danger(
         error instanceof TauriCommandError
@@ -65,14 +76,22 @@ export function AssetMetadataForm({ asset }: { asset: Asset }) {
   });
 
   return (
-    <Card>
-      <Card.Header>
-        <Card.Title>Managed metadata</Card.Title>
-        <Card.Description className="flex flex-row items-center justify-between">
-          <p>
+    <Card className={embedded ? 'border-0 bg-transparent' : undefined}>
+      {!embedded && (
+        <Card.Header>
+          <Card.Title>Managed metadata</Card.Title>
+          <Card.Description>
             Tags are reusable within this project. Variant relationships stay
             project-local.
-          </p>
+          </Card.Description>
+        </Card.Header>
+      )}
+      <Card.Content>
+        <Form
+          className="space-y-5"
+          onSubmit={(event) => event.preventDefault()}
+          validationBehavior="aria"
+        >
           <Controller
             control={control}
             name="favorite"
@@ -95,14 +114,7 @@ export function AssetMetadataForm({ asset }: { asset: Asset }) {
               </Switch>
             )}
           />
-        </Card.Description>
-      </Card.Header>
-      <Card.Content>
-        <Form
-          className="space-y-5"
-          onSubmit={(event) => event.preventDefault()}
-          validationBehavior="aria"
-        >
+
           {/* Tags field with icon cue */}
           <TextField
             fullWidth

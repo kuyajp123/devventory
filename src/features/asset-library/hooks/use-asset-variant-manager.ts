@@ -101,13 +101,15 @@ export function useAssetVariantManager(asset: Asset) {
 
   const save = async () => {
     try {
-      await updateVariants.mutateAsync({
+      const updated = await updateVariants.mutateAsync({
         assetId: asset.id,
         variantIds: excludedIds,
       });
       toast.success('Asset variants saved');
+      return updated;
     } catch (error) {
       toast.danger(commandMessage(error, 'Asset variants could not be saved.'));
+      return null;
     }
   };
 

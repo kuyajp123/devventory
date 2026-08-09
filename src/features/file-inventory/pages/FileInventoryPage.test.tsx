@@ -43,6 +43,29 @@ vi.mock('@/features/projects', () => ({
     selectProject: vi.fn(),
   }),
 }));
+vi.mock('@/features/asset-library', () => ({
+  AssetBrowser: ({ projectId }: { projectId: string }) => (
+    <section aria-label="Integrated asset browser">
+      Assets for {projectId}
+    </section>
+  ),
+  AssetFileInspector: ({
+    file,
+    onClose,
+  }: {
+    file: { name: string };
+    onClose: () => void;
+  }) => (
+    <aside aria-label={`File information for ${file.name}`}>
+      <button onClick={onClose} type="button">
+        Close file information
+      </button>
+    </aside>
+  ),
+  AssetImportControl: ({ destination }: { destination: string }) => (
+    <button type="button">Import to {destination}</button>
+  ),
+}));
 vi.mock('../services/file-inventory.gateway', () => ({
   fileInventoryGateway: {
     list: vi.fn(),
@@ -154,6 +177,59 @@ describe('FileInventoryPage', () => {
     );
     expect(
       await screen.findByText('Project inventory scan completed'),
+    ).toBeVisible();
+  });
+
+  it('opens file information on the right only while a file is selected', async () => {
+    const user = userEvent.setup();
+    renderWithProviders(
+      <MemoryRouter initialEntries={['/files']}>
+        <Routes>
+          <Route element={<FileInventoryPage />} path="/files" />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    expect(
+      screen.queryByRole('complementary', {
+        name: 'File information for main.ts',
+      }),
+    ).not.toBeInTheDocument();
+
+    await user.click(await screen.findByText('main.ts'));
+    expect(
+      screen.getByRole('complementary', {
+        name: 'File information for main.ts',
+      }),
+    ).toBeVisible();
+
+    await user.click(
+      screen.getByRole('button', { name: 'Close file information' }),
+    );
+    expect(
+      screen.queryByRole('complementary', {
+        name: 'File information for main.ts',
+      }),
+    ).not.toBeInTheDocument();
+  });
+
+  it('opens the integrated asset view and imports into the selected folder', async () => {
+    const user = userEvent.setup();
+    renderWithProviders(
+      <MemoryRouter initialEntries={['/files']}>
+        <Routes>
+          <Route element={<FileInventoryPage />} path="/files" />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    const sourceFolders = await screen.findAllByText('src');
+    await user.click(sourceFolders[0]);
+    expect(screen.getByRole('button', { name: 'Import to src' })).toBeVisible();
+
+    await user.click(screen.getByRole('button', { name: 'Assets' }));
+    expect(
+      screen.getByRole('region', { name: 'Integrated asset browser' }),
     ).toBeVisible();
   });
 

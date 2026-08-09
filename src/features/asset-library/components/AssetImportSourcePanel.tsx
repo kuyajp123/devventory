@@ -1,7 +1,7 @@
 import { Alert, Button, Card, Chip, Spinner } from '@heroui/react';
 import { IconFolderOpen } from '@tabler/icons-react';
 import { Link } from 'react-router';
-import { formatFileSize } from '@/features/file-inventory';
+import { formatFileSize } from '@/shared/models/indexed-file';
 import { ICON_SIZE, ICON_STROKE } from '@/shared/constants/icon.constants';
 import type { AssetPreview } from '../models/asset';
 

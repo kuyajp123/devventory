@@ -8,11 +8,11 @@ import {
 } from '@heroui/react';
 import { IconFilter, IconRefresh } from '@tabler/icons-react';
 import { type FormEvent, useState } from 'react';
+import { ICON_SIZE, ICON_STROKE } from '@/shared/constants/icon.constants';
 import {
   fileCategoryOptions,
   type FileCategory,
-} from '@/features/file-inventory';
-import { ICON_SIZE, ICON_STROKE } from '@/shared/constants/icon.constants';
+} from '@/shared/models/indexed-file';
 import type { AssetOrigin } from '../models/asset';
 import { AssetFilterSelect } from './AssetFilterSelect';
 

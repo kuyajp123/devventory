@@ -2,7 +2,7 @@ import { z } from 'zod';
 import {
   fileCategorySchema,
   type FileCategory,
-} from '@/features/file-inventory';
+} from '@/shared/models/indexed-file';
 
 export const assetOriginSchema = z.enum(['managed', 'discovered']);
 export type AssetOrigin = z.infer<typeof assetOriginSchema>;
@@ -246,4 +246,43 @@ export function parseTags(value: string): string[] {
         (candidate) => candidate.toLowerCase() === tag.toLowerCase(),
       ) === index,
   );
+}
+
+export function isImportDestinationAllowed(
+  destination: string,
+  watchedLocations: string[],
+): boolean {
+  const normalizedDestination = normalizeRelativeFolder(destination);
+  if (!normalizedDestination) return false;
+
+  return watchedLocations.some((location) => {
+    const normalizedLocation = normalizeRelativeFolder(location);
+    if (!normalizedLocation) return false;
+    return (
+      normalizedLocation === '.' ||
+      normalizedDestination === normalizedLocation ||
+      normalizedDestination.startsWith(`${normalizedLocation}/`)
+    );
+  });
+}
+
+function normalizeRelativeFolder(value: string): string | null {
+  const normalized = value.trim().replace(/\/+$/, '') || '.';
+  if (
+    normalized.includes('\\') ||
+    normalized.startsWith('/') ||
+    /^[a-zA-Z]:/.test(normalized)
+  ) {
+    return null;
+  }
+  const segments = normalized.split('/');
+  if (
+    segments.some(
+      (segment) =>
+        !segment || segment === '..' || (segment === '.' && normalized !== '.'),
+    )
+  ) {
+    return null;
+  }
+  return normalized;
 }

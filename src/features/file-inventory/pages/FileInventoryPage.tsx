@@ -2,6 +2,7 @@ import { Alert, Skeleton, Spinner, toast } from '@heroui/react';
 import { IconFiles } from '@tabler/icons-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router';
+import { AssetBrowser, AssetImportControl } from '@/features/asset-library';
 import { useActiveProject } from '@/features/projects';
 import { ICON_SIZE, ICON_STROKE } from '@/shared/constants/icon.constants';
 import { AppPagination } from '@/shared/ui/AppPagination';
@@ -42,7 +43,9 @@ export function FileInventoryPage() {
     isHydrating,
   } = useActiveProject();
   const [searchParams, setSearchParams] = useSearchParams();
-  const [view, setView] = useState<InventoryView>('explorer');
+  const [view, setView] = useState<InventoryView>(() =>
+    searchParams.get('view') === 'assets' ? 'assets' : 'explorer',
+  );
   const [folderSelection, setFolderSelection] = useState({
     path: '.',
     projectId,
@@ -111,7 +114,11 @@ export function FileInventoryPage() {
   const activeFilters = view === 'explorer' ? explorerFilters : allFilesFilters;
 
   // Queries
-  const inventory = useFileInventoryQuery(projectId ?? '', activeFilters);
+  const inventory = useFileInventoryQuery(
+    projectId ?? '',
+    activeFilters,
+    view !== 'assets',
+  );
   const rescanProject = useRescanProjectMutation(projectId ?? '');
   const rescanLocation = useRescanWatchedLocationMutation(projectId ?? '');
   const isScanning = rescanProject.isPending || rescanLocation.isPending;
@@ -173,6 +180,14 @@ export function FileInventoryPage() {
     },
     [projectId],
   );
+
+  function changeView(nextView: InventoryView) {
+    setView(nextView);
+    const nextParams = new URLSearchParams(searchParams);
+    if (nextView === 'assets') nextParams.set('view', 'assets');
+    else nextParams.delete('view');
+    setSearchParams(nextParams, { replace: true });
+  }
 
   // Scan handlers
   const mutationError = rescanProject.error ?? rescanLocation.error;
@@ -240,6 +255,20 @@ export function FileInventoryPage() {
 
       {/* Toolbar */}
       <ExplorerToolbar
+        actions={
+          view !== 'allFiles' ? (
+            <AssetImportControl
+              destination={
+                view === 'explorer'
+                  ? selectedFolder
+                  : (activeProject.watchedLocations[0] ?? '.')
+              }
+              key={`${projectId}:${view}:${view === 'explorer' ? selectedFolder : (activeProject.watchedLocations[0] ?? '.')}`}
+              projectId={projectId}
+              watchedLocations={activeProject.watchedLocations}
+            />
+          ) : undefined
+        }
         category={
           view === 'explorer' ? explorerCategory : allFilesFilters.category
         }
@@ -261,7 +290,7 @@ export function FileInventoryPage() {
             setExplorerPageState({ page: 1, projectId });
           }
         }}
-        onViewChange={setView}
+        onViewChange={changeView}
         search={
           view === 'explorer' ? searchInput : (allFilesFilters.search ?? '')
         }
@@ -270,15 +299,17 @@ export function FileInventoryPage() {
       />
 
       {/* Scan Summary Bar */}
-      <InventoryScanBar
-        directoriesVisited={latestScan?.directoriesVisited}
-        fileCount={
-          latestScan?.filesDiscovered ?? inventory.data?.totalItems ?? 0
-        }
-        isScanning={isScanning}
-        latestScan={latestScan}
-        onRescanProject={scanProject}
-      />
+      {view !== 'assets' && (
+        <InventoryScanBar
+          directoriesVisited={latestScan?.directoriesVisited}
+          fileCount={
+            latestScan?.filesDiscovered ?? inventory.data?.totalItems ?? 0
+          }
+          isScanning={isScanning}
+          latestScan={latestScan}
+          onRescanProject={scanProject}
+        />
+      )}
 
       {/* Error states */}
       {mutationError && (
@@ -312,6 +343,7 @@ export function FileInventoryPage() {
           folderContents={inventory.data}
           isFolderFetching={inventory.isFetching}
           isFolderLoading={inventory.isPending}
+          key={projectId}
           onFolderChange={handleFolderChange}
           onPageChange={handleExplorerPageChange}
           onSortChange={handleExplorerSortChange}
@@ -320,6 +352,10 @@ export function FileInventoryPage() {
           selectedFolder={selectedFolder}
           watchedLocations={activeProject.watchedLocations}
         />
+      )}
+
+      {view === 'assets' && (
+        <AssetBrowser key={projectId} projectId={projectId} />
       )}
 
       {/* All Files View (preserved existing behavior) */}

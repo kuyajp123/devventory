@@ -1,4 +1,4 @@
-import { fileCategorySchema } from '@/features/file-inventory';
+import { fileCategorySchema } from '@/shared/models/indexed-file';
 import {
   assetOriginSchema,
   assetSortFieldSchema,

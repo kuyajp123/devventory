@@ -79,23 +79,27 @@ test('adds a project through the selector and restores it after reload', async (
     page.getByText('Project inventory scan completed'),
   ).toBeVisible();
 
-  await primaryNavigation.getByRole('link', { name: 'Asset Library' }).click();
-  await expect(page).toHaveURL('/assets');
+  await page
+    .getByRole('group', { name: 'View mode' })
+    .getByRole('button', { name: 'Assets' })
+    .click();
+  await expect(page).toHaveURL('/files?view=assets');
   await expect(
-    page.getByRole('heading', { level: 1, name: 'Asset library' }),
+    page.getByRole('region', { name: 'Project assets' }),
   ).toBeVisible({ timeout: 30_000 });
-  await expect(page.getByRole('link', { name: 'main.ts' })).toBeVisible();
+  await expect(page.getByText('main.ts', { exact: true })).toBeVisible();
 
-  await page.getByRole('button', { name: 'Import asset' }).click();
-  await page.getByRole('button', { name: 'Choose source file' }).click();
+  await page.getByRole('button', { name: 'Import to project root' }).click();
   await expect(page.getByText('Safe metadata preview')).toBeVisible();
   await page.getByRole('button', { name: 'Import and index' }).click();
-  const importedAsset = page.getByRole('link', { name: 'logo.png' });
+  const importedAsset = page.getByRole('row', {
+    name: /logo\.png logo\.png/,
+  });
   await expect(importedAsset).toBeVisible();
   await importedAsset.click();
-  await expect(page).toHaveURL('/assets/8b2d755f-6639-448e-a4cf-3c8979820ceb');
+  await page.getByRole('button', { name: 'Manage variants' }).click();
   await expect(
-    page.getByRole('heading', { name: 'Manage variants' }),
+    page.getByRole('dialog', { name: 'Manage variants' }),
   ).toBeVisible();
   await page
     .getByRole('button', { name: 'Add assets/branding/logo-dark.png' })
@@ -105,9 +109,6 @@ test('adds a project through the selector and restores it after reload', async (
       name: 'Remove assets/branding/logo-dark.png',
     }),
   ).toBeVisible();
-  await page
-    .getByRole('button', { name: /^Selected variants, \d+ files$/ })
-    .click();
   await page.getByRole('button', { name: 'Save variants' }).click();
   await expect(
     page.getByRole('alertdialog', { name: 'Asset variants saved' }),

@@ -2,7 +2,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { act, renderHook } from '@testing-library/react';
 import type { PropsWithChildren } from 'react';
 import { describe, expect, it, vi } from 'vitest';
-import { fileInventoryKeys } from '@/features/file-inventory';
+import { fileInventoryProjectKeys } from '@/shared/query/file-inventory-query-keys';
 import { assetLibraryGateway } from '../services/asset-library.gateway';
 import { assetKeys, useImportAssetMutation } from './use-assets';
 
@@ -48,7 +48,7 @@ describe('useImportAssetMutation', () => {
       queryKey: assetKeys.project(projectId),
     });
     expect(invalidate).toHaveBeenCalledWith({
-      queryKey: fileInventoryKeys.project(projectId),
+      queryKey: fileInventoryProjectKeys.project(projectId),
     });
   });
 });

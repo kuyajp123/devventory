@@ -1,17 +1,15 @@
 import { z } from 'zod';
+import {
+  fileCategorySchema,
+  type FileCategory,
+} from '@/shared/models/indexed-file';
 
-export const fileCategorySchema = z.enum([
-  'source',
-  'document',
-  'image',
-  'audio',
-  'video',
-  'archive',
-  'font',
-  'configuration',
-  'other',
-]);
-export type FileCategory = z.infer<typeof fileCategorySchema>;
+export {
+  fileCategoryOptions,
+  fileCategorySchema,
+  formatFileSize,
+} from '@/shared/models/indexed-file';
+export type { FileCategory } from '@/shared/models/indexed-file';
 
 export const fileStatusSchema = z.enum(['active', 'missing']);
 export type FileStatus = z.infer<typeof fileStatusSchema>;
@@ -148,30 +146,3 @@ export const inventoryChangedPayloadSchema = z.object({
   scanId: z.string().uuid(),
   status: scanStatusSchema,
 });
-
-export const fileCategoryOptions: ReadonlyArray<{
-  label: string;
-  value: FileCategory;
-}> = [
-  { label: 'Source', value: 'source' },
-  { label: 'Documents', value: 'document' },
-  { label: 'Images', value: 'image' },
-  { label: 'Audio', value: 'audio' },
-  { label: 'Video', value: 'video' },
-  { label: 'Archives', value: 'archive' },
-  { label: 'Fonts', value: 'font' },
-  { label: 'Configuration', value: 'configuration' },
-  { label: 'Other', value: 'other' },
-];
-
-export function formatFileSize(bytes: number): string {
-  if (bytes < 1024) return `${bytes} B`;
-  const units = ['KB', 'MB', 'GB', 'TB'];
-  let value = bytes / 1024;
-  let unit = units[0];
-  for (let index = 1; index < units.length && value >= 1024; index += 1) {
-    value /= 1024;
-    unit = units[index];
-  }
-  return `${value >= 10 ? value.toFixed(0) : value.toFixed(1)} ${unit}`;
-}

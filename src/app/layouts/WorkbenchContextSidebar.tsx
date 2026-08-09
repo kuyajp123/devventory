@@ -3,12 +3,11 @@ import {
   IconChevronRight,
   IconFolder,
   IconLayoutSidebarLeftCollapse,
-  IconLibrary,
   IconRobot,
   IconShield,
 } from '@tabler/icons-react';
 import { useEffect } from 'react';
-import { useLocation, useNavigate, useSearchParams } from 'react-router';
+import { useLocation, useSearchParams } from 'react-router';
 import {
   DEFAULT_PROJECT_EXCLUSIONS,
   useActiveProject,
@@ -28,7 +27,6 @@ export function WorkbenchContextSidebar({
   const { activeProject } = useActiveProject();
   const location = useLocation();
   const [searchParams, setSearchParams] = useSearchParams();
-  const navigate = useNavigate();
 
   useEffect(() => {
     if (isCollapsed) return;
@@ -51,6 +49,8 @@ export function WorkbenchContextSidebar({
 
   const currentCategory = searchParams.get('category');
   const currentStatus = searchParams.get('status');
+  const isIntegratedAssetView =
+    location.pathname === '/files' && searchParams.get('view') === 'assets';
 
   function setFilter(key: string, value?: string) {
     const params = new URLSearchParams(searchParams);
@@ -214,7 +214,7 @@ export function WorkbenchContextSidebar({
             </>
           )}
 
-          {location.pathname === '/files' && (
+          {location.pathname === '/files' && !isIntegratedAssetView && (
             <>
               <SidebarSection title="Categories">
                 <div className="space-y-1">
@@ -288,54 +288,13 @@ export function WorkbenchContextSidebar({
             </>
           )}
 
-          {location.pathname.startsWith('/assets') && (
-            <>
-              <SidebarSection title="Asset Types">
-                <div className="space-y-1">
-                  {[
-                    { label: 'All Assets', value: undefined },
-                    { label: 'Images & Vectors', value: 'image' },
-                    { label: 'Fonts', value: 'font' },
-                    { label: 'Documents', value: 'document' },
-                    { label: 'Code & Schemas', value: 'code' },
-                  ].map((item) => {
-                    const isActive = currentCategory === item.value;
-                    return (
-                      <button
-                        className={`flex w-full items-center justify-between rounded px-2 py-1.5 text-xs transition-colors ${
-                          isActive
-                            ? 'bg-accent/15 text-accent font-medium'
-                            : 'text-secondary hover:bg-panel hover:text-foreground'
-                        }`}
-                        key={item.label}
-                        onClick={() => setFilter('category', item.value)}
-                        type="button"
-                      >
-                        <span>{item.label}</span>
-                        {isActive && (
-                          <IconChevronRight
-                            aria-hidden="true"
-                            className="shrink-0"
-                            size={14}
-                          />
-                        )}
-                      </button>
-                    );
-                  })}
-                </div>
-              </SidebarSection>
-
-              <SidebarSection title="Asset View">
-                <button
-                  className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-xs text-secondary hover:bg-panel hover:text-foreground"
-                  onClick={() => navigate('/assets')}
-                  type="button"
-                >
-                  <IconLibrary size={14} />
-                  <span>Browse All Assets</span>
-                </button>
-              </SidebarSection>
-            </>
+          {isIntegratedAssetView && (
+            <SidebarSection title="Asset view">
+              <p className="rounded-md border border-divider bg-panel p-2.5 text-xs leading-relaxed text-muted">
+                Select a file to inspect metadata, quick actions, and variants.
+                Asset filters are available above the file list.
+              </p>
+            </SidebarSection>
           )}
 
           {location.pathname === '/environments' && (

@@ -1,7 +1,6 @@
 import { Navigate, type RouteObject } from 'react-router';
 import { AppHealthPage } from '@/features/app-health';
 import { AgentUsagePage } from '@/features/agent-usage';
-import { FileInventoryPage } from '@/features/file-inventory';
 import { EnvironmentTrackerPage } from '@/features/environment-tracker';
 import { ValidationCenterPage } from '@/features/validation-center';
 import {
@@ -11,8 +10,9 @@ import {
 } from '@/features/projects';
 import { AppLayout } from '../layouts/AppLayout';
 import { NotFoundPage } from '../pages/NotFoundPage';
-import { LazyAssetDetailsPage, LazyAssetLibraryPage } from './LazyAssetRoutes';
+import { LazyAssetDetailsPage } from './LazyAssetRoutes';
 import { LazyDashboardRoute } from './LazyDashboardRoute';
+import { LazyFileInventoryRoute } from './LazyFileInventoryRoute';
 import { LazyGlobalSearchRoute } from './LazyGlobalSearchRoute';
 
 export const appRoutes: RouteObject[] = [
@@ -28,10 +28,13 @@ export const appRoutes: RouteObject[] = [
       {
         element: <ProjectRequiredRoute />,
         children: [
-          { path: 'files', Component: FileInventoryPage },
+          { path: 'files', Component: LazyFileInventoryRoute },
           { path: 'environments', Component: EnvironmentTrackerPage },
           { path: 'validation', Component: ValidationCenterPage },
-          { path: 'assets', Component: LazyAssetLibraryPage },
+          {
+            path: 'assets',
+            element: <Navigate replace to="/files?view=assets" />,
+          },
           { path: 'assets/:assetId', Component: LazyAssetDetailsPage },
         ],
       },

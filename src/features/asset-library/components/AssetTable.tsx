@@ -1,8 +1,8 @@
 import { Chip, EmptyState, Table } from '@heroui/react';
 import { IconFileOff, IconHeartFilled } from '@tabler/icons-react';
 import { Link } from 'react-router';
-import { formatFileSize } from '@/features/file-inventory';
 import { ICON_SIZE, ICON_STROKE } from '@/shared/constants/icon.constants';
+import { formatFileSize } from '@/shared/models/indexed-file';
 import {
   assetSortFieldSchema,
   type Asset,
@@ -13,7 +13,9 @@ import {
 interface AssetTableProps {
   assets: Asset[];
   hasFilters: boolean;
+  onSelectAsset?: (asset: Asset) => void;
   onSortChange: (sortBy: AssetSortField, direction: SortDirection) => void;
+  selectedAssetId?: string;
   sortBy: AssetSortField;
   sortDirection: SortDirection;
 }
@@ -21,7 +23,9 @@ interface AssetTableProps {
 export function AssetTable({
   assets,
   hasFilters,
+  onSelectAsset,
   onSortChange,
+  selectedAssetId,
   sortBy,
   sortDirection,
 }: AssetTableProps) {
@@ -69,7 +73,15 @@ export function AssetTable({
           </Table.Header>
           <Table.Body items={assets}>
             {(asset) => (
-              <Table.Row id={asset.id}>
+              <Table.Row
+                className={`${onSelectAsset ? 'cursor-pointer' : ''} ${
+                  selectedAssetId === asset.id ? 'bg-accent/5' : ''
+                }`}
+                id={asset.id}
+                onAction={
+                  onSelectAsset ? () => onSelectAsset(asset) : undefined
+                }
+              >
                 <Table.Cell className="max-w-lg">
                   <div className="flex min-w-0 items-start gap-2">
                     {asset.favorite && (
@@ -80,12 +92,18 @@ export function AssetTable({
                       />
                     )}
                     <div className="min-w-0">
-                      <Link
-                        className="block truncate font-medium text-accent hover:underline"
-                        to={`/assets/${asset.id}`}
-                      >
-                        {asset.name}
-                      </Link>
+                      {onSelectAsset ? (
+                        <span className="block truncate font-medium text-accent">
+                          {asset.name}
+                        </span>
+                      ) : (
+                        <Link
+                          className="block truncate font-medium text-accent hover:underline"
+                          to={`/assets/${asset.id}`}
+                        >
+                          {asset.name}
+                        </Link>
+                      )}
                       <p className="truncate font-mono text-xs text-muted">
                         {asset.relativePath}
                       </p>

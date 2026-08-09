@@ -1,13 +1,15 @@
 import { Label, ListBox, SearchField, Select } from '@heroui/react';
+import type { ReactNode } from 'react';
 import {
   type FileCategory,
   type FileStatus,
   fileCategoryOptions,
 } from '../models/file-inventory';
 
-export type InventoryView = 'explorer' | 'allFiles';
+export type InventoryView = 'explorer' | 'assets' | 'allFiles';
 
 interface ExplorerToolbarProps {
+  actions?: ReactNode;
   category: FileCategory | undefined;
   onCategoryChange: (category: FileCategory | undefined) => void;
   onSearchChange: (search: string) => void;
@@ -21,6 +23,7 @@ interface ExplorerToolbarProps {
 const ALL_ITEMS = 'all';
 
 export function ExplorerToolbar({
+  actions,
   category,
   onCategoryChange,
   onSearchChange,
@@ -123,35 +126,50 @@ export function ExplorerToolbar({
         <div />
       )}
 
-      <div
-        aria-label="View mode"
-        className="ml-auto inline-flex rounded-md border border-divider bg-surface p-0.5"
-        role="group"
-      >
-        <button
-          aria-pressed={view === 'explorer'}
-          className={`rounded-sm px-2.5 py-1 text-xs font-medium transition-colors ${
-            view === 'explorer'
-              ? 'bg-elevated text-accent'
-              : 'text-muted hover:text-foreground'
-          }`}
-          onClick={() => onViewChange('explorer')}
-          type="button"
+      <div className="ml-auto flex items-center gap-2">
+        {actions}
+        <div
+          aria-label="View mode"
+          className="inline-flex rounded-md border border-divider bg-surface p-0.5"
+          role="group"
         >
-          Explorer
-        </button>
-        <button
-          aria-pressed={view === 'allFiles'}
-          className={`rounded-sm px-2.5 py-1 text-xs font-medium transition-colors ${
-            view === 'allFiles'
-              ? 'bg-elevated text-accent'
-              : 'text-muted hover:text-foreground'
-          }`}
-          onClick={() => onViewChange('allFiles')}
-          type="button"
-        >
-          All files
-        </button>
+          <button
+            aria-pressed={view === 'explorer'}
+            className={`rounded-sm px-2.5 py-1 text-xs font-medium transition-colors ${
+              view === 'explorer'
+                ? 'bg-elevated text-accent'
+                : 'text-muted hover:text-foreground'
+            }`}
+            onClick={() => onViewChange('explorer')}
+            type="button"
+          >
+            Explorer
+          </button>
+          <button
+            aria-pressed={view === 'assets'}
+            className={`rounded-sm px-2.5 py-1 text-xs font-medium transition-colors ${
+              view === 'assets'
+                ? 'bg-elevated text-accent'
+                : 'text-muted hover:text-foreground'
+            }`}
+            onClick={() => onViewChange('assets')}
+            type="button"
+          >
+            Assets
+          </button>
+          <button
+            aria-pressed={view === 'allFiles'}
+            className={`rounded-sm px-2.5 py-1 text-xs font-medium transition-colors ${
+              view === 'allFiles'
+                ? 'bg-elevated text-accent'
+                : 'text-muted hover:text-foreground'
+            }`}
+            onClick={() => onViewChange('allFiles')}
+            type="button"
+          >
+            All files
+          </button>
+        </div>
       </div>
     </div>
   );

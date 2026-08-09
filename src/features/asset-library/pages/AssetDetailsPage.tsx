@@ -1,4 +1,4 @@
-import { formatFileSize } from '@/features/file-inventory';
+import { formatFileSize } from '@/shared/models/indexed-file';
 import { useActiveProject } from '@/features/projects';
 import { ICON_SIZE, ICON_STROKE } from '@/shared/constants/icon.constants';
 import { Alert, Card, Chip, Skeleton } from '@heroui/react';

@@ -6,6 +6,7 @@ import {
   useQueryClient,
 } from '@tanstack/react-query';
 import { invalidateDerivedProjectQueries } from '@/shared/query/derived-query-keys';
+import { fileInventoryProjectKeys } from '@/shared/query/file-inventory-query-keys';
 import type {
   InventoryFilters,
   ProjectDirectoryPage,
@@ -13,8 +14,7 @@ import type {
 import { fileInventoryGateway } from '../services/file-inventory.gateway';
 
 export const fileInventoryKeys = {
-  all: ['file-inventory'] as const,
-  project: (projectId: string) => ['file-inventory', projectId] as const,
+  ...fileInventoryProjectKeys,
   list: (projectId: string, filters: InventoryFilters) =>
     ['file-inventory', projectId, 'list', filters] as const,
   directory: (projectId: string, relativePath: string) =>
@@ -24,9 +24,10 @@ export const fileInventoryKeys = {
 export function useFileInventoryQuery(
   projectId: string,
   filters: InventoryFilters,
+  enabled = true,
 ) {
   return useQuery({
-    enabled: Boolean(projectId),
+    enabled: enabled && Boolean(projectId),
     queryKey: fileInventoryKeys.list(projectId, filters),
     queryFn: () => fileInventoryGateway.list(projectId, filters),
   });

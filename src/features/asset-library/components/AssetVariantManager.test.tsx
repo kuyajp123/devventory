@@ -54,10 +54,13 @@ describe('AssetVariantManager', () => {
     const user = userEvent.setup();
     renderWithProviders(<AssetVariantManager asset={asset} />);
 
+    await user.click(screen.getByRole('button', { name: 'Manage variants' }));
     expect(
       await screen.findByRole('heading', { name: 'Manage variants' }),
     ).toBeVisible();
-    expect(screen.getByText(asset.relativePath)).toBeVisible();
+    expect(
+      screen.getByText(`Current file: ${asset.relativePath}`),
+    ).toBeVisible();
     expect(await screen.findByText(existing.relativePath)).toBeVisible();
 
     await user.click(
@@ -89,6 +92,7 @@ describe('AssetVariantManager', () => {
   it('searches and changes scope without loading the complete inventory', async () => {
     const user = userEvent.setup();
     renderWithProviders(<AssetVariantManager asset={asset} />);
+    await user.click(screen.getByRole('button', { name: 'Manage variants' }));
     await screen.findByText(suggested.relativePath);
 
     await user.click(screen.getByRole('button', { name: 'Entire project' }));

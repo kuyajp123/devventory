@@ -4,8 +4,8 @@ import {
   useQuery,
   useQueryClient,
 } from '@tanstack/react-query';
-import { fileInventoryKeys } from '@/features/file-inventory';
 import { invalidateDerivedProjectQueries } from '@/shared/query/derived-query-keys';
+import { fileInventoryProjectKeys } from '@/shared/query/file-inventory-query-keys';
 import type {
   AssetFilters,
   ImportAssetInput,
@@ -107,7 +107,7 @@ export function useImportAssetMutation(projectId: string) {
           queryKey: assetKeys.project(projectId),
         }),
         queryClient.invalidateQueries({
-          queryKey: fileInventoryKeys.project(projectId),
+          queryKey: fileInventoryProjectKeys.project(projectId),
         }),
         invalidateDerivedProjectQueries(queryClient, projectId),
       ]);

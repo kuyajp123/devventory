@@ -98,7 +98,7 @@ export function VariantCandidateBrowser(props: VariantCandidateBrowserProps) {
         </Card>
       )}
 
-      <div className="flex flex-col gap-3 lg:flex-row lg:items-end">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
         <TextField className="min-w-0 flex-1" variant="secondary">
           <Label>Search variant filename or path</Label>
           <div className="relative">

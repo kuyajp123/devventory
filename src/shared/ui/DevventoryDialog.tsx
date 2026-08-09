@@ -5,15 +5,18 @@ interface DevventoryDialogProps {
   children: ReactNode;
   isOpen: boolean;
   onOpenChange: (isOpen: boolean) => void;
-  size?: 'sm' | 'md' | 'lg' | 'xl';
+  size?: 'sm' | 'md' | 'lg' | 'xl' | '2xl' | '3xl' | '4xl';
   scroll?: boolean;
 }
 
-const sizeClasses = {
-  sm: 'max-w-[420px]',
-  md: 'max-w-[520px]',
-  lg: 'max-w-[680px]',
-  xl: 'max-w-[860px]',
+const sizeMaxWidths: Record<string, string> = {
+  sm: '420px',
+  md: '520px',
+  lg: '680px',
+  xl: '860px',
+  '2xl': '1080px',
+  '3xl': '1240px',
+  '4xl': '1400px',
 };
 
 export function DevventoryDialog({
@@ -23,6 +26,8 @@ export function DevventoryDialog({
   size = 'md',
   scroll = false,
 }: DevventoryDialogProps) {
+  const maxWidth = sizeMaxWidths[size] ?? sizeMaxWidths.md;
+
   return (
     <Modal>
       <Modal.Backdrop
@@ -31,13 +36,18 @@ export function DevventoryDialog({
         variant="blur"
       >
         <Modal.Container
-          className={sizeClasses[size]}
+          className="w-full !max-w-[calc(100vw-2rem)]"
           scroll={scroll ? 'inside' : undefined}
         >
           <Modal.Dialog
-            className="flex max-h-[min(80vh,720px)] flex-col overflow-hidden rounded-[4px] border border-divider bg-surface shadow-lg"
+            className="flex w-full flex-col overflow-hidden rounded-[4px] border border-divider bg-surface shadow-lg"
             role="dialog"
             aria-modal="true"
+            style={{
+              width: '100%',
+              maxWidth,
+              maxHeight: 'min(85vh, 760px)',
+            }}
           >
             {children}
           </Modal.Dialog>

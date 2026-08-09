@@ -55,6 +55,7 @@ describe('AssetImportModal', () => {
     renderWithProviders(
       <MemoryRouter>
         <AssetImportModal
+          initialDestination="assets/branding"
           initialSourcePath={String.raw`C:\external\logo.png`}
           isOpen
           onOpenChange={onOpenChange}
@@ -69,7 +70,7 @@ describe('AssetImportModal', () => {
 
     expect(assetLibraryGateway.import).toHaveBeenCalledWith({
       collision: 'cancel',
-      destination: 'assets',
+      destination: 'assets/branding',
       favorite: false,
       filename: undefined,
       note: undefined,

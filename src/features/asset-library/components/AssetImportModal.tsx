@@ -25,6 +25,7 @@ import { AssetImportSourcePanel } from './AssetImportSourcePanel';
 import { AssetOperationError } from './AssetOperationError';
 
 interface AssetImportModalProps {
+  initialDestination?: string;
   initialSourcePath: string | null;
   isOpen: boolean;
   onOpenChange: (isOpen: boolean) => void;
@@ -33,6 +34,7 @@ interface AssetImportModalProps {
 }
 
 export function AssetImportModal({
+  initialDestination,
   initialSourcePath,
   isOpen,
   onOpenChange,
@@ -54,7 +56,7 @@ export function AssetImportModal({
   } = useForm<AssetImportFormValues>({
     defaultValues: {
       collision: 'cancel',
-      destination: watchedLocations[0] ?? '.',
+      destination: initialDestination ?? watchedLocations[0] ?? '.',
       favorite: false,
       filename: '',
       note: '',

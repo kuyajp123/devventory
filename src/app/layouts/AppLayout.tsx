@@ -8,7 +8,6 @@ import {
   IconLayoutDashboard,
   IconLayoutSidebarLeftCollapse,
   IconLayoutSidebarLeftExpand,
-  IconLibrary,
   IconMoon,
   IconRobot,
   IconSearch,
@@ -37,12 +36,6 @@ const navigationItems = [
     label: 'File Inventory',
     requiresProject: true,
     to: '/files',
-  },
-  {
-    icon: IconLibrary,
-    label: 'Asset Library',
-    requiresProject: true,
-    to: '/assets',
   },
   {
     icon: IconAdjustments,

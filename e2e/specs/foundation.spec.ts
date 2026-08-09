@@ -46,13 +46,7 @@ test('navigates through the project-aware application shell', async ({
   await expect(page.getByRole('link', { name: 'Home' })).toHaveCount(0);
   await expect(page.getByRole('link', { name: 'Projects' })).toHaveCount(0);
 
-  // These modules are buttons while no project is active.
-  await expect(
-    primaryNavigation.getByRole('button', {
-      name: 'Asset Library (requires active project)',
-    }),
-  ).toBeVisible();
-
+  // Project-scoped modules are buttons while no project is active.
   await expect(
     primaryNavigation.getByRole('button', {
       name: 'File Inventory (requires active project)',
