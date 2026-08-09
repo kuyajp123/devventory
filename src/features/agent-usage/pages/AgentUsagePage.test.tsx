@@ -1,4 +1,4 @@
-import { screen, waitFor, within } from '@testing-library/react';
+import { fireEvent, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { TauriCommandError } from '@/shared/infrastructure/tauri/tauri-error';
@@ -11,7 +11,6 @@ vi.mock('../services/agent-usage.gateway', () => ({
     deleteAccount: vi.fn(),
     deleteQuota: vi.fn(),
     listAccounts: vi.fn(),
-    previewReset: vi.fn(),
     saveAccount: vi.fn(),
     saveQuota: vi.fn(),
     takeDueReminders: vi.fn(),
@@ -24,13 +23,6 @@ describe('AgentUsagePage', () => {
     vi.mocked(agentUsageGateway.listAccounts).mockResolvedValue([
       accountResponse(),
     ]);
-    vi.mocked(agentUsageGateway.previewReset).mockResolvedValue({
-      hadExplicitTimezone: false,
-      interpretation: '2026-08-14 15:00 +08',
-      method: 'pasted',
-      resetAt: '2026-08-14T07:00:00Z',
-      timezone: 'Asia/Manila',
-    });
     vi.mocked(agentUsageGateway.saveQuota).mockResolvedValue(quotaResponse());
     vi.mocked(agentUsageGateway.deleteAccount).mockResolvedValue(undefined);
     vi.mocked(agentUsageGateway.deleteQuota).mockResolvedValue(undefined);
@@ -326,7 +318,7 @@ describe('AgentUsagePage', () => {
     );
   });
 
-  it('requires confirmation before saving a deterministically parsed reset', async () => {
+  it('saves a quota window with an exact date and time without a preview step', async () => {
     const user = userEvent.setup();
     renderWithProviders(<AgentUsagePage />);
 
@@ -336,21 +328,12 @@ describe('AgentUsagePage', () => {
         name: 'Add quota for paul+codex@example.com',
       }),
     );
-    await user.click(screen.getByRole('button', { name: 'Paste message' }));
-    await user.type(
-      screen.getByLabelText('Provider reset message'),
-      'Your limit resets Friday at 3:00 PM',
-    );
-    expect(screen.getByRole('button', { name: 'Save quota' })).toBeDisabled();
-    await user.click(screen.getByRole('button', { name: 'Preview reset' }));
-    expect(await screen.findByText('2026-08-14 15:00 +08')).toBeVisible();
-    await user.click(
-      screen.getByRole('checkbox', {
-        name: 'I confirm this interpreted reset time',
-      }),
-    );
+
+    // The dialog opens with Exact date & time selected by default.
+    // The Save quota button is available immediately (no preview/confirm step).
     const saveButton = screen.getByRole('button', { name: 'Save quota' });
-    await waitFor(() => expect(saveButton).toBeEnabled());
+    expect(saveButton).not.toBeDisabled();
+
     await user.click(saveButton);
 
     await waitFor(() =>
@@ -359,12 +342,72 @@ describe('AgentUsagePage', () => {
           accountId: '30af17bd-2dd6-4b89-a5e7-8517191815a7',
           label: 'Weekly',
           remainingPercent: null,
-          resetAt: '2026-08-14T07:00:00Z',
           timezone: 'Asia/Manila',
-          trackingSource: 'pasted',
+          trackingSource: 'manual',
         }),
       ),
     );
+    // The computed resetAt is a future UTC ISO string.
+    const call = vi.mocked(agentUsageGateway.saveQuota).mock.calls[0][0];
+    expect(new Date(call.resetAt).getTime()).toBeGreaterThan(Date.now());
+  });
+
+  it('shows an inline error and blocks save when relative reset delta is zero', async () => {
+    const user = userEvent.setup();
+    renderWithProviders(<AgentUsagePage />);
+
+    await expandAccount(user);
+    await user.click(
+      screen.getByRole('button', {
+        name: 'Add quota for paul+codex@example.com',
+      }),
+    );
+
+    await user.click(screen.getByRole('button', { name: 'Reset in' }));
+    // Clear all three fields to zero
+    fireEvent.change(screen.getByLabelText('Days'), { target: { value: '0' } });
+    fireEvent.change(screen.getByLabelText('Hours'), {
+      target: { value: '0' },
+    });
+    fireEvent.change(screen.getByLabelText('Minutes'), {
+      target: { value: '0' },
+    });
+
+    await user.click(screen.getByRole('button', { name: 'Save quota' }));
+
+    expect(
+      await screen.findByText('Enter a positive duration (at least 1 minute).'),
+    ).toBeVisible();
+    expect(agentUsageGateway.saveQuota).not.toHaveBeenCalled();
+  });
+
+  it('saves a valid relative reset quota', async () => {
+    const user = userEvent.setup();
+    renderWithProviders(<AgentUsagePage />);
+
+    await expandAccount(user);
+    await user.click(
+      screen.getByRole('button', {
+        name: 'Add quota for paul+codex@example.com',
+      }),
+    );
+
+    await user.click(screen.getByRole('button', { name: 'Reset in' }));
+    await user.clear(screen.getByLabelText('Days'));
+    await user.type(screen.getByLabelText('Days'), '7');
+
+    await user.click(screen.getByRole('button', { name: 'Save quota' }));
+
+    await waitFor(() =>
+      expect(agentUsageGateway.saveQuota).toHaveBeenCalledWith(
+        expect.objectContaining({
+          trackingSource: 'manual',
+        }),
+      ),
+    );
+    const call = vi.mocked(agentUsageGateway.saveQuota).mock.calls[0][0];
+    // 7 days from now should be in the future
+    expect(new Date(call.resetAt).getTime()).toBeGreaterThan(Date.now());
   });
 
   it('shows duplicate quota-label conflicts on the label field instead of a toast', async () => {
@@ -383,17 +426,7 @@ describe('AgentUsagePage', () => {
         name: 'Add quota for paul+codex@example.com',
       }),
     );
-    await user.click(screen.getByRole('button', { name: 'Paste message' }));
-    await user.type(
-      screen.getByLabelText('Provider reset message'),
-      'Your limit resets Friday at 3:00 PM',
-    );
-    await user.click(screen.getByRole('button', { name: 'Preview reset' }));
-    await user.click(
-      await screen.findByRole('checkbox', {
-        name: 'I confirm this interpreted reset time',
-      }),
-    );
+    // Use the Exact date & time mode (default) – Save quota is available immediately.
     await user.click(screen.getByRole('button', { name: 'Save quota' }));
 
     const label = screen.getByLabelText('Quota window label');
@@ -408,7 +441,7 @@ describe('AgentUsagePage', () => {
     expect(screen.queryByText(message)).not.toBeInTheDocument();
   });
 
-  it('previews exact and normalized relative reset inputs in the account timezone', async () => {
+  it('Paste message button is not present in the dialog', async () => {
     const user = userEvent.setup();
     renderWithProviders(<AgentUsagePage />);
 
@@ -418,32 +451,13 @@ describe('AgentUsagePage', () => {
         name: 'Add quota for paul+codex@example.com',
       }),
     );
-    await user.click(screen.getByRole('button', { name: 'Preview reset' }));
-    await waitFor(() =>
-      expect(agentUsageGateway.previewReset).toHaveBeenLastCalledWith(
-        expect.objectContaining({
-          method: 'exact',
-          time: '09:00',
-          timezone: 'Asia/Manila',
-        }),
-      ),
-    );
 
-    await user.click(screen.getByRole('button', { name: 'Reset in' }));
-    await user.clear(screen.getByLabelText('Days'));
-    await user.type(screen.getByLabelText('Days'), '6');
-    await user.clear(screen.getByLabelText('Hours'));
-    await user.type(screen.getByLabelText('Hours'), '24');
-    await user.click(screen.getByRole('button', { name: 'Preview reset' }));
-    await waitFor(() =>
-      expect(agentUsageGateway.previewReset).toHaveBeenLastCalledWith({
-        days: 6,
-        hours: 24,
-        method: 'relative',
-        minutes: 0,
-        timezone: 'Asia/Manila',
-      }),
-    );
+    expect(
+      screen.queryByRole('button', { name: 'Paste message' }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: 'Preview reset' }),
+    ).not.toBeInTheDocument();
   });
 
   it('edits and removes quota windows without requiring usage percentage', async () => {

@@ -6,8 +6,8 @@ use tauri::Manager;
 
 use app::state::AppState;
 use features::agent_usage::commands::{
-    delete_agent_account, delete_agent_quota, list_agent_accounts, preview_agent_reset,
-    save_agent_account, save_agent_quota, take_due_agent_reminders,
+    delete_agent_account, delete_agent_quota, list_agent_accounts, save_agent_account,
+    save_agent_quota, take_due_agent_reminders,
 };
 use features::app_health::commands::health_check;
 use features::asset_library::commands::{
@@ -67,7 +67,6 @@ pub fn run() {
             delete_agent_account,
             save_agent_quota,
             delete_agent_quota,
-            preview_agent_reset,
             take_due_agent_reminders,
             validate_project_root,
             scan_project_root,

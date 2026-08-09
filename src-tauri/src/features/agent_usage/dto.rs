@@ -2,14 +2,10 @@ use chrono::{DateTime, Utc};
 use serde::Deserialize;
 use uuid::Uuid;
 
-use super::{
-    error::AgentUsageError,
-    model::{
+use super::{error::AgentUsageError, model::{
         AgentPlatform, ReminderPreferences, SaveAgentAccount, SaveQuotaWindow, SignInMethod,
         TrackingMode, TrackingSource,
-    },
-    reset_parser::{parse_pasted_reset, preview_exact_reset, preview_relative_reset, ResetPreview},
-};
+    }};
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -116,45 +112,6 @@ impl AgentQuotaIdInput {
     }
 }
 
-#[derive(Debug, Deserialize)]
-#[serde(tag = "method", rename_all = "camelCase", deny_unknown_fields)]
-pub(crate) enum ResetPreviewInput {
-    Exact {
-        date: String,
-        time: String,
-        timezone: String,
-    },
-    Relative {
-        days: u32,
-        hours: u32,
-        minutes: u32,
-        timezone: String,
-    },
-    Pasted {
-        text: String,
-        timezone: String,
-    },
-}
-
-impl ResetPreviewInput {
-    pub(crate) fn preview(self) -> Result<ResetPreview, AgentUsageError> {
-        match self {
-            Self::Exact {
-                date,
-                time,
-                timezone,
-            } => preview_exact_reset(&date, &time, &timezone),
-            Self::Relative {
-                days,
-                hours,
-                minutes,
-                timezone,
-            } => preview_relative_reset(Utc::now(), days, hours, minutes, &timezone),
-            Self::Pasted { text, timezone } => parse_pasted_reset(&text, &timezone, Utc::now()),
-        }
-        .map_err(|_| AgentUsageError::InvalidInput)
-    }
-}
 
 fn parse_uuid(value: &str) -> Result<Uuid, AgentUsageError> {
     Uuid::parse_str(value).map_err(|_| AgentUsageError::InvalidInput)

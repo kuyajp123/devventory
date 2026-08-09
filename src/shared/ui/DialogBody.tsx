@@ -4,11 +4,18 @@ import type { ReactNode } from 'react';
 interface DialogBodyProps {
   children: ReactNode;
   className?: string;
+  scrollable?: boolean;
 }
 
-export function DialogBody({ children, className = '' }: DialogBodyProps) {
+export function DialogBody({
+  children,
+  className = '',
+  scrollable = true,
+}: DialogBodyProps) {
   return (
-    <Modal.Body className={`flex-1 overflow-y-auto px-4 py-3 ${className}`}>
+    <Modal.Body
+      className={`flex-1 ${scrollable ? 'overflow-y-auto' : 'overflow-y-visible'} px-4 py-3 ${className}`}
+    >
       {children}
     </Modal.Body>
   );

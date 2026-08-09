@@ -4,7 +4,6 @@ mod dto;
 mod error;
 mod model;
 mod repository;
-mod reset_parser;
 mod service;
 
 pub(crate) use repository::SqliteAgentUsageRepository;

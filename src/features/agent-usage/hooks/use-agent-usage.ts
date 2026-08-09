@@ -1,6 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type {
-  ResetPreviewInput,
   SaveAgentAccountInput,
   SaveAgentQuotaInput,
 } from '../models/agent-usage';
@@ -57,13 +56,6 @@ export function useDeleteAgentQuotaMutation() {
     mutationFn: (input: { accountId: string; quotaId: string }) =>
       agentUsageGateway.deleteQuota(input.accountId, input.quotaId),
     onSuccess: invalidate,
-  });
-}
-
-export function usePreviewAgentResetMutation() {
-  return useMutation({
-    mutationFn: (input: ResetPreviewInput) =>
-      agentUsageGateway.previewReset(input),
   });
 }
 

@@ -3,12 +3,8 @@ use tauri::State;
 use crate::{app::state::AppState, shared::errors::command::CommandError};
 
 use super::{
-    dto::{
-        AgentAccountInput, AgentQuotaIdInput, AgentQuotaInput, AgentRecordIdInput,
-        ResetPreviewInput,
-    },
+    dto::{AgentAccountInput, AgentQuotaIdInput, AgentQuotaInput, AgentRecordIdInput},
     model::{AgentAccount, AgentQuotaWindow, AgentReminder},
-    reset_parser::ResetPreview,
 };
 
 #[tauri::command]
@@ -71,10 +67,6 @@ pub(crate) async fn delete_agent_quota(
         .map_err(Into::into)
 }
 
-#[tauri::command]
-pub(crate) fn preview_agent_reset(input: ResetPreviewInput) -> Result<ResetPreview, CommandError> {
-    input.preview().map_err(Into::into)
-}
 
 #[tauri::command]
 pub(crate) async fn take_due_agent_reminders(

@@ -104,17 +104,6 @@ export const agentReminderSchema = z
   .strict();
 export type AgentReminder = z.infer<typeof agentReminderSchema>;
 
-export const resetPreviewSchema = z
-  .object({
-    hadExplicitTimezone: z.boolean(),
-    interpretation: z.string().min(1),
-    method: z.enum(['exact', 'relative', 'pasted']),
-    resetAt: z.string().min(1),
-    timezone: z.string().min(1),
-  })
-  .strict();
-export type ResetPreview = z.infer<typeof resetPreviewSchema>;
-
 export const agentAccountFormSchema = z
   .object({
     customPlatform: z.string().trim().max(80),
@@ -179,17 +168,6 @@ export interface AgentQuotaSaveError {
   field: 'form' | 'label';
   message: string;
 }
-
-export type ResetPreviewInput =
-  | { date: string; method: 'exact'; time: string; timezone: string }
-  | {
-      days: number;
-      hours: number;
-      method: 'relative';
-      minutes: number;
-      timezone: string;
-    }
-  | { method: 'pasted'; text: string; timezone: string };
 
 export const PLATFORM_LABELS: Record<AgentPlatform, string> = {
   antigravity: 'Antigravity',

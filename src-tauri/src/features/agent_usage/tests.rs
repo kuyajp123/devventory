@@ -12,7 +12,6 @@ use super::model::{
     SignInMethod, TrackingMode, TrackingSource,
 };
 use super::repository::SqliteAgentUsageRepository;
-use super::reset_parser::{parse_pasted_reset, preview_exact_reset, preview_relative_reset};
 use crate::shared::database::{initialize_database, DatabasePaths};
 
 fn quota(remaining_percent: Option<f64>, reset_at: &str) -> QuotaWindowState {
@@ -127,52 +126,6 @@ fn next_reset_uses_the_earliest_future_unreached_window() {
     );
 }
 
-#[test]
-fn exact_and_relative_resets_are_timezone_safe_and_normalized() {
-    let now = Utc.with_ymd_and_hms(2026, 8, 8, 12, 0, 0).unwrap();
-    let exact = preview_exact_reset("2026-08-14", "15:00", "Asia/Manila")
-        .expect("exact reset should parse");
-    assert_eq!(exact.reset_at.to_rfc3339(), "2026-08-14T07:00:00+00:00");
-    assert_eq!(exact.timezone, "Asia/Manila");
-
-    let relative =
-        preview_relative_reset(now, 6, 24, 0, "Asia/Manila").expect("relative reset should parse");
-    assert_eq!(relative.reset_at.to_rfc3339(), "2026-08-15T12:00:00+00:00");
-}
-
-#[test]
-fn pasted_reset_parser_handles_iso_relative_and_common_dates() {
-    let now = Utc.with_ymd_and_hms(2026, 8, 8, 12, 0, 0).unwrap();
-
-    let iso = parse_pasted_reset("2026-08-14T15:00:00+08:00", "Asia/Manila", now)
-        .expect("ISO reset should parse");
-    assert_eq!(iso.reset_at.to_rfc3339(), "2026-08-14T07:00:00+00:00");
-    assert!(iso.had_explicit_timezone);
-
-    let relative = parse_pasted_reset(
-        "Your limit resets in 6 days and 4 hours",
-        "Asia/Manila",
-        now,
-    )
-    .expect("relative reset should parse");
-    assert_eq!(relative.reset_at.to_rfc3339(), "2026-08-14T16:00:00+00:00");
-
-    let weekday = parse_pasted_reset("Your limit resets Friday at 3:00 PM", "Asia/Manila", now)
-        .expect("weekday reset should parse");
-    assert_eq!(weekday.reset_at.to_rfc3339(), "2026-08-14T07:00:00+00:00");
-    assert_eq!(weekday.timezone, "Asia/Manila");
-    assert!(!weekday.had_explicit_timezone);
-
-    let month = parse_pasted_reset("August 14 at 3 PM", "Asia/Manila", now)
-        .expect("month reset should parse");
-    assert_eq!(month.reset_at.to_rfc3339(), "2026-08-14T07:00:00+00:00");
-}
-
-#[test]
-fn pasted_reset_parser_rejects_ambiguous_text() {
-    let now = Utc.with_ymd_and_hms(2026, 8, 8, 12, 0, 0).unwrap();
-    assert!(parse_pasted_reset("sometime Friday", "Asia/Manila", now).is_err());
-}
 
 fn account(identifier: &str) -> SaveAgentAccount {
     SaveAgentAccount {

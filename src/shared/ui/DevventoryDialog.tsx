@@ -7,6 +7,7 @@ interface DevventoryDialogProps {
   onOpenChange: (isOpen: boolean) => void;
   size?: 'sm' | 'md' | 'lg' | 'xl' | '2xl' | '3xl' | '4xl';
   scroll?: boolean;
+  bodyScrollable?: boolean;
 }
 
 const sizeMaxWidths: Record<string, string> = {
@@ -25,6 +26,7 @@ export function DevventoryDialog({
   onOpenChange,
   size = 'md',
   scroll = false,
+  bodyScrollable = true,
 }: DevventoryDialogProps) {
   const maxWidth = sizeMaxWidths[size] ?? sizeMaxWidths.md;
 
@@ -40,7 +42,9 @@ export function DevventoryDialog({
           scroll={scroll ? 'inside' : undefined}
         >
           <Modal.Dialog
-            className="flex w-full flex-col overflow-hidden rounded-[4px] border border-divider bg-surface shadow-lg"
+            className={`flex w-full flex-col rounded-[4px] border border-divider bg-surface shadow-lg ${
+              bodyScrollable ? 'overflow-hidden' : 'overflow-visible'
+            }`}
             role="dialog"
             aria-modal="true"
             style={{

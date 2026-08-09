@@ -28,6 +28,7 @@
     "@heroui/react": "^3.2.3",
     "@heroui/styles": "^3.2.3",
     "@hookform/resolvers": "^5.6.0",
+    "@internationalized/date": "^3.12.3",
     "@tabler/icons-react": "^3.46.0",
     "@tailwindcss/vite": "^4.3.3",
     "@tanstack/react-query": "^5.101.4",

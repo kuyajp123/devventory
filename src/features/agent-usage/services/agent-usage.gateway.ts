@@ -3,8 +3,6 @@ import {
   agentAccountSchema,
   agentQuotaSchema,
   agentReminderSchema,
-  resetPreviewSchema,
-  type ResetPreviewInput,
   type SaveAgentAccountInput,
   type SaveAgentQuotaInput,
 } from '../models/agent-usage';
@@ -41,13 +39,6 @@ export const agentUsageGateway = {
     return invokeCommand<void>('delete_agent_quota', {
       input: { accountId, quotaId },
     });
-  },
-
-  async previewReset(input: ResetPreviewInput) {
-    const response = await invokeCommand<unknown>('preview_agent_reset', {
-      input,
-    });
-    return resetPreviewSchema.parse(response);
   },
 
   async takeDueReminders() {

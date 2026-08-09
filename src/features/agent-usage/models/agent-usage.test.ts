@@ -40,6 +40,7 @@ describe('Agent Usage contracts', () => {
 
     expect(
       agentQuotaFormSchema.parse({
+        accountIdentifier: 'paul+codex@example.com',
         label: 'Weekly',
         remainingPercent: '',
         remindOneDayBefore: true,
