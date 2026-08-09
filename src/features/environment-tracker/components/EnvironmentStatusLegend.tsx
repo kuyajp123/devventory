@@ -1,4 +1,3 @@
-import { Chip } from '@heroui/react';
 import {
   IconAlertCircle,
   IconAlertTriangle,
@@ -8,8 +7,7 @@ import {
 } from '@tabler/icons-react';
 import type { ReactNode } from 'react';
 import { ICON_SIZE, ICON_STROKE } from '@/shared/constants/icon.constants';
-
-type LegendColor = 'default' | 'success' | 'warning';
+import { SemanticStatusChip, type SemanticStatusTone } from '@/shared/ui';
 
 export function EnvironmentStatusLegend() {
   return (
@@ -18,7 +16,7 @@ export function EnvironmentStatusLegend() {
       className="flex flex-wrap gap-2"
     >
       <LegendChip
-        color="success"
+        tone="success"
         icon={
           <IconPointFilled className="text-success" size={ICON_SIZE.small} />
         }
@@ -28,7 +26,7 @@ export function EnvironmentStatusLegend() {
         title="Exactly one active definition exists in this environment."
       />
       <LegendChip
-        color="warning"
+        tone="warning"
         icon={
           <IconAlertTriangle
             className="text-warning"
@@ -42,7 +40,7 @@ export function EnvironmentStatusLegend() {
         title="Two or more active definitions exist in this environment."
       />
       <LegendChip
-        color="default"
+        tone="neutral"
         icon={
           <IconHash
             className="text-muted"
@@ -56,7 +54,7 @@ export function EnvironmentStatusLegend() {
         title="The key exists only in commented lines."
       />
       <LegendChip
-        color="default"
+        tone="neutral"
         icon={
           <IconMinus
             className="text-muted"
@@ -70,7 +68,7 @@ export function EnvironmentStatusLegend() {
         title="The key was not found in configured readable sources."
       />
       <LegendChip
-        color="warning"
+        tone="warning"
         icon={
           <IconAlertCircle
             className="text-warning"
@@ -88,30 +86,29 @@ export function EnvironmentStatusLegend() {
 }
 
 function LegendChip({
-  color,
   icon,
   label,
   labelClassName,
   status,
   title,
+  tone,
 }: {
-  color: LegendColor;
   icon: ReactNode;
   label: string;
   labelClassName: string;
   status: string;
   title: string;
+  tone: SemanticStatusTone;
 }) {
   return (
-    <Chip
-      color={color}
-      data-legend-status={status}
-      size="sm"
+    <SemanticStatusChip
+      dataLegendStatus={status}
+      dataStatus={status}
+      label={label}
+      labelClassName={labelClassName}
+      leadingContent={icon}
       title={title}
-      variant="soft"
-    >
-      {icon}
-      <Chip.Label className={labelClassName}>{label}</Chip.Label>
-    </Chip>
+      tone={tone}
+    />
   );
 }

@@ -1,4 +1,4 @@
-import { Chip, EmptyState, Spinner, Table } from '@heroui/react';
+import { EmptyState, Spinner, Table } from '@heroui/react';
 import {
   IconCode,
   IconFile,
@@ -20,6 +20,7 @@ import {
   type ProjectDirectoryEntry,
   type SortDirection,
 } from '../models/file-inventory';
+import { InventoryStatusChip } from './InventoryStatusChip';
 
 interface FolderContentsTableProps {
   /** Live direct subfolders to display. */
@@ -152,9 +153,7 @@ export function FolderContentsTable({
                   <Table.Cell className="text-muted">—</Table.Cell>
                   <Table.Cell className="text-muted">—</Table.Cell>
                   <Table.Cell>
-                    <Chip color="default" size="sm" variant="soft">
-                      <Chip.Label>Available</Chip.Label>
-                    </Chip>
+                    <InventoryStatusChip status="available" />
                   </Table.Cell>
                 </Table.Row>
               ))}
@@ -187,7 +186,7 @@ export function FolderContentsTable({
                     {formatModified(file.modifiedAtMs)}
                   </Table.Cell>
                   <Table.Cell>
-                    <StatusChip status={file.status} />
+                    <InventoryStatusChip status={file.status} />
                   </Table.Cell>
                 </Table.Row>
               ))}
@@ -216,18 +215,6 @@ function SortableColumn({
         </Table.SortableColumnHeader>
       )}
     </Table.Column>
-  );
-}
-
-function StatusChip({ status }: { status: IndexedFile['status'] }) {
-  return (
-    <Chip
-      color={status === 'active' ? 'success' : 'warning'}
-      size="sm"
-      variant="soft"
-    >
-      <Chip.Label>{status === 'active' ? 'Active' : 'Missing'}</Chip.Label>
-    </Chip>
   );
 }
 

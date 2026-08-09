@@ -7,6 +7,7 @@ import {
 } from '@tabler/icons-react';
 import { useMemo, useState } from 'react';
 import { ICON_SIZE, ICON_STROKE } from '@/shared/constants/icon.constants';
+import { SemanticStatusChip } from '@/shared/ui';
 import type {
   Environment,
   EnvironmentMatrixSourceDetail,
@@ -190,15 +191,13 @@ function EnvironmentKeyDetailsContent({
                               : 'Line unavailable'}
                           </p>
                         </div>
-                        <Chip
-                          color={detail.isCommented ? 'default' : 'success'}
-                          size="sm"
-                          variant="soft"
-                        >
-                          <Chip.Label>
-                            {detail.isCommented ? 'Commented' : 'Active'}
-                          </Chip.Label>
-                        </Chip>
+                        <SemanticStatusChip
+                          dataStatus={
+                            detail.isCommented ? 'commented' : 'active'
+                          }
+                          label={detail.isCommented ? 'Commented' : 'Active'}
+                          tone={detail.isCommented ? 'neutral' : 'success'}
+                        />
                       </div>
                     </button>
                   </li>

@@ -16,6 +16,7 @@ import {
 import { useMemo } from 'react';
 import { ICON_SIZE, ICON_STROKE } from '@/shared/constants/icon.constants';
 import { AppPagination } from '@/shared/ui/AppPagination';
+import { SemanticStatusChip } from '@/shared/ui';
 import {
   resultContext,
   type SearchMetadataRequest,
@@ -291,9 +292,12 @@ function ResultMetadata({ result }: { result: SearchResult }) {
       <Chip size="sm" variant="soft">
         <Chip.Label className="capitalize">{result.category}</Chip.Label>
       </Chip>
-      <Chip size="sm" variant="soft">
-        <Chip.Label className="capitalize">{result.status}</Chip.Label>
-      </Chip>
+      <SemanticStatusChip
+        dataStatus={result.status}
+        label={result.status}
+        labelClassName="capitalize"
+        tone={result.status === 'active' ? 'success' : 'warning'}
+      />
       {result.tags.slice(0, 2).map((tag) => (
         <Chip key={tag} size="sm" variant="soft">
           <Chip.Label>{tag}</Chip.Label>

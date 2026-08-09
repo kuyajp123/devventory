@@ -15,13 +15,14 @@ import {
   sortableKeyboardCoordinates,
   useSortable,
 } from '@dnd-kit/sortable';
-import { Chip, EmptyState, Table } from '@heroui/react';
+import { EmptyState, Table } from '@heroui/react';
 import {
   IconChevronRight,
   IconGripVertical,
   IconTableOff,
 } from '@tabler/icons-react';
 import { memo, type CSSProperties, useMemo, useRef, useState } from 'react';
+import { SemanticStatusChip } from '@/shared/ui';
 import type {
   Environment,
   EnvironmentMatrixCell,
@@ -49,8 +50,6 @@ interface EnvironmentMatrixProps {
   isRefreshingId: string | null;
   isReordering: boolean;
   matrix: EnvironmentMatrixPage;
-  onDelete: (environment: Environment) => void;
-  onEdit: (environment: Environment) => void;
   onManageSources: (environment: Environment) => void;
   onRefresh: (environment: Environment) => void;
   onReorder: (environmentIds: string[]) => Promise<void>;
@@ -76,8 +75,6 @@ export function EnvironmentMatrix({
   isRefreshingId,
   isReordering,
   matrix,
-  onDelete,
-  onEdit,
   onManageSources,
   onRefresh,
   onReorder,
@@ -281,8 +278,6 @@ export function EnvironmentMatrix({
                           isReordering || isRefreshingId === environment.id
                         }
                         key={environment.id}
-                        onDelete={onDelete}
-                        onEdit={onEdit}
                         onManageSources={onManageSources}
                         onRefresh={onRefresh}
                       />
@@ -372,15 +367,11 @@ const EnvironmentMatrixBody = memo(function EnvironmentMatrixBody({
 const SortableEnvironmentColumn = memo(function SortableEnvironmentColumn({
   environment,
   isBusy,
-  onDelete,
-  onEdit,
   onManageSources,
   onRefresh,
 }: {
   environment: Environment;
   isBusy: boolean;
-  onDelete: (environment: Environment) => void;
-  onEdit: (environment: Environment) => void;
   onManageSources: (environment: Environment) => void;
   onRefresh: (environment: Environment) => void;
 }) {
@@ -392,8 +383,6 @@ const SortableEnvironmentColumn = memo(function SortableEnvironmentColumn({
       <SortableEnvironmentColumnContent
         environment={environment}
         isBusy={isBusy}
-        onDelete={onDelete}
-        onEdit={onEdit}
         onManageSources={onManageSources}
         onRefresh={onRefresh}
       />
@@ -405,15 +394,11 @@ const SortableEnvironmentColumnContent = memo(
   function SortableEnvironmentColumnContent({
     environment,
     isBusy,
-    onDelete,
-    onEdit,
     onManageSources,
     onRefresh,
   }: {
     environment: Environment;
     isBusy: boolean;
-    onDelete: (environment: Environment) => void;
-    onEdit: (environment: Environment) => void;
     onManageSources: (environment: Environment) => void;
     onRefresh: (environment: Environment) => void;
   }) {
@@ -450,8 +435,6 @@ const SortableEnvironmentColumnContent = memo(
             environment={environment}
             isBusy={isBusy}
             listeners={listeners}
-            onDelete={onDelete}
-            onEdit={onEdit}
             onManageSources={onManageSources}
             onRefresh={onRefresh}
             setActivatorNodeRef={setActivatorNodeRef}
@@ -549,9 +532,11 @@ const MatrixCellStatus = memo(function MatrixCellStatus({
 }) {
   return (
     <div className="min-w-0 space-y-1">
-      <Chip color={cellColor(state)} size="sm" variant="soft">
-        <Chip.Label>{status}</Chip.Label>
-      </Chip>
+      <SemanticStatusChip
+        dataStatus={state}
+        label={status}
+        tone={cellTone(state)}
+      />
 
       {summary ? (
         <p className="truncate text-xs text-muted" title={summary}>
@@ -618,7 +603,7 @@ function cellSummary(
   return null;
 }
 
-function cellColor(state: EnvironmentMatrixCell['state']) {
+function cellTone(state: EnvironmentMatrixCell['state']) {
   switch (state) {
     case 'present':
       return 'success' as const;
@@ -629,9 +614,9 @@ function cellColor(state: EnvironmentMatrixCell['state']) {
       return 'warning' as const;
 
     case 'commented':
-      return 'default' as const;
+      return 'neutral' as const;
 
     default:
-      return 'default' as const;
+      return 'neutral' as const;
   }
 }

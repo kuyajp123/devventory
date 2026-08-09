@@ -1,4 +1,4 @@
-import { Chip, EmptyState, Table } from '@heroui/react';
+import { EmptyState, Table } from '@heroui/react';
 import { IconFileOff } from '@tabler/icons-react';
 import { ICON_SIZE, ICON_STROKE } from '@/shared/constants/icon.constants';
 import {
@@ -8,6 +8,7 @@ import {
   type InventorySortField,
   type SortDirection,
 } from '../models/file-inventory';
+import { InventoryStatusChip } from './InventoryStatusChip';
 
 interface InventoryTableProps {
   files: IndexedFile[];
@@ -87,7 +88,7 @@ export function InventoryTable({
                   {formatModified(file.modifiedAtMs)}
                 </Table.Cell>
                 <Table.Cell>
-                  <StatusChip status={file.status} />
+                  <InventoryStatusChip status={file.status} />
                 </Table.Cell>
               </Table.Row>
             )}
@@ -115,18 +116,6 @@ function SortableColumn({
         </Table.SortableColumnHeader>
       )}
     </Table.Column>
-  );
-}
-
-function StatusChip({ status }: { status: IndexedFile['status'] }) {
-  return (
-    <Chip
-      color={status === 'active' ? 'success' : 'warning'}
-      size="sm"
-      variant="soft"
-    >
-      <Chip.Label>{status === 'active' ? 'Active' : 'Missing'}</Chip.Label>
-    </Chip>
   );
 }
 

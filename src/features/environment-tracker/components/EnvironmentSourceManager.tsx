@@ -18,7 +18,6 @@ import { CSS } from '@dnd-kit/utilities';
 import {
   Alert,
   Button,
-  Chip,
   Input,
   Label,
   Spinner,
@@ -41,41 +40,55 @@ import {
   DialogBody,
   DialogFooter,
   DialogHeader,
+  SemanticStatusChip,
 } from '@/shared/ui';
 import {
   useAddEnvironmentSourceMutation,
+  useDeleteEnvironmentMutation,
   useDeleteEnvironmentSourceMutation,
   useEnvironmentSourceCandidatesQuery,
   useEnvironmentSourcesQuery,
   useReorderEnvironmentSourcesMutation,
+  useUpdateEnvironmentMutation,
 } from '../hooks/use-environments';
 import {
   sourceStatusLabel,
   type Environment,
   type EnvironmentSource,
 } from '../models/environment';
+import { EnvironmentSourceIssuePopover } from './EnvironmentSourceIssuePopover';
+import { EnvironmentSettingsSection } from './EnvironmentSettingsSection';
 
 const SOURCE_PAGE_SIZE = 25;
 
 interface EnvironmentSourceManagerProps {
   environment: Environment | null;
+  onEnvironmentChange?: (environment: Environment) => void;
+  onEnvironmentDeleted?: (environmentId: string) => void;
   onOpenChange: (isOpen: boolean) => void;
   projectId: string;
 }
 
 export function EnvironmentSourceManager({
   environment,
+  onEnvironmentChange,
+  onEnvironmentDeleted,
   onOpenChange,
   projectId,
 }: EnvironmentSourceManagerProps) {
   const environmentId = environment?.id ?? '';
   const sources = useEnvironmentSourcesQuery(projectId, environmentId);
   const addSource = useAddEnvironmentSourceMutation(projectId);
+  const deleteEnvironment = useDeleteEnvironmentMutation(projectId);
   const deleteSource = useDeleteEnvironmentSourceMutation(projectId);
   const reorderSources = useReorderEnvironmentSourcesMutation(projectId);
+  const updateEnvironment = useUpdateEnvironmentMutation(projectId);
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(1);
   const [relativePath, setRelativePath] = useState('');
+  const [openIssueSourceId, setOpenIssueSourceId] = useState<string | null>(
+    null,
+  );
   const candidates = useEnvironmentSourceCandidatesQuery(
     projectId,
     { page, pageSize: SOURCE_PAGE_SIZE, search: search.trim() || undefined },
@@ -93,7 +106,46 @@ export function EnvironmentSourceManager({
     [sources.data],
   );
   const isBusy =
-    addSource.isPending || deleteSource.isPending || reorderSources.isPending;
+    addSource.isPending ||
+    deleteEnvironment.isPending ||
+    deleteSource.isPending ||
+    reorderSources.isPending ||
+    updateEnvironment.isPending;
+
+  async function renameEnvironment(name: string) {
+    if (!environment) return;
+    try {
+      const updatedEnvironment = await updateEnvironment.mutateAsync({
+        description: environment.description ?? undefined,
+        environmentId: environment.id,
+        name,
+      });
+      onEnvironmentChange?.(updatedEnvironment);
+      toast.success('Environment name updated');
+    } catch (error) {
+      throw Object.assign(
+        new Error(
+          errorMessage(error, 'The environment name could not be saved.'),
+        ),
+        { cause: error },
+      );
+    }
+  }
+
+  async function removeEnvironment() {
+    if (!environment) return;
+    try {
+      await deleteEnvironment.mutateAsync(environment.id);
+      onEnvironmentDeleted?.(environment.id);
+      onOpenChange(false);
+      toast.success('Environment deleted');
+    } catch (error) {
+      throw Object.assign(
+        new Error(errorMessage(error, 'The environment could not be deleted.')),
+        { cause: error },
+      );
+    }
+  }
 
   function add(path = relativePath) {
     const normalized = path.trim();
@@ -103,9 +155,10 @@ export function EnvironmentSourceManager({
       {
         onError: (error) =>
           toast.danger(errorMessage(error, 'The source could not be added.')),
-        onSuccess: () => {
+        onSuccess: (source) => {
+          setOpenIssueSourceId(source.id);
           setRelativePath('');
-          toast.success('Configuration source added and parsed');
+          toast.success('Configuration source added');
         },
       },
     );
@@ -163,6 +216,16 @@ export function EnvironmentSourceManager({
         title={`Configuration sources${environment ? ` — ${environment.name}` : ''}`}
       />
       <DialogBody className="flex flex-col gap-6">
+        {environment ? (
+          <EnvironmentSettingsSection
+            environment={environment}
+            isDeleting={deleteEnvironment.isPending}
+            isSaving={updateEnvironment.isPending}
+            onDelete={removeEnvironment}
+            onRename={renameEnvironment}
+          />
+        ) : null}
+
         <section
           aria-labelledby="configured-sources-heading"
           className="flex flex-col gap-3"
@@ -209,7 +272,17 @@ export function EnvironmentSourceManager({
                 <ul className="space-y-2">
                   {sources.data.map((source) => (
                     <SortableSource
+                      isIssueOpen={source.id === openIssueSourceId}
                       key={source.id}
+                      onIssueOpenChange={(isOpen) => {
+                        setOpenIssueSourceId((currentId) =>
+                          isOpen
+                            ? source.id
+                            : currentId === source.id
+                              ? null
+                              : currentId,
+                        );
+                      }}
                       onRemove={() => remove(source.id)}
                       source={source}
                     />
@@ -363,9 +436,13 @@ export function EnvironmentSourceManager({
 }
 
 function SortableSource({
+  isIssueOpen,
+  onIssueOpenChange,
   onRemove,
   source,
 }: {
+  isIssueOpen: boolean;
+  onIssueOpenChange: (isOpen: boolean) => void;
   onRemove: () => void;
   source: EnvironmentSource;
 }) {
@@ -377,6 +454,9 @@ function SortableSource({
     transform,
     transition,
   } = useSortable({ id: source.id });
+  const isParsed = source.parseStatus === 'parsed';
+  const shouldExplainIssue = !isParsed && Boolean(source.lastIssueMessage);
+
   return (
     <li
       ref={setNodeRef}
@@ -400,17 +480,20 @@ function SortableSource({
       </Button>
       <div className="min-w-0 flex-1">
         <p className="truncate font-mono text-sm">{source.relativePath}</p>
-        {source.lastIssueMessage ? (
-          <p className="mt-1 text-xs text-warning">{source.lastIssueMessage}</p>
-        ) : null}
       </div>
-      <Chip
-        color={source.parseStatus === 'parsed' ? 'success' : 'warning'}
-        size="sm"
-        variant="soft"
-      >
-        <Chip.Label>{sourceStatusLabel(source.parseStatus)}</Chip.Label>
-      </Chip>
+      {shouldExplainIssue ? (
+        <EnvironmentSourceIssuePopover
+          isOpen={isIssueOpen}
+          onOpenChange={onIssueOpenChange}
+          source={source}
+        />
+      ) : (
+        <SemanticStatusChip
+          dataStatus={source.parseStatus}
+          label={sourceStatusLabel(source.parseStatus)}
+          tone={isParsed ? 'success' : 'warning'}
+        />
+      )}
       <Button
         aria-label={`Remove ${source.relativePath}`}
         isIconOnly

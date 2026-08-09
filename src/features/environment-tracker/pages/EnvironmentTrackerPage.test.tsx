@@ -1,4 +1,4 @@
-import { screen, waitFor } from '@testing-library/react';
+import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { renderWithProviders } from '@/test/render';
@@ -63,6 +63,13 @@ describe('EnvironmentTrackerPage', () => {
       page: 1,
       pageSize: 50,
       rows: [],
+      totalItems: 0,
+      totalPages: 0,
+    });
+    vi.mocked(environmentTrackerGateway.sourceCandidates).mockResolvedValue({
+      items: [],
+      page: 1,
+      pageSize: 25,
       totalItems: 0,
       totalPages: 0,
     });
@@ -158,21 +165,23 @@ describe('EnvironmentTrackerPage', () => {
       screen.getByRole('menuitem', { name: 'Refresh environment' }),
     ).toBeVisible();
     expect(
-      screen.getByRole('menuitem', { name: 'Edit environment' }),
-    ).toBeVisible();
+      screen.queryByRole('menuitem', { name: 'Edit environment' }),
+    ).not.toBeInTheDocument();
     expect(
-      screen.getByRole('menuitem', { name: 'Delete environment' }),
-    ).toBeVisible();
+      screen.queryByRole('menuitem', { name: 'Delete environment' }),
+    ).not.toBeInTheDocument();
     expect(
       screen.queryByRole('menuitem', { name: /view/i }),
     ).not.toBeInTheDocument();
 
-    await user.click(
-      screen.getByRole('menuitem', { name: 'Edit environment' }),
+    await user.click(screen.getByRole('menuitem', { name: 'Manage sources' }));
+    const manager = await screen.findByRole('dialog', {
+      name: 'Configuration sources — Development',
+    });
+    expect(manager).toBeVisible();
+    expect(within(manager).getByLabelText('Environment name')).toHaveValue(
+      'Development',
     );
-    expect(
-      await screen.findByRole('heading', { name: 'Edit environment' }),
-    ).toBeVisible();
   });
 
   it('switches to a source-file breakdown and explains active definitions per file', async () => {

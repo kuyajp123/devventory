@@ -1,4 +1,5 @@
-import { Card, Chip, Table } from '@heroui/react';
+import { Card, Table } from '@heroui/react';
+import { SemanticStatusChip } from '@/shared/ui';
 import type { ProjectDashboard } from '../models/dashboard';
 
 export function RecentScansTable({
@@ -43,21 +44,18 @@ export function RecentScansTable({
                         {scan.scanType.replace(/_/g, ' ')}
                       </Table.Cell>
                       <Table.Cell>
-                        <Chip
-                          color={
+                        <SemanticStatusChip
+                          dataStatus={scan.status}
+                          label={scan.status}
+                          labelClassName="font-mono text-[10px]"
+                          tone={
                             scan.status === 'completed'
                               ? 'success'
                               : scan.status === 'failed'
                                 ? 'danger'
                                 : 'warning'
                           }
-                          size="sm"
-                          variant="soft"
-                        >
-                          <Chip.Label className="font-mono text-[10px]">
-                            {scan.status}
-                          </Chip.Label>
-                        </Chip>
+                        />
                       </Table.Cell>
                       <Table.Cell className="font-mono tabular-nums">
                         {scan.filesDiscovered}

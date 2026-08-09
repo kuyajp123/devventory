@@ -1,4 +1,3 @@
-import { Chip } from '@heroui/react';
 import {
   IconAlertTriangle,
   IconCircleCheck,
@@ -8,6 +7,7 @@ import {
   IconFolderOff,
 } from '@tabler/icons-react';
 import { ICON_SIZE, ICON_STROKE } from '@/shared/constants/icon.constants';
+import { SemanticStatusChip } from '@/shared/ui';
 import type { InitialScanSummary } from '../models/project';
 
 export function ScanSummaryCard({ summary }: { summary: InitialScanSummary }) {
@@ -76,15 +76,12 @@ export function ScanSummaryCard({ summary }: { summary: InitialScanSummary }) {
           </div>
         </div>
 
-        <Chip
-          color={summary.completed ? 'success' : 'warning'}
-          size="sm"
-          variant="soft"
-        >
-          <Chip.Label className="font-mono text-[10px]">
-            {summary.completed ? 'Completed' : 'Review needed'}
-          </Chip.Label>
-        </Chip>
+        <SemanticStatusChip
+          dataStatus={summary.completed ? 'completed' : 'review-needed'}
+          label={summary.completed ? 'Completed' : 'Review needed'}
+          labelClassName="font-mono text-[10px]"
+          tone={summary.completed ? 'success' : 'warning'}
+        />
       </div>
 
       <dl className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">

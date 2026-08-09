@@ -7,3 +7,5 @@ export { FieldError } from './FieldError';
 export { FieldHint } from './FieldHint';
 export { FormField } from './FormField';
 export { FormSection } from './FormSection';
+export { SemanticStatusChip } from './SemanticStatusChip';
+export type { SemanticStatusTone } from './SemanticStatusChip';

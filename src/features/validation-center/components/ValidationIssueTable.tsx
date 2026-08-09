@@ -1,4 +1,4 @@
-import { Button, Chip, EmptyState, Spinner, Table } from '@heroui/react';
+import { Button, EmptyState, Spinner, Table } from '@heroui/react';
 import {
   IconCircleCheck,
   IconEyeOff,
@@ -6,6 +6,7 @@ import {
 } from '@tabler/icons-react';
 import { ICON_SIZE, ICON_STROKE } from '@/shared/constants/icon.constants';
 import { AppPagination } from '@/shared/ui/AppPagination';
+import { SemanticStatusChip } from '@/shared/ui';
 import {
   validationIssueTypeLabel,
   type ValidationIssue,
@@ -204,37 +205,35 @@ function SortableColumn({
 
 function SeverityChip({ severity }: { severity: ValidationIssue['severity'] }) {
   return (
-    <Chip
-      color={
+    <SemanticStatusChip
+      dataStatus={severity}
+      label={severity}
+      labelClassName="capitalize"
+      tone={
         severity === 'error'
           ? 'danger'
           : severity === 'warning'
             ? 'warning'
-            : 'default'
+            : 'neutral'
       }
-      size="sm"
-      variant="soft"
-    >
-      <Chip.Label className="capitalize">{severity}</Chip.Label>
-    </Chip>
+    />
   );
 }
 
 function StatusChip({ status }: { status: ValidationIssue['status'] }) {
   return (
-    <Chip
-      color={
+    <SemanticStatusChip
+      dataStatus={status}
+      label={status}
+      labelClassName="capitalize"
+      tone={
         status === 'open'
           ? 'accent'
           : status === 'ignored'
             ? 'warning'
             : 'success'
       }
-      size="sm"
-      variant="soft"
-    >
-      <Chip.Label className="capitalize">{status}</Chip.Label>
-    </Chip>
+    />
   );
 }
 

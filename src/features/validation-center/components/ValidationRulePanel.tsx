@@ -15,7 +15,7 @@ import {
   verticalListSortingStrategy,
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { Button, Card, Chip, EmptyState, Skeleton } from '@heroui/react';
+import { Button, Card, EmptyState, Skeleton } from '@heroui/react';
 import {
   IconArrowDown,
   IconArrowUp,
@@ -28,7 +28,7 @@ import {
 import { useMemo, useState } from 'react';
 import type { Environment } from '@/features/environment-tracker';
 import { ICON_SIZE, ICON_STROKE } from '@/shared/constants/icon.constants';
-import { ConfirmDialog } from '@/shared/ui';
+import { ConfirmDialog, SemanticStatusChip } from '@/shared/ui';
 import type { ValidationRule } from '../models/validation';
 
 interface ValidationRulePanelProps {
@@ -258,32 +258,30 @@ function SortableRule({
           <span className="font-mono text-sm font-semibold">
             {rule.keyName}
           </span>
-          <Chip
-            color={
+          <SemanticStatusChip
+            dataStatus={rule.ruleType}
+            label={rule.ruleType}
+            labelClassName="capitalize"
+            tone={
               rule.ruleType === 'forbidden'
                 ? 'danger'
                 : rule.ruleType === 'required'
                   ? 'accent'
-                  : 'default'
+                  : 'neutral'
             }
-            size="sm"
-            variant="soft"
-          >
-            <Chip.Label className="capitalize">{rule.ruleType}</Chip.Label>
-          </Chip>
-          <Chip
-            color={
+          />
+          <SemanticStatusChip
+            dataStatus={rule.severity}
+            label={rule.severity}
+            labelClassName="capitalize"
+            tone={
               rule.severity === 'error'
                 ? 'danger'
                 : rule.severity === 'warning'
                   ? 'warning'
-                  : 'default'
+                  : 'neutral'
             }
-            size="sm"
-            variant="soft"
-          >
-            <Chip.Label className="capitalize">{rule.severity}</Chip.Label>
-          </Chip>
+          />
           {!rule.enabled && (
             <span className="text-xs text-muted">Disabled</span>
           )}

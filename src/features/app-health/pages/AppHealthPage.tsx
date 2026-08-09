@@ -1,7 +1,8 @@
-import { Alert, Button, Chip, Spinner, toast } from '@heroui/react';
+import { Alert, Button, Spinner, toast } from '@heroui/react';
 import { IconActivityHeartbeat } from '@tabler/icons-react';
 import { useState } from 'react';
 import { ICON_SIZE, ICON_STROKE } from '@/shared/constants/icon.constants';
+import { SemanticStatusChip } from '@/shared/ui';
 import { appHealthGateway } from '../services/app-health.gateway';
 
 type HealthStatus =
@@ -109,12 +110,15 @@ function HealthStatusChip({ state }: { state: HealthStatus['state'] }) {
     loading: 'Checking',
     success: 'Connected',
   }[state];
-  const color =
-    state === 'success' ? 'success' : state === 'error' ? 'danger' : 'default';
+  const tone =
+    state === 'success' ? 'success' : state === 'error' ? 'danger' : 'neutral';
 
   return (
-    <Chip color={color} size="sm" variant="soft">
-      <Chip.Label className="font-mono text-[10px]">{label}</Chip.Label>
-    </Chip>
+    <SemanticStatusChip
+      dataStatus={state}
+      label={label}
+      labelClassName="font-mono text-[10px]"
+      tone={tone}
+    />
   );
 }

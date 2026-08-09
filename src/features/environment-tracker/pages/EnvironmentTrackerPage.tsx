@@ -2,7 +2,6 @@ import { useActiveProject } from '@/features/projects';
 import { ICON_SIZE, ICON_STROKE } from '@/shared/constants/icon.constants';
 import { TauriCommandError } from '@/shared/infrastructure/tauri/tauri-error';
 import { AppPagination } from '@/shared/ui/AppPagination';
-import { ConfirmDialog } from '@/shared/ui';
 import {
   Alert,
   Button,
@@ -38,7 +37,6 @@ import { EnvironmentSourceManager } from '../components/EnvironmentSourceManager
 import { InspectEnvironmentMatrix } from '../components/InspectEnvironmentMatrix';
 import {
   useCreateEnvironmentMutation,
-  useDeleteEnvironmentMutation,
   useEnvironmentInspectMatrixQuery,
   useEnvironmentMatrixQuery,
   useEnvironmentSourcesQuery,
@@ -46,7 +44,6 @@ import {
   useRefreshEnvironmentMutation,
   useRefreshProjectEnvironmentsMutation,
   useReorderEnvironmentsMutation,
-  useUpdateEnvironmentMutation,
 } from '../hooks/use-environments';
 import type { Environment, EnvironmentFormValues } from '../models/environment';
 
@@ -68,10 +65,9 @@ export function EnvironmentTrackerPage() {
   const [selection, setSelection] = useState<EnvironmentKeySelection | null>(
     null,
   );
-  const [editing, setEditing] = useState<Environment | null | 'new'>(null);
+  const [editing, setEditing] = useState<'new' | null>(null);
   const [sourceEnvironment, setSourceEnvironment] =
     useState<Environment | null>(null);
-  const [deleteConfirm, setDeleteConfirm] = useState<Environment | null>(null);
   const previousProjectId = useRef(projectId);
   const matrixContainerRef = useRef<HTMLDivElement>(null);
 
@@ -105,8 +101,6 @@ export function EnvironmentTrackerPage() {
     view === 'inspect' ? (selectedEnvironment?.id ?? '') : '',
   );
   const createEnvironment = useCreateEnvironmentMutation(projectId ?? '');
-  const updateEnvironment = useUpdateEnvironmentMutation(projectId ?? '');
-  const deleteEnvironment = useDeleteEnvironmentMutation(projectId ?? '');
   const reorder = useReorderEnvironmentsMutation(projectId ?? '');
   const refreshEnvironment = useRefreshEnvironmentMutation(projectId ?? '');
   const refreshProject = useRefreshProjectEnvironmentsMutation(projectId ?? '');
@@ -125,41 +119,12 @@ export function EnvironmentTrackerPage() {
 
   async function saveEnvironment(values: EnvironmentFormValues) {
     try {
-      if (editing && editing !== 'new') {
-        await updateEnvironment.mutateAsync({
-          environmentId: editing.id,
-          ...values,
-        });
-        toast.success('Environment updated');
-      } else {
-        await createEnvironment.mutateAsync(values);
-        toast.success('Environment created');
-      }
+      await createEnvironment.mutateAsync(values);
+      toast.success('Environment created');
       setEditing(null);
     } catch (error) {
       toast.danger(errorMessage(error, 'The environment could not be saved.'));
     }
-  }
-
-  function removeEnvironment(environment: Environment) {
-    setDeleteConfirm(environment);
-  }
-
-  function confirmDelete() {
-    if (!deleteConfirm) return;
-    deleteEnvironment.mutate(deleteConfirm.id, {
-      onError: (error) =>
-        toast.danger(
-          errorMessage(error, 'The environment could not be deleted.'),
-        ),
-      onSuccess: () => {
-        if (sourceEnvironment?.id === deleteConfirm.id)
-          setSourceEnvironment(null);
-        if (selection?.environment.id === deleteConfirm.id) setSelection(null);
-        toast.success('Environment deleted');
-        setDeleteConfirm(null);
-      },
-    });
   }
 
   function refreshOne(environment: Environment) {
@@ -202,7 +167,7 @@ export function EnvironmentTrackerPage() {
     setPage(1);
   }
 
-  const isSaving = createEnvironment.isPending || updateEnvironment.isPending;
+  const isSaving = createEnvironment.isPending;
 
   const handleDefinitionClick = useCallback(
     (relativePath: string) => {
@@ -444,6 +409,7 @@ export function EnvironmentTrackerPage() {
                       <div className="flex flex-wrap items-center gap-2">
                         <Tooltip delay={0}>
                           <Button
+                            aria-label={`Manage sources for ${selectedEnvironment.name}`}
                             onPress={() =>
                               setSourceEnvironment(selectedEnvironment)
                             }
@@ -528,8 +494,6 @@ export function EnvironmentTrackerPage() {
                         }
                         isReordering={reorder.isPending}
                         matrix={matrixData}
-                        onDelete={removeEnvironment}
-                        onEdit={setEditing}
                         onManageSources={setSourceEnvironment}
                         onRefresh={refreshOne}
                         onReorder={reorderEnvironments}
@@ -584,7 +548,7 @@ export function EnvironmentTrackerPage() {
       ) : null}
 
       <EnvironmentFormModal
-        environment={editing === 'new' ? null : editing}
+        environment={null}
         isOpen={editing !== null}
         isSaving={isSaving}
         onOpenChange={(isOpen) => {
@@ -595,23 +559,34 @@ export function EnvironmentTrackerPage() {
       <EnvironmentSourceManager
         environment={sourceEnvironment}
         key={`${projectId}:${sourceEnvironment?.id ?? 'none'}`}
+        onEnvironmentChange={(updatedEnvironment) => {
+          setSourceEnvironment(updatedEnvironment);
+          setSelection((currentSelection) =>
+            currentSelection?.environment.id === updatedEnvironment.id
+              ? {
+                  ...currentSelection,
+                  environment: updatedEnvironment,
+                }
+              : currentSelection,
+          );
+        }}
+        onEnvironmentDeleted={(environmentId) => {
+          setSourceEnvironment(null);
+          setSelectedEnvironmentId((currentEnvironmentId) =>
+            currentEnvironmentId === environmentId
+              ? null
+              : currentEnvironmentId,
+          );
+          setSelection((currentSelection) =>
+            currentSelection?.environment.id === environmentId
+              ? null
+              : currentSelection,
+          );
+        }}
         onOpenChange={(isOpen) => {
           if (!isOpen) setSourceEnvironment(null);
         }}
         projectId={projectId}
-      />
-      <ConfirmDialog
-        body={
-          deleteConfirm
-            ? `Delete ${deleteConfirm.name} and its configured sources?`
-            : undefined
-        }
-        isOpen={deleteConfirm !== null}
-        onOpenChange={(isOpen) => {
-          if (!isOpen) setDeleteConfirm(null);
-        }}
-        onConfirm={confirmDelete}
-        title="Delete environment"
       />
     </section>
   );

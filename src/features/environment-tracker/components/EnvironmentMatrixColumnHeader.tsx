@@ -2,10 +2,8 @@ import { Button, Dropdown, Label } from '@heroui/react';
 import {
   IconDotsVertical,
   IconGripVertical,
-  IconPencil,
   IconRefresh,
   IconSettings,
-  IconTrash,
 } from '@tabler/icons-react';
 import type { DraggableAttributes } from '@dnd-kit/core';
 import type { SyntheticListenerMap } from '@dnd-kit/core/dist/hooks/utilities';
@@ -20,8 +18,6 @@ interface EnvironmentMatrixColumnHeaderProps {
   isBusy: boolean;
   isOverlay?: boolean;
   listeners?: SyntheticListenerMap;
-  onDelete: (environment: Environment) => void;
-  onEdit: (environment: Environment) => void;
   onManageSources: (environment: Environment) => void;
   onRefresh: (environment: Environment) => void;
   setActivatorNodeRef?: (element: HTMLElement | null) => void;
@@ -33,8 +29,6 @@ function EnvironmentMatrixColumnHeaderComponent({
   isBusy,
   isOverlay = false,
   listeners,
-  onDelete,
-  onEdit,
   onManageSources,
   onRefresh,
   setActivatorNodeRef,
@@ -66,12 +60,6 @@ function EnvironmentMatrixColumnHeaderComponent({
         break;
       case 'refresh':
         onRefresh(environment);
-        break;
-      case 'edit':
-        onEdit(environment);
-        break;
-      case 'delete':
-        onDelete(environment);
         break;
     }
   }
@@ -145,26 +133,6 @@ function EnvironmentMatrixColumnHeaderComponent({
                 stroke={ICON_STROKE}
               />
               <Label>Refresh environment</Label>
-            </Dropdown.Item>
-            <Dropdown.Item id="edit" textValue="Edit environment">
-              <IconPencil
-                aria-hidden="true"
-                size={ICON_SIZE.button}
-                stroke={ICON_STROKE}
-              />
-              <Label>Edit environment</Label>
-            </Dropdown.Item>
-            <Dropdown.Item
-              id="delete"
-              textValue="Delete environment"
-              variant="danger"
-            >
-              <IconTrash
-                aria-hidden="true"
-                size={ICON_SIZE.button}
-                stroke={ICON_STROKE}
-              />
-              <Label>Delete environment</Label>
             </Dropdown.Item>
           </Dropdown.Menu>
         </Dropdown.Popover>

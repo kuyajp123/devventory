@@ -145,8 +145,6 @@ function CompareSelectionHarness() {
       isRefreshingId={null}
       isReordering={false}
       matrix={compareMatrix}
-      onDelete={vi.fn()}
-      onEdit={vi.fn()}
       onManageSources={vi.fn()}
       onRefresh={vi.fn()}
       onReorder={vi.fn().mockResolvedValue(undefined)}

@@ -1,11 +1,12 @@
 import { ICON_SIZE, ICON_STROKE } from '@/shared/constants/icon.constants';
-import { Chip, EmptyState, Table } from '@heroui/react';
+import { EmptyState, Table } from '@heroui/react';
 import {
   IconChevronRight,
   IconFileCode,
   IconTableOff,
 } from '@tabler/icons-react';
 import { memo, useMemo } from 'react';
+import { SemanticStatusChip } from '@/shared/ui';
 import {
   sourceStatusLabel,
   type Environment,
@@ -104,6 +105,7 @@ export function InspectEnvironmentMatrix({
             >
               <Table.Content
                 aria-label={`${environment.name} source-file key matrix`}
+                key={sources.map((source) => source.id).join(':')}
               >
                 <Table.Header className="sticky top-0 z-40 bg-surface">
                   <Table.Column
@@ -264,13 +266,11 @@ const SourceMatrixCellStatus = memo(function SourceMatrixCellStatus({
 }) {
   return (
     <div className="min-w-0">
-      <Chip
-        color={sourceCellColor(source, activeCount)}
-        size="sm"
-        variant="soft"
-      >
-        <Chip.Label>{status}</Chip.Label>
-      </Chip>
+      <SemanticStatusChip
+        dataStatus={sourceCellDataStatus(source, activeCount)}
+        label={status}
+        tone={sourceCellTone(source, activeCount)}
+      />
       {summary ? (
         <p className="mt-1 truncate text-xs text-muted" title={summary}>
           {summary}
@@ -336,7 +336,7 @@ function sourceCellSummary(
   return null;
 }
 
-function sourceCellColor(source: EnvironmentSource, active: number) {
+function sourceCellTone(source: EnvironmentSource, active: number) {
   if (active > 0)
     return active > 1 ? ('warning' as const) : ('success' as const);
   if (
@@ -346,5 +346,14 @@ function sourceCellColor(source: EnvironmentSource, active: number) {
     source.parseStatus === 'unsupported_encoding'
   )
     return 'warning' as const;
-  return 'default' as const;
+  return 'neutral' as const;
+}
+
+function sourceCellDataStatus(
+  source: EnvironmentSource,
+  active: number,
+): string {
+  if (active > 1) return 'duplicate';
+  if (active === 1) return 'active';
+  return source.parseStatus;
 }

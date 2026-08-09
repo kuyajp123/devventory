@@ -1,4 +1,4 @@
-import { Card, Chip, Skeleton } from '@heroui/react';
+import { Card, Skeleton } from '@heroui/react';
 import {
   IconAlertCircle,
   IconAlertTriangle,
@@ -6,6 +6,7 @@ import {
   IconHelpCircle,
 } from '@tabler/icons-react';
 import { ICON_SIZE, ICON_STROKE } from '@/shared/constants/icon.constants';
+import { SemanticStatusChip } from '@/shared/ui';
 import type { ValidationSummary } from '../models/validation';
 
 export function ValidationSummaryCards({
@@ -28,22 +29,22 @@ export function ValidationSummaryCards({
   const health = summary?.health ?? 'unknown';
   const healthPresentation = {
     healthy: {
-      color: 'success' as const,
+      tone: 'success' as const,
       icon: IconCircleCheck,
       label: 'Healthy',
     },
     warning: {
-      color: 'warning' as const,
+      tone: 'warning' as const,
       icon: IconAlertTriangle,
       label: 'Warning',
     },
     error: {
-      color: 'danger' as const,
+      tone: 'danger' as const,
       icon: IconAlertCircle,
       label: 'Error',
     },
     unknown: {
-      color: 'default' as const,
+      tone: 'neutral' as const,
       icon: IconHelpCircle,
       label: 'Unknown',
     },
@@ -63,16 +64,19 @@ export function ValidationSummaryCards({
                 {healthPresentation.label}
               </p>
             </div>
-            <Chip color={healthPresentation.color} size="sm" variant="soft">
-              <Chip.Label className="flex items-center gap-1.5">
+            <SemanticStatusChip
+              dataStatus={health}
+              label={healthPresentation.label}
+              labelClassName="flex items-center gap-1.5"
+              leadingContent={
                 <HealthIcon
                   aria-hidden="true"
                   size={ICON_SIZE.small}
                   stroke={ICON_STROKE}
                 />
-                {healthPresentation.label}
-              </Chip.Label>
-            </Chip>
+              }
+              tone={healthPresentation.tone}
+            />
           </div>
         </Card.Content>
       </Card>
