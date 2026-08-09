@@ -1,7 +1,5 @@
 import { describe, expect, it } from 'vitest';
 import {
-  ENVIRONMENT_COLUMN_WIDTH_PX,
-  KEY_COLUMN_WIDTH_PX,
   areEnvironmentOrdersEqual,
   getMatrixTableMinWidth,
   mergePreferredEnvironmentOrder,
@@ -13,10 +11,8 @@ describe('environment-matrix-layout', () => {
   const environmentIds = ['env-a', 'env-b', 'env-c'];
 
   it('calculates a minimum table width from fixed column sizes', () => {
-    expect(getMatrixTableMinWidth(0)).toBe(KEY_COLUMN_WIDTH_PX);
-    expect(getMatrixTableMinWidth(2)).toBe(
-      KEY_COLUMN_WIDTH_PX + ENVIRONMENT_COLUMN_WIDTH_PX * 2,
-    );
+    expect(getMatrixTableMinWidth(0)).toBe(340);
+    expect(getMatrixTableMinWidth(2)).toBe(780);
   });
 
   it('moves the first environment column to the last position', () => {

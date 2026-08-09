@@ -10,6 +10,7 @@ import {
 import { EnvironmentMatrix } from './EnvironmentMatrix';
 import { EnvironmentStatusLegend } from './EnvironmentStatusLegend';
 import { InspectEnvironmentMatrix } from './InspectEnvironmentMatrix';
+import { createEnvironmentMatrixSelectionStore } from './environment-matrix-selection-context';
 
 const environment = {
   createdAt: '2026-08-05T00:00:00.000Z',
@@ -137,8 +138,7 @@ const compareMatrix = {
 };
 
 function CompareSelectionHarness() {
-  const [currentSelection, setCurrentSelection] =
-    useState<EnvironmentKeySelection | null>(null);
+  const [selectionStore] = useState(createEnvironmentMatrixSelectionStore);
 
   return (
     <EnvironmentMatrix
@@ -148,22 +148,21 @@ function CompareSelectionHarness() {
       onManageSources={vi.fn()}
       onRefresh={vi.fn()}
       onReorder={vi.fn().mockResolvedValue(undefined)}
-      onSelect={setCurrentSelection}
-      selection={currentSelection}
+      onSelect={selectionStore.setSelection}
+      selectionStore={selectionStore}
     />
   );
 }
 
 function InspectSelectionHarness() {
-  const [currentSelection, setCurrentSelection] =
-    useState<EnvironmentKeySelection | null>(null);
+  const [selectionStore] = useState(createEnvironmentMatrixSelectionStore);
 
   return (
     <InspectEnvironmentMatrix
       environment={environment}
       matrix={inspectMatrix}
-      onSelect={setCurrentSelection}
-      selection={currentSelection}
+      onSelect={selectionStore.setSelection}
+      selectionStore={selectionStore}
       sources={[firstSource, secondSource]}
     />
   );

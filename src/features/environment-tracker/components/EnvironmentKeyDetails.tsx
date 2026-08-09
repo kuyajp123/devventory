@@ -5,7 +5,7 @@ import {
   IconInfoCircle,
   IconX,
 } from '@tabler/icons-react';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { ICON_SIZE, ICON_STROKE } from '@/shared/constants/icon.constants';
 import { SemanticStatusChip } from '@/shared/ui';
 import type {
@@ -79,14 +79,24 @@ function EnvironmentKeyDetailsContent({
     ? sourceStatus(selectedSourceDetails)
     : environmentStatus(activeDetails.length, commentedDetails.length);
 
+  useEffect(() => {
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key === 'Escape') {
+        onClose();
+      }
+    }
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [onClose]);
+
   function handleDefinitionClick(relativePath: string) {
     setSelectedDefinitionPath(relativePath);
     onDefinitionClick?.(relativePath);
   }
 
   return (
-    <aside className="rounded-xl border border-divider bg-surface xl:sticky xl:top-6 xl:h-fit">
-      <header className="flex items-start justify-between gap-3 border-b border-divider p-5">
+    <aside className="flex flex-col h-full overflow-y-auto bg-surface border-l border-divider shadow-xl">
+      <header className="flex items-start justify-between gap-3 border-b border-divider p-4 sticky top-0 bg-surface z-10">
         <div className="min-w-0">
           <p className="truncate font-mono text-sm font-semibold">
             {selection.keyName}

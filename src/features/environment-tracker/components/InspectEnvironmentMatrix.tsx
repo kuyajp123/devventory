@@ -15,20 +15,30 @@ import {
   type EnvironmentSource,
 } from '../models/environment';
 import type { EnvironmentKeySelection } from './EnvironmentKeyDetails';
+import { CopyableKeyName } from './CopyableKeyName';
+import {
+  ENVIRONMENT_COLUMN_CLASS,
+  ENVIRONMENT_COLUMN_WIDTH_PX,
+  KEY_COLUMN_CLASS,
+  KEY_COLUMN_WIDTH_PX,
+} from './environment-matrix-layout';
 import { EnvironmentMatrixSelectionProvider } from './environment-matrix-selection';
-import { useEnvironmentMatrixSelection } from './environment-matrix-selection-context';
+import {
+  type EnvironmentMatrixSelectionStore,
+  useEnvironmentMatrixCellSelection,
+} from './environment-matrix-selection-context';
 
 export function InspectEnvironmentMatrix({
   environment,
   matrix,
   onSelect,
-  selection,
+  selectionStore,
   sources,
 }: {
   environment: Environment;
   matrix: EnvironmentMatrixPage;
   onSelect: (selection: EnvironmentKeySelection) => void;
-  selection: EnvironmentKeySelection | null;
+  selectionStore: EnvironmentMatrixSelectionStore;
   sources: EnvironmentSource[];
 }) {
   const environmentIndex = useMemo(
@@ -97,7 +107,7 @@ export function InspectEnvironmentMatrix({
           </p>
         </EmptyState>
       ) : (
-        <EnvironmentMatrixSelectionProvider selection={selection}>
+        <EnvironmentMatrixSelectionProvider store={selectionStore}>
           <Table variant="secondary">
             <Table.ScrollContainer
               className="max-h-[70vh] overflow-auto overscroll-contain"
@@ -105,11 +115,15 @@ export function InspectEnvironmentMatrix({
             >
               <Table.Content
                 aria-label={`${environment.name} source-file key matrix`}
+                className="table-fixed"
                 key={sources.map((source) => source.id).join(':')}
+                style={{
+                  width: `${KEY_COLUMN_WIDTH_PX + sources.length * ENVIRONMENT_COLUMN_WIDTH_PX}px`,
+                }}
               >
-                <Table.Header className="sticky top-0 z-40 bg-surface">
+                <Table.Header className="sticky top-0 z-40 bg-surface border-b border-divider">
                   <Table.Column
-                    className="sticky left-0 top-0 z-50 min-w-64 bg-surface"
+                    className={`${KEY_COLUMN_CLASS} top-0 z-50`}
                     isRowHeader
                     id="key"
                   >
@@ -117,15 +131,15 @@ export function InspectEnvironmentMatrix({
                   </Table.Column>
                   {sources.map((source) => (
                     <Table.Column
-                      className="sticky top-0 z-40 bg-surface"
+                      className={`${ENVIRONMENT_COLUMN_CLASS} sticky top-0 z-40 bg-surface px-2 py-1.5`}
                       id={source.id}
                       key={source.id}
                     >
-                      <div className="min-w-48">
-                        <p className="font-mono text-sm">
+                      <div className="min-w-0">
+                        <p className="truncate font-mono text-sm font-semibold">
                           {source.relativePath}
                         </p>
-                        <p className="text-xs font-normal text-muted">
+                        <p className="truncate text-xs font-normal text-muted">
                           {sourceStatusLabel(source.parseStatus)} · Display{' '}
                           {source.sortOrder + 1}
                         </p>
@@ -147,13 +161,13 @@ export function InspectEnvironmentMatrix({
 
                     return (
                       <Table.Row
-                        className="even:bg-surface-secondary/40"
+                        className="border-b border-divider/40 even:bg-surface-secondary/30 hover:bg-surface-secondary/60"
                         id={row.keyName}
                       >
-                        <Table.Cell className="sticky left-0 z-30 min-w-64 bg-surface">
-                          <p className="font-mono text-sm font-medium">
-                            {row.keyName}
-                          </p>
+                        <Table.Cell
+                          className={`${KEY_COLUMN_CLASS} py-2 px-3 align-middle`}
+                        >
+                          <CopyableKeyName keyName={row.keyName} />
                           {activeCount > 1 ? (
                             <p className="mt-1 text-xs text-warning">
                               {activeCount} active definitions across this
@@ -166,7 +180,7 @@ export function InspectEnvironmentMatrix({
                             detailsBySource.get(source.relativePath) ?? [];
                           return (
                             <Table.Cell
-                              className="p-1"
+                              className={`${ENVIRONMENT_COLUMN_CLASS} p-1 align-middle`}
                               key={`${row.keyName}:${source.id}`}
                             >
                               <SourceMatrixCell
@@ -208,11 +222,11 @@ const SourceMatrixCell = memo(function SourceMatrixCell({
   source: EnvironmentSource;
   sourceDetails: EnvironmentMatrixSourceDetail[];
 }) {
-  const selection = useEnvironmentMatrixSelection();
-  const isSelected =
-    selection?.keyName === keyName &&
-    selection.environment.id === environment.id &&
-    selection.selectedSourcePath === source.relativePath;
+  const isSelected = useEnvironmentMatrixCellSelection(
+    keyName,
+    environment.id,
+    source.relativePath,
+  );
   const active = sourceDetails.filter((detail) => !detail.isCommented);
   const commented = sourceDetails.filter((detail) => detail.isCommented);
   const status = sourceCellStatus(source, active.length, commented.length);

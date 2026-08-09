@@ -18,6 +18,7 @@ interface EnvironmentMatrixColumnHeaderProps {
   isBusy: boolean;
   isOverlay?: boolean;
   listeners?: SyntheticListenerMap;
+  onDragHandlePointerEnter?: () => void;
   onManageSources: (environment: Environment) => void;
   onRefresh: (environment: Environment) => void;
   setActivatorNodeRef?: (element: HTMLElement | null) => void;
@@ -29,6 +30,7 @@ function EnvironmentMatrixColumnHeaderComponent({
   isBusy,
   isOverlay = false,
   listeners,
+  onDragHandlePointerEnter,
   onManageSources,
   onRefresh,
   setActivatorNodeRef,
@@ -77,6 +79,7 @@ function EnvironmentMatrixColumnHeaderComponent({
         className="cursor-grab active:cursor-grabbing disabled:cursor-not-allowed"
         isDisabled={isBusy}
         isIconOnly
+        onPointerEnter={onDragHandlePointerEnter}
         ref={setActivatorNodeRef}
         size="sm"
         variant="ghost"

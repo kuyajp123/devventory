@@ -1,12 +1,28 @@
 import type { Modifier } from '@dnd-kit/core';
 
+export interface EnvironmentHeaderBounds {
+  left: number;
+  right: number;
+}
+
+export function createEnvironmentHeaderBoundsCache() {
+  let value: EnvironmentHeaderBounds | null = null;
+
+  return {
+    get: () => value,
+    set: (nextValue: EnvironmentHeaderBounds | null) => {
+      value = nextValue;
+    },
+  };
+}
+
 export const restrictToHorizontalAxis: Modifier = ({ transform }) => ({
   ...transform,
   y: 0,
 });
 
 export function createRestrictToEnvironmentHeaderBounds(
-  getBounds: () => { left: number; right: number } | null,
+  getBounds: () => EnvironmentHeaderBounds | null,
 ): Modifier {
   return ({ transform, draggingNodeRect }) => {
     if (!draggingNodeRect) {
@@ -48,7 +64,7 @@ export function createRestrictToEnvironmentHeaderBounds(
 
 export function getEnvironmentHeaderBounds(
   headerElement: Element | null,
-): { left: number; right: number } | null {
+): EnvironmentHeaderBounds | null {
   if (!headerElement) {
     return null;
   }

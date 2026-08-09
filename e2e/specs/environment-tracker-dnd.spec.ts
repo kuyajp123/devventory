@@ -60,6 +60,135 @@ test('keeps environment status colors stable while selecting and reordering colu
   await expectStatusColor(page, 'Development', 'Present', 'chip--success');
 });
 
+test('shows the drag preview as soon as a column handle starts moving', async ({
+  page,
+}) => {
+  await page.addInitScript((database) => {
+    localStorage.setItem('devventory.e2e.database', JSON.stringify(database));
+  }, createMockDatabase());
+
+  await page.goto('/environments');
+
+  const handle = await page
+    .getByRole('button', { name: 'Reorder Development' })
+    .boundingBox();
+
+  if (!handle) {
+    throw new Error('The Development drag handle must be visible.');
+  }
+
+  await page.mouse.move(
+    handle.x + handle.width / 2,
+    handle.y + handle.height / 2,
+  );
+  await page.mouse.down();
+  await page.mouse.move(
+    handle.x + handle.width / 2 + 2,
+    handle.y + handle.height / 2,
+  );
+
+  await expect(page.getByText('Moving column')).toBeVisible({ timeout: 500 });
+  await page.mouse.up();
+});
+
+test('reorders columns without remounting every matrix cell', async ({
+  page,
+}) => {
+  await page.addInitScript((database) => {
+    localStorage.setItem('devventory.e2e.database', JSON.stringify(database));
+  }, createMockDatabase());
+
+  await page.goto('/environments');
+
+  const developmentCell = page.getByRole('button', {
+    name: /APP_MODE in Development: Present/,
+  });
+  await developmentCell.evaluate((element) => {
+    element.setAttribute('data-render-identity', 'preserved');
+  });
+
+  await dragColumn(page, 'Development', 'Production');
+
+  await expect(developmentCell).toHaveAttribute(
+    'data-render-identity',
+    'preserved',
+  );
+});
+
+test('keeps the page fixed while the environment matrix owns scrolling', async ({
+  page,
+}) => {
+  await page.addInitScript((database) => {
+    localStorage.setItem('devventory.e2e.database', JSON.stringify(database));
+  }, createMockDatabase());
+
+  await page.goto('/environments');
+  await expect(
+    page.getByRole('heading', { name: 'Environment tracker' }),
+  ).toBeVisible();
+
+  const workspace = page.locator('main');
+  await expect
+    .poll(() =>
+      workspace.evaluate((element) => getComputedStyle(element).overflowY),
+    )
+    .toBe('hidden');
+
+  const workspaceSize = await workspace.evaluate((element) => ({
+    clientHeight: element.clientHeight,
+    scrollHeight: element.scrollHeight,
+  }));
+  expect(workspaceSize.scrollHeight).toBeLessThanOrEqual(
+    workspaceSize.clientHeight + 1,
+  );
+
+  const matrixScroll = page.getByTestId('environment-matrix-scroll');
+  await expect(matrixScroll).toHaveCSS('overflow-x', 'auto');
+  await expect(matrixScroll).toHaveCSS('overflow-y', 'auto');
+
+  const matrixBottom = await matrixScroll.evaluate(
+    (element) => element.getBoundingClientRect().bottom,
+  );
+  const workspaceBottom = await workspace.evaluate(
+    (element) => element.getBoundingClientRect().bottom,
+  );
+  expect(matrixBottom).toBeLessThanOrEqual(workspaceBottom + 1);
+});
+
+test('shows copy guidance and confirms copied keys without a toast', async ({
+  page,
+}) => {
+  await page.addInitScript((database) => {
+    localStorage.setItem('devventory.e2e.database', JSON.stringify(database));
+    Object.defineProperty(navigator, 'clipboard', {
+      configurable: true,
+      value: {
+        writeText: async (value: string) => {
+          sessionStorage.setItem('devventory.e2e.clipboard', value);
+        },
+      },
+    });
+  }, createMockDatabase());
+
+  await page.goto('/environments');
+
+  const keyName = page.getByRole('button', {
+    name: 'Copy environment key APP_MODE',
+  });
+  await keyName.hover();
+  await expect(page.getByText('Click to copy environment key')).toBeVisible();
+
+  await keyName.click();
+
+  await expect(page.getByText('Copied')).toBeVisible();
+  await expect(page.getByText('Environment key copied')).toHaveCount(0);
+  await expect
+    .poll(() =>
+      page.evaluate(() => sessionStorage.getItem('devventory.e2e.clipboard')),
+    )
+    .toBe('APP_MODE');
+});
+
 async function dragColumn(page: Page, from: string, to: string) {
   const source = await page
     .getByRole('button', { name: `Reorder ${from}` })

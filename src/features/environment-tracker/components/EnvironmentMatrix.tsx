@@ -3,10 +3,11 @@ import {
   DndContext,
   type DragEndEvent,
   DragOverlay,
-  type DragStartEvent,
   KeyboardSensor,
+  type Modifier,
   PointerSensor,
   closestCenter,
+  useDndContext,
   useSensor,
   useSensors,
 } from '@dnd-kit/core';
@@ -21,7 +22,7 @@ import {
   IconGripVertical,
   IconTableOff,
 } from '@tabler/icons-react';
-import { memo, type CSSProperties, useMemo, useRef, useState } from 'react';
+import { memo, useCallback, useMemo, useRef, useState } from 'react';
 import { SemanticStatusChip } from '@/shared/ui';
 import type {
   Environment,
@@ -29,8 +30,10 @@ import type {
   EnvironmentMatrixPage,
 } from '../models/environment';
 import type { EnvironmentKeySelection } from './EnvironmentKeyDetails';
+import { CopyableKeyName } from './CopyableKeyName';
 import { EnvironmentMatrixColumnHeader } from './EnvironmentMatrixColumnHeader';
 import {
+  createEnvironmentHeaderBoundsCache,
   createRestrictToEnvironmentHeaderBounds,
   getEnvironmentHeaderBounds,
   restrictToHorizontalAxis,
@@ -44,7 +47,10 @@ import {
   resolveEnvironmentReorder,
 } from './environment-matrix-layout';
 import { EnvironmentMatrixSelectionProvider } from './environment-matrix-selection';
-import { useEnvironmentMatrixSelection } from './environment-matrix-selection-context';
+import {
+  type EnvironmentMatrixSelectionStore,
+  useEnvironmentMatrixCellSelection,
+} from './environment-matrix-selection-context';
 
 interface EnvironmentMatrixProps {
   isRefreshingId: string | null;
@@ -54,7 +60,7 @@ interface EnvironmentMatrixProps {
   onRefresh: (environment: Environment) => void;
   onReorder: (environmentIds: string[]) => Promise<void>;
   onSelect: (selection: EnvironmentKeySelection) => void;
-  selection: EnvironmentKeySelection | null;
+  selectionStore: EnvironmentMatrixSelectionStore;
 }
 
 interface EnvironmentMatrixBodyProps {
@@ -79,7 +85,7 @@ export function EnvironmentMatrix({
   onRefresh,
   onReorder,
   onSelect,
-  selection,
+  selectionStore,
 }: EnvironmentMatrixProps) {
   const scrollContainerRef = useRef<HTMLDivElement>(null);
 
@@ -91,10 +97,6 @@ export function EnvironmentMatrix({
   const [preferredEnvironmentIds, setPreferredEnvironmentIds] = useState<
     string[]
   >([]);
-
-  const [activeEnvironmentId, setActiveEnvironmentId] = useState<string | null>(
-    null,
-  );
 
   const environmentById = useMemo(
     () =>
@@ -135,28 +137,36 @@ export function EnvironmentMatrix({
     [environmentById, orderedEnvironmentIds],
   );
 
-  const activeEnvironment = activeEnvironmentId
-    ? environmentById.get(activeEnvironmentId)
-    : undefined;
-
   const tableMinWidth = getMatrixTableMinWidth(orderedEnvironments.length);
 
-  const [environmentHeaderBounds, setEnvironmentHeaderBounds] = useState(() =>
-    getEnvironmentHeaderBounds(null),
+  const [environmentHeaderBoundsCache] = useState(
+    createEnvironmentHeaderBoundsCache,
   );
 
   const dragModifiers = useMemo(
     () => [
       restrictToHorizontalAxis,
-      createRestrictToEnvironmentHeaderBounds(() => environmentHeaderBounds),
+      createRestrictToEnvironmentHeaderBounds(environmentHeaderBoundsCache.get),
     ],
-    [environmentHeaderBounds],
+    [environmentHeaderBoundsCache],
   );
+
+  const prepareDragBounds = useCallback(() => {
+    const tableHeader =
+      scrollContainerRef.current?.querySelector('[data-slot="table-header"]') ??
+      null;
+
+    environmentHeaderBoundsCache.set(getEnvironmentHeaderBounds(tableHeader));
+  }, [environmentHeaderBoundsCache]);
 
   const sensors = useSensors(
     useSensor(PointerSensor, {
       activationConstraint: {
         distance: 8,
+      },
+      bypassActivationConstraint: ({ activeNode, event }) => {
+        const activator = activeNode.activatorNode.current;
+        return activator?.contains(event.target as Node) ?? false;
       },
     }),
     useSensor(KeyboardSensor, {
@@ -164,22 +174,14 @@ export function EnvironmentMatrix({
     }),
   );
 
-  function resetDragState() {
-    setActiveEnvironmentId(null);
-  }
-
-  function handleDragStart(event: DragStartEvent) {
-    const tableHeader =
-      scrollContainerRef.current?.querySelector('[data-slot="table-header"]') ??
-      null;
-
-    setEnvironmentHeaderBounds(getEnvironmentHeaderBounds(tableHeader));
-    setActiveEnvironmentId(String(event.active.id));
+  function handleDragStart() {
+    if (!environmentHeaderBoundsCache.get()) {
+      prepareDragBounds();
+    }
   }
 
   function handleDragCancel() {
-    setEnvironmentHeaderBounds(null);
-    resetDragState();
+    environmentHeaderBoundsCache.set(null);
   }
 
   function handleDragEnd(event: DragEndEvent) {
@@ -189,8 +191,7 @@ export function EnvironmentMatrix({
       event.over?.id ? String(event.over.id) : null,
     );
 
-    setEnvironmentHeaderBounds(null);
-    resetDragState();
+    environmentHeaderBoundsCache.set(null);
 
     if (!nextIds) {
       return;
@@ -244,25 +245,21 @@ export function EnvironmentMatrix({
           items={orderedEnvironmentIds}
           strategy={noopSortingStrategy}
         >
-          <EnvironmentMatrixSelectionProvider selection={selection}>
+          <EnvironmentMatrixSelectionProvider store={selectionStore}>
             <Table variant="secondary">
               <Table.ScrollContainer
                 ref={scrollContainerRef}
-                className="max-h-[70vh] overflow-auto overscroll-contain"
+                className="max-h-[74vh] overflow-auto overscroll-contain"
                 data-testid="environment-matrix-scroll"
               >
                 <Table.Content
                   aria-label="Environment key matrix"
                   className="table-fixed"
-                  style={
-                    {
-                      minWidth: tableMinWidth,
-                      width: 'max(100%, var(--matrix-table-min-width))',
-                      '--matrix-table-min-width': `${tableMinWidth}px`,
-                    } as CSSProperties
-                  }
+                  style={{
+                    width: `${tableMinWidth}px`,
+                  }}
                 >
-                  <Table.Header className="sticky top-0 z-40 bg-surface">
+                  <Table.Header className="sticky top-0 z-40 bg-surface border-b border-divider">
                     <Table.Column
                       className={`${KEY_COLUMN_CLASS} top-0 z-50`}
                       isRowHeader
@@ -278,6 +275,7 @@ export function EnvironmentMatrix({
                           isReordering || isRefreshingId === environment.id
                         }
                         key={environment.id}
+                        onDragHandlePointerEnter={prepareDragBounds}
                         onManageSources={onManageSources}
                         onRefresh={onRefresh}
                       />
@@ -287,7 +285,6 @@ export function EnvironmentMatrix({
                   <EnvironmentMatrixBody
                     environmentIndexById={environmentIndexById}
                     environments={orderedEnvironments}
-                    key={orderedEnvironmentIds.join(':')}
                     onSelect={onSelect}
                     rows={matrix.rows}
                   />
@@ -297,24 +294,10 @@ export function EnvironmentMatrix({
           </EnvironmentMatrixSelectionProvider>
         </SortableContext>
 
-        <DragOverlay
-          adjustScale={false}
-          dropAnimation={null}
+        <EnvironmentMatrixDragOverlay
+          environmentById={environmentById}
           modifiers={dragModifiers}
-        >
-          {activeEnvironment ? (
-            <div
-              className="pointer-events-none transform-gpu"
-              style={{
-                contain: 'layout paint style',
-                width: ENVIRONMENT_COLUMN_WIDTH_PX,
-                willChange: 'transform',
-              }}
-            >
-              <EnvironmentColumnDragPreview environment={activeEnvironment} />
-            </div>
-          ) : null}
-        </DragOverlay>
+        />
       </DndContext>
     </section>
   );
@@ -329,11 +312,12 @@ const EnvironmentMatrixBody = memo(function EnvironmentMatrixBody({
   return (
     <Table.Body items={rows}>
       {(row) => (
-        <Table.Row className="even:bg-surface-secondary/40" id={row.keyName}>
-          <Table.Cell
-            className={`${KEY_COLUMN_CLASS} font-mono text-sm font-medium`}
-          >
-            {row.keyName}
+        <Table.Row
+          className="border-b border-divider/40 even:bg-surface-secondary/30 hover:bg-surface-secondary/60"
+          id={row.keyName}
+        >
+          <Table.Cell className={`${KEY_COLUMN_CLASS} py-2 px-3 align-middle`}>
+            <CopyableKeyName keyName={row.keyName} />
           </Table.Cell>
 
           {environments.map((environment) => {
@@ -346,7 +330,7 @@ const EnvironmentMatrixBody = memo(function EnvironmentMatrixBody({
 
             return (
               <Table.Cell
-                className={`${ENVIRONMENT_COLUMN_CLASS} p-1`}
+                className={`${ENVIRONMENT_COLUMN_CLASS} p-1 align-middle`}
                 key={`${row.keyName}-${environment.id}`}
               >
                 <MatrixCell
@@ -367,11 +351,13 @@ const EnvironmentMatrixBody = memo(function EnvironmentMatrixBody({
 const SortableEnvironmentColumn = memo(function SortableEnvironmentColumn({
   environment,
   isBusy,
+  onDragHandlePointerEnter,
   onManageSources,
   onRefresh,
 }: {
   environment: Environment;
   isBusy: boolean;
+  onDragHandlePointerEnter: () => void;
   onManageSources: (environment: Environment) => void;
   onRefresh: (environment: Environment) => void;
 }) {
@@ -383,6 +369,7 @@ const SortableEnvironmentColumn = memo(function SortableEnvironmentColumn({
       <SortableEnvironmentColumnContent
         environment={environment}
         isBusy={isBusy}
+        onDragHandlePointerEnter={onDragHandlePointerEnter}
         onManageSources={onManageSources}
         onRefresh={onRefresh}
       />
@@ -394,11 +381,13 @@ const SortableEnvironmentColumnContent = memo(
   function SortableEnvironmentColumnContent({
     environment,
     isBusy,
+    onDragHandlePointerEnter,
     onManageSources,
     onRefresh,
   }: {
     environment: Environment;
     isBusy: boolean;
+    onDragHandlePointerEnter: () => void;
     onManageSources: (environment: Environment) => void;
     onRefresh: (environment: Environment) => void;
   }) {
@@ -435,6 +424,7 @@ const SortableEnvironmentColumnContent = memo(
             environment={environment}
             isBusy={isBusy}
             listeners={listeners}
+            onDragHandlePointerEnter={onDragHandlePointerEnter}
             onManageSources={onManageSources}
             onRefresh={onRefresh}
             setActivatorNodeRef={setActivatorNodeRef}
@@ -444,6 +434,36 @@ const SortableEnvironmentColumnContent = memo(
     );
   },
 );
+
+function EnvironmentMatrixDragOverlay({
+  environmentById,
+  modifiers,
+}: {
+  environmentById: Map<string, Environment>;
+  modifiers: Modifier[];
+}) {
+  const { active } = useDndContext();
+  const activeEnvironment = active
+    ? environmentById.get(String(active.id))
+    : undefined;
+
+  return (
+    <DragOverlay adjustScale={false} dropAnimation={null} modifiers={modifiers}>
+      {activeEnvironment ? (
+        <div
+          className="pointer-events-none transform-gpu"
+          style={{
+            contain: 'layout paint style',
+            width: ENVIRONMENT_COLUMN_WIDTH_PX,
+            willChange: 'transform',
+          }}
+        >
+          <EnvironmentColumnDragPreview environment={activeEnvironment} />
+        </div>
+      ) : null}
+    </DragOverlay>
+  );
+}
 
 function EnvironmentColumnDragPreview({
   environment,
@@ -477,10 +497,7 @@ const MatrixCell = memo(function MatrixCell({
   keyName: string;
   onSelect: (selection: EnvironmentKeySelection) => void;
 }) {
-  const selection = useEnvironmentMatrixSelection();
-  const isSelected =
-    selection?.keyName === keyName &&
-    selection.environment.id === environment.id;
+  const isSelected = useEnvironmentMatrixCellSelection(keyName, environment.id);
   const activeCount = cell.sourceDetails.filter(
     (detail) => !detail.isCommented,
   ).length;

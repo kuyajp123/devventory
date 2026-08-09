@@ -101,6 +101,7 @@ export function AppLayout() {
         location.pathname === item.to ||
         (item.to !== '/dashboard' && location.pathname.startsWith(item.to)),
     )?.label ?? 'Workbench';
+  const isEnvironmentTrackerRoute = location.pathname === '/environments';
 
   return (
     <div className="flex h-screen w-screen flex-col overflow-hidden bg-background text-foreground select-none">
@@ -294,7 +295,13 @@ export function AppLayout() {
           </div>
 
           {/* Main Content Area */}
-          <main className="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8">
+          <main
+            className={`flex-1 p-4 sm:p-6 lg:p-8 ${
+              isEnvironmentTrackerRoute
+                ? 'flex min-h-0 flex-col overflow-hidden'
+                : 'overflow-y-auto'
+            }`}
+          >
             <Outlet />
           </main>
 

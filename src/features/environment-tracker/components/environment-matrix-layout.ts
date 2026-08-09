@@ -1,12 +1,13 @@
 import { arrayMove } from '@dnd-kit/sortable';
 
-export const KEY_COLUMN_WIDTH_PX = 256;
-export const ENVIRONMENT_COLUMN_WIDTH_PX = 208;
+export const KEY_COLUMN_WIDTH_PX = 340;
+export const ENVIRONMENT_COLUMN_WIDTH_PX = 220;
+export const TOOLBAR_HEIGHT_PX = 48;
 
 export const KEY_COLUMN_CLASS =
-  'sticky left-0 z-30 w-64 min-w-64 max-w-64 bg-surface';
+  'sticky left-0 z-30 w-[340px] min-w-[340px] max-w-[340px] bg-surface';
 export const ENVIRONMENT_COLUMN_CLASS =
-  'w-52 min-w-52 max-w-52 box-border p-0 align-top';
+  'w-[220px] min-w-[220px] max-w-[220px] box-border p-0 align-top';
 
 export function getMatrixTableMinWidth(environmentCount: number): number {
   return KEY_COLUMN_WIDTH_PX + environmentCount * ENVIRONMENT_COLUMN_WIDTH_PX;

@@ -1,13 +1,15 @@
 import type { PropsWithChildren } from 'react';
-import type { EnvironmentKeySelection } from './EnvironmentKeyDetails';
-import { EnvironmentMatrixSelectionContext } from './environment-matrix-selection-context';
+import {
+  EnvironmentMatrixSelectionContext,
+  type EnvironmentMatrixSelectionStore,
+} from './environment-matrix-selection-context';
 
 export function EnvironmentMatrixSelectionProvider({
   children,
-  selection,
-}: PropsWithChildren<{ selection: EnvironmentKeySelection | null }>) {
+  store,
+}: PropsWithChildren<{ store: EnvironmentMatrixSelectionStore }>) {
   return (
-    <EnvironmentMatrixSelectionContext.Provider value={selection}>
+    <EnvironmentMatrixSelectionContext.Provider value={store}>
       {children}
     </EnvironmentMatrixSelectionContext.Provider>
   );

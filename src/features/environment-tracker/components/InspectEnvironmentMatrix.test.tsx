@@ -7,6 +7,7 @@ import type {
   EnvironmentSource,
 } from '../models/environment';
 import { InspectEnvironmentMatrix } from './InspectEnvironmentMatrix';
+import { createEnvironmentMatrixSelectionStore } from './environment-matrix-selection-context';
 
 describe('InspectEnvironmentMatrix', () => {
   it('rebuilds the table collection when configured sources are added and removed', () => {
@@ -21,7 +22,7 @@ describe('InspectEnvironmentMatrix', () => {
         environment={environment}
         matrix={matrix}
         onSelect={vi.fn()}
-        selection={null}
+        selectionStore={createEnvironmentMatrixSelectionStore()}
         sources={sources.slice(0, 2)}
       />,
     );
@@ -33,7 +34,7 @@ describe('InspectEnvironmentMatrix', () => {
         environment={environment}
         matrix={matrix}
         onSelect={vi.fn()}
-        selection={null}
+        selectionStore={createEnvironmentMatrixSelectionStore()}
         sources={sources}
       />,
     );
@@ -50,7 +51,7 @@ describe('InspectEnvironmentMatrix', () => {
         environment={environment}
         matrix={matrix}
         onSelect={vi.fn()}
-        selection={null}
+        selectionStore={createEnvironmentMatrixSelectionStore()}
         sources={sources.slice(0, 2)}
       />,
     );
