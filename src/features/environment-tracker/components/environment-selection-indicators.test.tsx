@@ -86,8 +86,17 @@ const inspectMatrix = {
       ],
       keyName: selection.keyName,
     },
+    {
+      cells: [
+        {
+          sourceDetails: [sourceDetails[0]],
+          state: 'present' as const,
+        },
+      ],
+      keyName: 'SECURITY_EVENT_SECRET',
+    },
   ],
-  totalItems: 1,
+  totalItems: 2,
   totalPages: 1,
 };
 
@@ -109,8 +118,21 @@ const compareMatrix = {
       ],
       keyName: selection.keyName,
     },
+    {
+      cells: [
+        {
+          sourceDetails: [],
+          state: 'absent' as const,
+        },
+        {
+          sourceDetails: [sourceDetails[0]],
+          state: 'present' as const,
+        },
+      ],
+      keyName: 'SUPABASE_PROJECT_REF',
+    },
   ],
-  totalItems: 1,
+  totalItems: 2,
   totalPages: 1,
 };
 
@@ -227,6 +249,39 @@ describe('environment selection indicators', () => {
     ).toHaveLength(1);
   });
 
+  it('keeps every compare-view chip color attached to its status after cell selection', async () => {
+    const user = userEvent.setup();
+
+    renderWithProviders(<CompareSelectionHarness />);
+
+    await user.click(
+      screen.getByRole('button', {
+        name: /NARRATIVE_LIVE_REPORT_ID in Development: Absent/,
+      }),
+    );
+
+    expectChipColor(
+      `${selection.keyName}:${environment.id}`,
+      'Present',
+      'chip--success',
+    );
+    expectChipColor(
+      `${selection.keyName}:${developmentEnvironment.id}`,
+      'Absent',
+      'chip--default',
+    );
+    expectChipColor(
+      `SUPABASE_PROJECT_REF:${environment.id}`,
+      'Absent',
+      'chip--default',
+    );
+    expectChipColor(
+      `SUPABASE_PROJECT_REF:${developmentEnvironment.id}`,
+      'Present',
+      'chip--success',
+    );
+  });
+
   it('moves the inspect-view indicator between source cells and keeps headers sticky', async () => {
     const user = userEvent.setup();
 
@@ -264,6 +319,29 @@ describe('environment selection indicators', () => {
     ).toHaveClass('sticky', 'top-0');
   });
 
+  it('keeps inspect-view status colors stable after selecting an absent source cell', async () => {
+    const user = userEvent.setup();
+
+    renderWithProviders(<InspectSelectionHarness />);
+
+    await user.click(
+      screen.getByRole('button', {
+        name: 'SECURITY_EVENT_SECRET in .env.security-test.local: Absent',
+      }),
+    );
+
+    expectChipColor(
+      `SECURITY_EVENT_SECRET:${firstSource.id}`,
+      'Active',
+      'chip--success',
+    );
+    expectChipColor(
+      `SECURITY_EVENT_SECRET:${secondSource.id}`,
+      'Absent',
+      'chip--default',
+    );
+  });
+
   it('uses explicit, stable colors for every environment status legend item', () => {
     renderWithProviders(<EnvironmentStatusLegend />);
 
@@ -278,3 +356,11 @@ describe('environment selection indicators', () => {
     expect(document.querySelectorAll('[data-legend-status]')).toHaveLength(5);
   });
 });
+
+function expectChipColor(cellId: string, label: string, colorClass: string) {
+  const cell = document.querySelector(`[data-cell-id="${cellId}"]`);
+  const chip = cell?.querySelector('[data-slot="chip"]');
+
+  expect(chip).toHaveTextContent(label);
+  expect(chip).toHaveClass(colorClass);
+}

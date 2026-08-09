@@ -14,6 +14,8 @@ import {
   type EnvironmentSource,
 } from '../models/environment';
 import type { EnvironmentKeySelection } from './EnvironmentKeyDetails';
+import { EnvironmentMatrixSelectionProvider } from './environment-matrix-selection';
+import { useEnvironmentMatrixSelection } from './environment-matrix-selection-context';
 
 export function InspectEnvironmentMatrix({
   environment,
@@ -94,105 +96,96 @@ export function InspectEnvironmentMatrix({
           </p>
         </EmptyState>
       ) : (
-        <Table variant="secondary">
-          <Table.ScrollContainer
-            className="max-h-[70vh] overflow-auto overscroll-contain"
-            data-testid="inspect-environment-matrix-scroll"
-          >
-            <Table.Content
-              aria-label={`${environment.name} source-file key matrix`}
+        <EnvironmentMatrixSelectionProvider selection={selection}>
+          <Table variant="secondary">
+            <Table.ScrollContainer
+              className="max-h-[70vh] overflow-auto overscroll-contain"
+              data-testid="inspect-environment-matrix-scroll"
             >
-              <Table.Header className="sticky top-0 z-40 bg-surface">
-                <Table.Column
-                  className="sticky left-0 top-0 z-50 min-w-64 bg-surface"
-                  isRowHeader
-                  id="key"
-                >
-                  Configuration key
-                </Table.Column>
-                {sources.map((source) => (
-                  <Table.Column
-                    className="sticky top-0 z-40 bg-surface"
-                    id={source.id}
-                    key={source.id}
-                  >
-                    <div className="min-w-48">
-                      <p className="font-mono text-sm">{source.relativePath}</p>
-                      <p className="text-xs font-normal text-muted">
-                        {sourceStatusLabel(source.parseStatus)} · Display{' '}
-                        {source.sortOrder + 1}
-                      </p>
-                    </div>
-                  </Table.Column>
-                ))}
-              </Table.Header>
-              <Table.Body
-                dependencies={[
-                  selection?.keyName,
-                  selection?.environment.id,
-                  selection?.selectedSourcePath,
-                ]}
-                items={matrix.rows}
+              <Table.Content
+                aria-label={`${environment.name} source-file key matrix`}
               >
-                {(row) => {
-                  const environmentCell =
-                    environmentIndex >= 0
-                      ? row.cells[environmentIndex]
-                      : undefined;
-                  const allDetails = environmentCell?.sourceDetails ?? [];
-                  const detailsBySource = groupDetailsBySource(allDetails);
-                  const activeCount = allDetails.filter(
-                    (detail) => !detail.isCommented,
-                  ).length;
-
-                  return (
-                    <Table.Row
-                      className="even:bg-surface-secondary/40"
-                      id={row.keyName}
+                <Table.Header className="sticky top-0 z-40 bg-surface">
+                  <Table.Column
+                    className="sticky left-0 top-0 z-50 min-w-64 bg-surface"
+                    isRowHeader
+                    id="key"
+                  >
+                    Configuration key
+                  </Table.Column>
+                  {sources.map((source) => (
+                    <Table.Column
+                      className="sticky top-0 z-40 bg-surface"
+                      id={source.id}
+                      key={source.id}
                     >
-                      <Table.Cell className="sticky left-0 z-30 min-w-64 bg-surface">
-                        <p className="font-mono text-sm font-medium">
-                          {row.keyName}
+                      <div className="min-w-48">
+                        <p className="font-mono text-sm">
+                          {source.relativePath}
                         </p>
-                        {activeCount > 1 ? (
-                          <p className="mt-1 text-xs text-warning">
-                            {activeCount} active definitions across this
-                            environment
-                          </p>
-                        ) : null}
-                      </Table.Cell>
-                      {sources.map((source) => {
-                        const details =
-                          detailsBySource.get(source.relativePath) ?? [];
-                        const isCellSelected =
-                          selection?.keyName === row.keyName &&
-                          selection.environment.id === environment.id &&
-                          selection.selectedSourcePath === source.relativePath;
+                        <p className="text-xs font-normal text-muted">
+                          {sourceStatusLabel(source.parseStatus)} · Display{' '}
+                          {source.sortOrder + 1}
+                        </p>
+                      </div>
+                    </Table.Column>
+                  ))}
+                </Table.Header>
+                <Table.Body items={matrix.rows}>
+                  {(row) => {
+                    const environmentCell =
+                      environmentIndex >= 0
+                        ? row.cells[environmentIndex]
+                        : undefined;
+                    const allDetails = environmentCell?.sourceDetails ?? [];
+                    const detailsBySource = groupDetailsBySource(allDetails);
+                    const activeCount = allDetails.filter(
+                      (detail) => !detail.isCommented,
+                    ).length;
 
-                        return (
-                          <Table.Cell
-                            className="p-1"
-                            key={`${row.keyName}:${source.id}`}
-                          >
-                            <SourceMatrixCell
-                              allDetails={allDetails}
-                              environment={environment}
-                              isSelected={isCellSelected}
-                              keyName={row.keyName}
-                              onSelect={onSelect}
-                              source={source}
-                              sourceDetails={details}
-                            />
-                          </Table.Cell>
-                        );
-                      })}
-                    </Table.Row>
-                  );
-                }}
-              </Table.Body>
-            </Table.Content>
-          </Table.ScrollContainer>
-        </Table>
+                    return (
+                      <Table.Row
+                        className="even:bg-surface-secondary/40"
+                        id={row.keyName}
+                      >
+                        <Table.Cell className="sticky left-0 z-30 min-w-64 bg-surface">
+                          <p className="font-mono text-sm font-medium">
+                            {row.keyName}
+                          </p>
+                          {activeCount > 1 ? (
+                            <p className="mt-1 text-xs text-warning">
+                              {activeCount} active definitions across this
+                              environment
+                            </p>
+                          ) : null}
+                        </Table.Cell>
+                        {sources.map((source) => {
+                          const details =
+                            detailsBySource.get(source.relativePath) ?? [];
+                          return (
+                            <Table.Cell
+                              className="p-1"
+                              key={`${row.keyName}:${source.id}`}
+                            >
+                              <SourceMatrixCell
+                                allDetails={allDetails}
+                                environment={environment}
+                                keyName={row.keyName}
+                                onSelect={onSelect}
+                                source={source}
+                                sourceDetails={details}
+                              />
+                            </Table.Cell>
+                          );
+                        })}
+                      </Table.Row>
+                    );
+                  }}
+                </Table.Body>
+              </Table.Content>
+            </Table.ScrollContainer>
+          </Table>
+        </EnvironmentMatrixSelectionProvider>
       )}
     </div>
   );
@@ -201,7 +194,6 @@ export function InspectEnvironmentMatrix({
 const SourceMatrixCell = memo(function SourceMatrixCell({
   allDetails,
   environment,
-  isSelected,
   keyName,
   onSelect,
   source,
@@ -209,12 +201,16 @@ const SourceMatrixCell = memo(function SourceMatrixCell({
 }: {
   allDetails: EnvironmentMatrixSourceDetail[];
   environment: Environment;
-  isSelected: boolean;
   keyName: string;
   onSelect: (selection: EnvironmentKeySelection) => void;
   source: EnvironmentSource;
   sourceDetails: EnvironmentMatrixSourceDetail[];
 }) {
+  const selection = useEnvironmentMatrixSelection();
+  const isSelected =
+    selection?.keyName === keyName &&
+    selection.environment.id === environment.id &&
+    selection.selectedSourcePath === source.relativePath;
   const active = sourceDetails.filter((detail) => !detail.isCommented);
   const commented = sourceDetails.filter((detail) => detail.isCommented);
   const status = sourceCellStatus(source, active.length, commented.length);
@@ -239,20 +235,12 @@ const SourceMatrixCell = memo(function SourceMatrixCell({
       }
       type="button"
     >
-      <div className="min-w-0">
-        <Chip
-          color={sourceCellColor(source, active.length)}
-          size="sm"
-          variant="soft"
-        >
-          <Chip.Label>{status}</Chip.Label>
-        </Chip>
-        {summary ? (
-          <p className="mt-1 truncate text-xs text-muted" title={summary}>
-            {summary}
-          </p>
-        ) : null}
-      </div>
+      <SourceMatrixCellStatus
+        activeCount={active.length}
+        source={source}
+        status={status}
+        summary={summary}
+      />
       <IconChevronRight
         aria-hidden="true"
         className="shrink-0 text-muted"
@@ -260,6 +248,35 @@ const SourceMatrixCell = memo(function SourceMatrixCell({
         stroke={ICON_STROKE}
       />
     </button>
+  );
+});
+
+const SourceMatrixCellStatus = memo(function SourceMatrixCellStatus({
+  activeCount,
+  source,
+  status,
+  summary,
+}: {
+  activeCount: number;
+  source: EnvironmentSource;
+  status: string;
+  summary: string | null;
+}) {
+  return (
+    <div className="min-w-0">
+      <Chip
+        color={sourceCellColor(source, activeCount)}
+        size="sm"
+        variant="soft"
+      >
+        <Chip.Label>{status}</Chip.Label>
+      </Chip>
+      {summary ? (
+        <p className="mt-1 truncate text-xs text-muted" title={summary}>
+          {summary}
+        </p>
+      ) : null}
+    </div>
   );
 });
 

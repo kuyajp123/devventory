@@ -2,7 +2,6 @@ import { ICON_SIZE, ICON_STROKE } from '@/shared/constants/icon.constants';
 import {
   DndContext,
   type DragEndEvent,
-  type DragOverEvent,
   DragOverlay,
   type DragStartEvent,
   KeyboardSensor,
@@ -43,6 +42,8 @@ import {
   mergePreferredEnvironmentOrder,
   resolveEnvironmentReorder,
 } from './environment-matrix-layout';
+import { EnvironmentMatrixSelectionProvider } from './environment-matrix-selection';
+import { useEnvironmentMatrixSelection } from './environment-matrix-selection-context';
 
 interface EnvironmentMatrixProps {
   isRefreshingId: string | null;
@@ -62,7 +63,6 @@ interface EnvironmentMatrixBodyProps {
   environments: Environment[];
   onSelect: (selection: EnvironmentKeySelection) => void;
   rows: EnvironmentMatrixPage['rows'];
-  selection: EnvironmentKeySelection | null;
 }
 
 const ABSENT_CELL: EnvironmentMatrixCell = {
@@ -96,10 +96,6 @@ export function EnvironmentMatrix({
   >([]);
 
   const [activeEnvironmentId, setActiveEnvironmentId] = useState<string | null>(
-    null,
-  );
-
-  const [overEnvironmentId, setOverEnvironmentId] = useState<string | null>(
     null,
   );
 
@@ -173,7 +169,6 @@ export function EnvironmentMatrix({
 
   function resetDragState() {
     setActiveEnvironmentId(null);
-    setOverEnvironmentId(null);
   }
 
   function handleDragStart(event: DragStartEvent) {
@@ -183,17 +178,6 @@ export function EnvironmentMatrix({
 
     setEnvironmentHeaderBounds(getEnvironmentHeaderBounds(tableHeader));
     setActiveEnvironmentId(String(event.active.id));
-    setOverEnvironmentId(String(event.active.id));
-  }
-
-  function handleDragOver(event: DragOverEvent) {
-    const nextOverEnvironmentId = event.over ? String(event.over.id) : null;
-
-    setOverEnvironmentId((currentEnvironmentId) =>
-      currentEnvironmentId === nextOverEnvironmentId
-        ? currentEnvironmentId
-        : nextOverEnvironmentId,
-    );
   }
 
   function handleDragCancel() {
@@ -256,7 +240,6 @@ export function EnvironmentMatrix({
         modifiers={dragModifiers}
         onDragCancel={handleDragCancel}
         onDragEnd={handleDragEnd}
-        onDragOver={handleDragOver}
         onDragStart={handleDragStart}
         sensors={sensors}
       >
@@ -264,59 +247,59 @@ export function EnvironmentMatrix({
           items={orderedEnvironmentIds}
           strategy={noopSortingStrategy}
         >
-          <Table variant="secondary">
-            <Table.ScrollContainer
-              ref={scrollContainerRef}
-              className="max-h-[70vh] overflow-auto overscroll-contain"
-              data-testid="environment-matrix-scroll"
-            >
-              <Table.Content
-                aria-label="Environment key matrix"
-                className="table-fixed"
-                style={
-                  {
-                    minWidth: tableMinWidth,
-                    width: 'max(100%, var(--matrix-table-min-width))',
-                    '--matrix-table-min-width': `${tableMinWidth}px`,
-                  } as CSSProperties
-                }
+          <EnvironmentMatrixSelectionProvider selection={selection}>
+            <Table variant="secondary">
+              <Table.ScrollContainer
+                ref={scrollContainerRef}
+                className="max-h-[70vh] overflow-auto overscroll-contain"
+                data-testid="environment-matrix-scroll"
               >
-                <Table.Header className="sticky top-0 z-40 bg-surface">
-                  <Table.Column
-                    className={`${KEY_COLUMN_CLASS} top-0 z-50`}
-                    isRowHeader
-                    id="key"
-                  >
-                    Configuration key
-                  </Table.Column>
+                <Table.Content
+                  aria-label="Environment key matrix"
+                  className="table-fixed"
+                  style={
+                    {
+                      minWidth: tableMinWidth,
+                      width: 'max(100%, var(--matrix-table-min-width))',
+                      '--matrix-table-min-width': `${tableMinWidth}px`,
+                    } as CSSProperties
+                  }
+                >
+                  <Table.Header className="sticky top-0 z-40 bg-surface">
+                    <Table.Column
+                      className={`${KEY_COLUMN_CLASS} top-0 z-50`}
+                      isRowHeader
+                      id="key"
+                    >
+                      Configuration key
+                    </Table.Column>
 
-                  {orderedEnvironments.map((environment) => (
-                    <SortableEnvironmentColumn
-                      environment={environment}
-                      isBusy={isReordering || isRefreshingId === environment.id}
-                      isDropTarget={
-                        overEnvironmentId === environment.id &&
-                        activeEnvironmentId !== environment.id
-                      }
-                      key={environment.id}
-                      onDelete={onDelete}
-                      onEdit={onEdit}
-                      onManageSources={onManageSources}
-                      onRefresh={onRefresh}
-                    />
-                  ))}
-                </Table.Header>
+                    {orderedEnvironments.map((environment) => (
+                      <SortableEnvironmentColumn
+                        environment={environment}
+                        isBusy={
+                          isReordering || isRefreshingId === environment.id
+                        }
+                        key={environment.id}
+                        onDelete={onDelete}
+                        onEdit={onEdit}
+                        onManageSources={onManageSources}
+                        onRefresh={onRefresh}
+                      />
+                    ))}
+                  </Table.Header>
 
-                <EnvironmentMatrixBody
-                  environmentIndexById={environmentIndexById}
-                  environments={orderedEnvironments}
-                  onSelect={onSelect}
-                  rows={matrix.rows}
-                  selection={selection}
-                />
-              </Table.Content>
-            </Table.ScrollContainer>
-          </Table>
+                  <EnvironmentMatrixBody
+                    environmentIndexById={environmentIndexById}
+                    environments={orderedEnvironments}
+                    key={orderedEnvironmentIds.join(':')}
+                    onSelect={onSelect}
+                    rows={matrix.rows}
+                  />
+                </Table.Content>
+              </Table.ScrollContainer>
+            </Table>
+          </EnvironmentMatrixSelectionProvider>
         </SortableContext>
 
         <DragOverlay
@@ -347,17 +330,9 @@ const EnvironmentMatrixBody = memo(function EnvironmentMatrixBody({
   environments,
   onSelect,
   rows,
-  selection,
 }: EnvironmentMatrixBodyProps) {
   return (
-    <Table.Body
-      dependencies={[
-        selection?.keyName,
-        selection?.environment.id,
-        selection?.selectedSourcePath,
-      ]}
-      items={rows}
-    >
+    <Table.Body items={rows}>
       {(row) => (
         <Table.Row className="even:bg-surface-secondary/40" id={row.keyName}>
           <Table.Cell
@@ -382,10 +357,6 @@ const EnvironmentMatrixBody = memo(function EnvironmentMatrixBody({
                 <MatrixCell
                   cell={cell}
                   environment={environment}
-                  isSelected={
-                    selection?.keyName === row.keyName &&
-                    selection.environment.id === environment.id
-                  }
                   keyName={row.keyName}
                   onSelect={onSelect}
                 />
@@ -401,7 +372,6 @@ const EnvironmentMatrixBody = memo(function EnvironmentMatrixBody({
 const SortableEnvironmentColumn = memo(function SortableEnvironmentColumn({
   environment,
   isBusy,
-  isDropTarget,
   onDelete,
   onEdit,
   onManageSources,
@@ -409,48 +379,88 @@ const SortableEnvironmentColumn = memo(function SortableEnvironmentColumn({
 }: {
   environment: Environment;
   isBusy: boolean;
-  isDropTarget: boolean;
   onDelete: (environment: Environment) => void;
   onEdit: (environment: Environment) => void;
   onManageSources: (environment: Environment) => void;
   onRefresh: (environment: Environment) => void;
 }) {
-  const { attributes, isDragging, listeners, setActivatorNodeRef, setNodeRef } =
-    useSortable({
+  return (
+    <Table.Column
+      className={`${ENVIRONMENT_COLUMN_CLASS} sticky top-0 z-40 bg-surface`}
+      id={environment.id}
+    >
+      <SortableEnvironmentColumnContent
+        environment={environment}
+        isBusy={isBusy}
+        onDelete={onDelete}
+        onEdit={onEdit}
+        onManageSources={onManageSources}
+        onRefresh={onRefresh}
+      />
+    </Table.Column>
+  );
+});
+
+const SortableEnvironmentColumnContent = memo(
+  function SortableEnvironmentColumnContent({
+    environment,
+    isBusy,
+    onDelete,
+    onEdit,
+    onManageSources,
+    onRefresh,
+  }: {
+    environment: Environment;
+    isBusy: boolean;
+    onDelete: (environment: Environment) => void;
+    onEdit: (environment: Environment) => void;
+    onManageSources: (environment: Environment) => void;
+    onRefresh: (environment: Environment) => void;
+  }) {
+    const {
+      attributes,
+      isDragging,
+      isOver,
+      listeners,
+      setActivatorNodeRef,
+      setNodeRef,
+    } = useSortable({
       animateLayoutChanges: () => false,
       disabled: isBusy,
       id: environment.id,
     });
 
-  return (
-    <Table.Column
-      ref={setNodeRef}
-      className={`${ENVIRONMENT_COLUMN_CLASS} sticky top-0 z-40 bg-surface ${
-        isDropTarget ? 'bg-accent/5 ring-2 ring-inset ring-accent/60' : ''
-      } ${isDragging ? 'opacity-40' : ''}`}
-      id={environment.id}
-    >
-      {isDragging ? (
-        <div
-          aria-hidden="true"
-          className="min-h-[3.75rem] rounded-lg border border-dashed border-divider bg-surface-secondary/60"
-        />
-      ) : (
-        <EnvironmentMatrixColumnHeader
-          attributes={attributes}
-          environment={environment}
-          isBusy={isBusy}
-          listeners={listeners}
-          onDelete={onDelete}
-          onEdit={onEdit}
-          onManageSources={onManageSources}
-          onRefresh={onRefresh}
-          setActivatorNodeRef={setActivatorNodeRef}
-        />
-      )}
-    </Table.Column>
-  );
-});
+    return (
+      <div
+        ref={setNodeRef}
+        className={`h-full rounded-lg ${
+          isOver && !isDragging
+            ? 'bg-accent/5 ring-2 ring-inset ring-accent/60'
+            : ''
+        } ${isDragging ? 'opacity-40' : ''}`}
+      >
+        {isDragging ? (
+          <div
+            aria-hidden="true"
+            className="min-h-[3.75rem] rounded-lg border border-dashed border-divider bg-surface-secondary/60"
+          />
+        ) : (
+          <EnvironmentMatrixColumnHeader
+            attributes={attributes}
+            environment={environment}
+            isBusy={isBusy}
+            listeners={listeners}
+            onDelete={onDelete}
+            onEdit={onEdit}
+            onManageSources={onManageSources}
+            onRefresh={onRefresh}
+            setActivatorNodeRef={setActivatorNodeRef}
+          />
+        )}
+      </div>
+    );
+  },
+);
 
 function EnvironmentColumnDragPreview({
   environment,
@@ -476,16 +486,18 @@ function EnvironmentColumnDragPreview({
 const MatrixCell = memo(function MatrixCell({
   cell,
   environment,
-  isSelected,
   keyName,
   onSelect,
 }: {
   cell: EnvironmentMatrixCell;
   environment: Environment;
-  isSelected: boolean;
   keyName: string;
   onSelect: (selection: EnvironmentKeySelection) => void;
 }) {
+  const selection = useEnvironmentMatrixSelection();
+  const isSelected =
+    selection?.keyName === keyName &&
+    selection.environment.id === environment.id;
   const activeCount = cell.sourceDetails.filter(
     (detail) => !detail.isCommented,
   ).length;
@@ -514,17 +526,7 @@ const MatrixCell = memo(function MatrixCell({
       }
       type="button"
     >
-      <div className="min-w-0 space-y-1">
-        <Chip color={cellColor(cell.state)} size="sm" variant="soft">
-          <Chip.Label>{status}</Chip.Label>
-        </Chip>
-
-        {summary ? (
-          <p className="truncate text-xs text-muted" title={summary}>
-            {summary}
-          </p>
-        ) : null}
-      </div>
+      <MatrixCellStatus state={cell.state} status={status} summary={summary} />
 
       <IconChevronRight
         aria-hidden="true"
@@ -533,6 +535,30 @@ const MatrixCell = memo(function MatrixCell({
         stroke={ICON_STROKE}
       />
     </button>
+  );
+});
+
+const MatrixCellStatus = memo(function MatrixCellStatus({
+  state,
+  status,
+  summary,
+}: {
+  state: EnvironmentMatrixCell['state'];
+  status: string;
+  summary: string | null;
+}) {
+  return (
+    <div className="min-w-0 space-y-1">
+      <Chip color={cellColor(state)} size="sm" variant="soft">
+        <Chip.Label>{status}</Chip.Label>
+      </Chip>
+
+      {summary ? (
+        <p className="truncate text-xs text-muted" title={summary}>
+          {summary}
+        </p>
+      ) : null}
+    </div>
   );
 });
 

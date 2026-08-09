@@ -9,7 +9,7 @@ import {
 } from '@tabler/icons-react';
 import type { DraggableAttributes } from '@dnd-kit/core';
 import type { SyntheticListenerMap } from '@dnd-kit/core/dist/hooks/utilities';
-import type { Key } from 'react';
+import { memo, type Key } from 'react';
 import { ICON_SIZE, ICON_STROKE } from '@/shared/constants/icon.constants';
 import { useEnvironmentSourcesQuery } from '../hooks/use-environments';
 import type { Environment, EnvironmentSource } from '../models/environment';
@@ -27,7 +27,7 @@ interface EnvironmentMatrixColumnHeaderProps {
   setActivatorNodeRef?: (element: HTMLElement | null) => void;
 }
 
-export function EnvironmentMatrixColumnHeader({
+function EnvironmentMatrixColumnHeaderComponent({
   attributes,
   environment,
   isBusy,
@@ -172,6 +172,10 @@ export function EnvironmentMatrixColumnHeader({
     </div>
   );
 }
+
+export const EnvironmentMatrixColumnHeader = memo(
+  EnvironmentMatrixColumnHeaderComponent,
+);
 
 function sourceHasIssue(source: EnvironmentSource): boolean {
   return !['not_parsed', 'parsed'].includes(source.parseStatus);
