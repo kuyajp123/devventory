@@ -2,6 +2,7 @@ use sqlx::{query, query_as, FromRow, Sqlite, SqlitePool, Transaction};
 use uuid::Uuid;
 
 use super::error::ProjectError;
+use super::exclusions::is_built_in_exclusion;
 use super::model::{
     InitialScanSummary, NewProjectRecord, Project, ProjectScanTarget, ProjectType,
     WatchedLocationScanTarget,
@@ -131,6 +132,7 @@ impl SqliteProjectRepository {
         .await?
         .into_iter()
         .map(|item| item.value)
+        .filter(|value| !is_built_in_exclusion(value))
         .collect();
 
         Ok(Project {
@@ -188,6 +190,7 @@ impl SqliteProjectRepository {
         .await?
         .into_iter()
         .map(|item| item.value)
+        .filter(|value| !is_built_in_exclusion(value))
         .collect();
 
         Ok(ProjectScanTarget {

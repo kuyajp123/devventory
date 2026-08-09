@@ -8,8 +8,8 @@ use crate::features::projects::{
 use crate::shared::database::{initialize_database, DatabasePaths};
 
 use super::model::{
-    FileCategory, FileStatus, InventoryQuery, InventorySortField, ScanStatus, ScanType,
-    SortDirection,
+    FileCategory, FileStatus, InventoryQuery, InventorySortField, ProjectDirectoryQuery,
+    ScanStatus, ScanType, SortDirection,
 };
 use super::repository::{FileInventoryRepository, SqliteFileInventoryRepository};
 use super::service::FileInventoryService;
@@ -83,6 +83,7 @@ async fn reconciles_persistent_metadata_and_recovers_missing_files() {
             sort_direction: SortDirection::Descending,
             page: 1,
             page_size: 10,
+            parent_folder: None,
         })
         .await
         .expect("size-sorted inventory");
@@ -146,6 +147,7 @@ async fn reconciles_persistent_metadata_and_recovers_missing_files() {
             sort_direction: SortDirection::Ascending,
             page: 1,
             page_size: 10,
+            parent_folder: None,
         })
         .await
         .expect("recovered inventory");
@@ -171,6 +173,7 @@ async fn reconciles_persistent_metadata_and_recovers_missing_files() {
             sort_direction: SortDirection::Ascending,
             page: 1,
             page_size: 10,
+            parent_folder: None,
         })
         .await
         .expect("moved file query");
@@ -253,6 +256,122 @@ async fn a_partial_scan_never_marks_unseen_records_missing() {
     initialization.database.close().await;
 }
 
+#[tokio::test]
+async fn live_directory_pages_are_secure_bounded_and_apply_all_exclusions() {
+    let workspace = tempdir().expect("temporary workspace");
+    let root = workspace.path().join("project");
+    for relative in [
+        "assets/empty-folder",
+        "docs",
+        "generated/private",
+        "node_modules/package",
+        "packages/app/node_modules/package",
+        "src/components",
+    ] {
+        fs::create_dir_all(root.join(relative)).expect("project directory");
+    }
+    fs::write(root.join("README.md"), "Devventory").expect("project file");
+
+    let initialization = initialize_database(&DatabasePaths::new(workspace.path().join("data")))
+        .await
+        .expect("database initialization");
+    let project_service = ProjectService::new(
+        SqliteProjectRepository::new(initialization.database.pool().clone()),
+        LocalProjectFilesystem,
+    );
+    let project = project_service
+        .create(CreateProject {
+            name: "Directory project".to_owned(),
+            description: None,
+            project_type: ProjectType::Other,
+            root_path: root.to_string_lossy().into_owned(),
+            watched_locations: vec!["src".to_owned()],
+            exclusions: vec!["generated/".to_owned()],
+        })
+        .await
+        .expect("project creation");
+    let inventory = FileInventoryService::new(
+        SqliteFileInventoryRepository::new(initialization.database.pool().clone()),
+        project_service,
+    );
+
+    let first = inventory
+        .list_directory(directory_query(project.id(), ".", 1, 2))
+        .await
+        .expect("first directory page");
+    assert_eq!(first.total_items, 4);
+    assert_eq!(first.total_pages, 2);
+    assert!(first.has_more);
+    assert_eq!(
+        first
+            .items
+            .iter()
+            .map(|entry| entry.relative_path.as_str())
+            .collect::<Vec<_>>(),
+        ["assets", "docs"]
+    );
+
+    let second = inventory
+        .list_directory(directory_query(project.id(), ".", 2, 2))
+        .await
+        .expect("second directory page");
+    assert_eq!(
+        second
+            .items
+            .iter()
+            .map(|entry| entry.relative_path.as_str())
+            .collect::<Vec<_>>(),
+        ["packages", "src"]
+    );
+    assert!(!second.has_more);
+    assert!(second.items[1].is_watched);
+
+    let assets = inventory
+        .list_directory(directory_query(project.id(), "assets", 1, 25))
+        .await
+        .expect("nested directory page");
+    assert_eq!(assets.items.len(), 1);
+    assert_eq!(assets.items[0].relative_path, "assets/empty-folder");
+
+    assert!(inventory
+        .list_directory(directory_query(project.id(), "../outside", 1, 25))
+        .await
+        .is_err());
+    assert!(inventory
+        .list_directory(directory_query(
+            project.id(),
+            &root.to_string_lossy(),
+            1,
+            25,
+        ))
+        .await
+        .is_err());
+    assert!(inventory
+        .list_directory(directory_query(project.id(), "README.md", 1, 25))
+        .await
+        .is_err());
+    assert!(inventory
+        .list_directory(directory_query(project.id(), "missing", 1, 25))
+        .await
+        .is_err());
+
+    initialization.database.close().await;
+}
+
+fn directory_query(
+    project_id: uuid::Uuid,
+    relative_path: &str,
+    page: u32,
+    page_size: u32,
+) -> ProjectDirectoryQuery {
+    ProjectDirectoryQuery {
+        project_id,
+        relative_path: relative_path.to_owned(),
+        page,
+        page_size,
+    }
+}
+
 fn query(
     project_id: uuid::Uuid,
     category: Option<FileCategory>,
@@ -270,5 +389,6 @@ fn query(
         sort_direction: SortDirection::Ascending,
         page,
         page_size,
+        parent_folder: None,
     }
 }

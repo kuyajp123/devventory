@@ -51,7 +51,7 @@ describe('ProjectOnboardingPage', () => {
     vi.mocked(projectsGateway.create).mockResolvedValue({
       createdAt: '2026-08-01T00:00:00.000Z',
       description: 'Offline inventory',
-      exclusions: ['node_modules/'],
+      exclusions: [],
       id: projectId,
       initialScan: scanSummary,
       name: 'Devventory',
@@ -74,9 +74,11 @@ describe('ProjectOnboardingPage', () => {
     );
 
     expect(screen.getByLabelText('Watched locations')).toHaveValue('.');
-    expect(screen.getByLabelText('Exclusions')).toHaveValue(
-      DEFAULT_PROJECT_EXCLUSIONS.join('\n'),
-    );
+    expect(screen.getByText('Built-in exclusions')).toBeVisible();
+    for (const exclusion of DEFAULT_PROJECT_EXCLUSIONS) {
+      expect(screen.getByText(exclusion)).toBeVisible();
+    }
+    expect(screen.getByLabelText('Additional exclusions')).toHaveValue('');
     await user.type(screen.getByLabelText('Project name'), 'Devventory');
     await user.type(
       screen.getByLabelText('Description (optional)'),

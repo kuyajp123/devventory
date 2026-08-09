@@ -23,7 +23,7 @@ use features::environment_tracker::commands::{
     reorder_environment_sources, reorder_environments, update_environment,
 };
 use features::file_inventory::commands::{
-    list_project_files, rescan_project, rescan_watched_location,
+    list_project_directory, list_project_files, rescan_project, rescan_watched_location,
 };
 use features::projects::commands::{
     create_project, delete_project, get_project, list_projects, scan_project_root,
@@ -83,6 +83,7 @@ pub fn run() {
             get_project_dashboard,
             get_last_opened_project_id,
             save_last_opened_project_id,
+            list_project_directory,
             list_project_files,
             rescan_project,
             rescan_watched_location,

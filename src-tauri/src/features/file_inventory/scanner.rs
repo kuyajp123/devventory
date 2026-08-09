@@ -5,7 +5,7 @@ use std::time::{Instant, UNIX_EPOCH};
 
 use tokio::sync::mpsc;
 
-use crate::features::projects::ResolvedProjectScanTarget;
+use crate::features::projects::{is_project_path_excluded, ResolvedProjectScanTarget};
 
 use super::categorization;
 use super::model::{ScanTraversalSummary, ScannedFile};
@@ -87,11 +87,6 @@ impl LocalFileScanner {
                     summary.completed = false;
                     continue;
                 };
-                if is_excluded(&relative_path, &target.exclusions) {
-                    summary.entries_excluded += 1;
-                    continue;
-                }
-
                 let file_type = match entry.file_type() {
                     Ok(file_type) => file_type,
                     Err(_) => {
@@ -100,6 +95,11 @@ impl LocalFileScanner {
                         continue;
                     }
                 };
+                if is_project_path_excluded(&relative_path, file_type.is_dir(), &target.exclusions)
+                {
+                    summary.entries_excluded += 1;
+                    continue;
+                }
                 match is_link_or_reparse_point(&path, &file_type) {
                     Ok(true) => {
                         summary.entries_excluded += 1;
@@ -177,23 +177,6 @@ fn portable_relative_path(root: &Path, path: &Path) -> Option<String> {
         .collect::<Option<Vec<_>>>()
         .map(|parts| parts.join("/"))
         .filter(|path| !path.is_empty())
-}
-
-fn is_excluded(relative_path: &str, exclusions: &[String]) -> bool {
-    exclusions.iter().any(|exclusion| {
-        let prefix = exclusion.trim_end_matches('/');
-        path_matches(relative_path, prefix)
-    })
-}
-
-fn path_matches(relative_path: &str, prefix: &str) -> bool {
-    #[cfg(windows)]
-    let (relative_path, prefix) = (relative_path.to_lowercase(), prefix.to_lowercase());
-
-    #[cfg(not(windows))]
-    let (relative_path, prefix) = (relative_path.to_owned(), prefix.to_owned());
-
-    relative_path == prefix || relative_path.starts_with(&format!("{prefix}/"))
 }
 
 fn modified_at_ms(metadata: &fs::Metadata) -> Option<i64> {

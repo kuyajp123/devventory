@@ -7,6 +7,7 @@ export { useActiveProject } from './hooks/use-active-project';
 export { useProjectQuery } from './hooks/use-projects';
 export { useDeleteProjectMutation } from './hooks/use-projects';
 export type { Project } from './models/project';
+export { DEFAULT_PROJECT_EXCLUSIONS } from './models/project';
 export { LegacyProjectRedirect } from './pages/LegacyProjectRedirect';
 export { ProjectOnboardingPage } from './pages/ProjectOnboardingPage';
 export { ActiveProjectProvider } from './providers/ActiveProjectProvider';

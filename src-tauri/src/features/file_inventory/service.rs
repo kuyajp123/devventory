@@ -4,14 +4,15 @@ use std::sync::{Arc, Mutex};
 use tokio::sync::mpsc;
 use uuid::Uuid;
 
-use crate::features::projects::{ProjectService, ResolvedProjectScanTarget};
-
+use super::directory::LocalDirectoryLister;
 use super::error::FileInventoryError;
 use super::model::{
-    InventoryPage, InventoryQuery, InventoryWatchedLocation, PersistenceSummary, ScanRun, ScanType,
+    InventoryPage, InventoryQuery, InventoryWatchedLocation, PersistenceSummary,
+    ProjectDirectoryPage, ProjectDirectoryQuery, ScanRun, ScanType,
 };
 use super::repository::{FileInventoryRepository, SqliteFileInventoryRepository};
 use super::scanner::{LocalFileScanner, ScanMessage};
+use crate::features::projects::{ProjectService, ResolvedProjectScanTarget};
 
 const SCAN_CHANNEL_CAPACITY: usize = 8;
 
@@ -20,6 +21,7 @@ pub(crate) struct FileInventoryService {
     repository: SqliteFileInventoryRepository,
     project_service: ProjectService,
     scanner: LocalFileScanner,
+    directory_lister: LocalDirectoryLister,
     scan_locks: Arc<Mutex<HashMap<Uuid, Arc<tokio::sync::Mutex<()>>>>>,
 }
 
@@ -32,6 +34,7 @@ impl FileInventoryService {
             repository,
             project_service,
             scanner: LocalFileScanner,
+            directory_lister: LocalDirectoryLister,
             scan_locks: Arc::new(Mutex::new(HashMap::new())),
         }
     }
@@ -51,6 +54,20 @@ impl FileInventoryService {
             })
             .collect();
         Ok(page)
+    }
+
+    pub(crate) async fn list_directory(
+        &self,
+        query: ProjectDirectoryQuery,
+    ) -> Result<ProjectDirectoryPage, FileInventoryError> {
+        let target = self
+            .project_service
+            .resolve_project_directory(query.project_id, &query.relative_path)
+            .await?;
+        let lister = self.directory_lister;
+        tokio::task::spawn_blocking(move || lister.list(target, query.page, query.page_size))
+            .await
+            .map_err(|_| FileInventoryError::RuntimeUnavailable)?
     }
 
     pub(crate) async fn reconcile_project(

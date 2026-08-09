@@ -16,7 +16,10 @@ import {
   type UseFormRegister,
 } from 'react-hook-form';
 import { ICON_SIZE, ICON_STROKE } from '@/shared/constants/icon.constants';
-import type { ProjectOnboardingValues } from '../models/project';
+import {
+  DEFAULT_PROJECT_EXCLUSIONS,
+  type ProjectOnboardingValues,
+} from '../models/project';
 
 interface ProjectFolderFieldsProps {
   control: Control<ProjectOnboardingValues>;
@@ -112,7 +115,7 @@ export function ProjectFolderFields({
                 isInvalid={Boolean(fieldState.error)}
                 variant="secondary"
               >
-                <Label>Exclusions</Label>
+                <Label>Additional exclusions</Label>
                 <TextArea
                   {...field}
                   className="min-h-36 resize-y font-mono text-xs"
@@ -122,14 +125,48 @@ export function ProjectFolderFields({
                   }}
                 />
                 <Description>
-                  One relative directory prefix per line. Glob patterns are not
-                  used.
+                  Optional project-relative directory prefixes, one per line.
+                  You can add or remove these at any time during onboarding.
                 </Description>
                 <FieldError>{fieldState.error?.message}</FieldError>
               </TextField>
             )}
           />
         </div>
+
+        <section
+          aria-labelledby="built-in-exclusions-title"
+          className="rounded-md border border-divider bg-workspace p-3"
+        >
+          <div className="flex flex-wrap items-baseline justify-between gap-2">
+            <h3
+              className="text-sm font-medium text-foreground"
+              id="built-in-exclusions-title"
+            >
+              Built-in exclusions
+            </h3>
+            <span className="font-mono text-[10px] uppercase tracking-wider text-muted">
+              Managed by Devventory
+            </span>
+          </div>
+          <p className="mt-1 text-xs leading-relaxed text-muted">
+            These technical directories are always excluded from scans and the
+            Project Tree. They cannot be edited or removed.
+          </p>
+          <ul
+            className="mt-3 flex flex-wrap gap-1.5"
+            aria-label="Built-in exclusions"
+          >
+            {DEFAULT_PROJECT_EXCLUSIONS.map((exclusion) => (
+              <li
+                className="rounded border border-divider bg-panel px-2 py-1 font-mono text-[11px] text-secondary"
+                key={exclusion}
+              >
+                {exclusion}
+              </li>
+            ))}
+          </ul>
+        </section>
       </Fieldset.Group>
     </Fieldset>
   );

@@ -101,11 +101,42 @@ export const inventoryPageSchema = z.object({
 });
 export type InventoryPage = z.infer<typeof inventoryPageSchema>;
 
+const projectRelativeDirectorySchema = z
+  .string()
+  .min(1)
+  .max(1_024)
+  .refine(
+    (value) =>
+      !value.startsWith('/') &&
+      !value.includes('\\') &&
+      !value.split('/').includes('..'),
+    'Expected a safe project-relative directory path.',
+  );
+
+export const projectDirectoryEntrySchema = z.object({
+  isWatched: z.boolean(),
+  name: z.string().min(1),
+  relativePath: projectRelativeDirectorySchema,
+});
+export type ProjectDirectoryEntry = z.infer<typeof projectDirectoryEntrySchema>;
+
+export const projectDirectoryPageSchema = z.object({
+  entriesUnreadable: z.number().int().nonnegative(),
+  hasMore: z.boolean(),
+  items: z.array(projectDirectoryEntrySchema).max(100),
+  page: z.number().int().positive(),
+  pageSize: z.number().int().min(1).max(100),
+  totalItems: z.number().int().nonnegative(),
+  totalPages: z.number().int().nonnegative(),
+});
+export type ProjectDirectoryPage = z.infer<typeof projectDirectoryPageSchema>;
+
 export interface InventoryFilters {
   category?: FileCategory;
   extension?: string;
   page: number;
   pageSize: number;
+  parentFolder?: string;
   search?: string;
   sortBy: InventorySortField;
   sortDirection: SortDirection;

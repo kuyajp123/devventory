@@ -16,7 +16,6 @@ import {
   useValidateProjectRootMutation,
 } from '../hooks/use-projects';
 import {
-  DEFAULT_PROJECT_EXCLUSIONS,
   projectOnboardingSchema,
   splitConfigurationLines,
   type InitialScanSummary,
@@ -45,7 +44,7 @@ export function ProjectOnboardingPage() {
   } = useForm<ProjectOnboardingValues>({
     defaultValues: {
       description: '',
-      exclusionsText: DEFAULT_PROJECT_EXCLUSIONS.join('\n'),
+      exclusionsText: '',
       name: '',
       projectType: 'web',
       rootPath: '',

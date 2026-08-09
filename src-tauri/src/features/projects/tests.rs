@@ -16,8 +16,15 @@ fn scan_rejects_traversal_and_never_enters_excluded_directories() {
     let root = workspace.path().join("project");
     fs::create_dir_all(root.join("src")).expect("source directory");
     fs::create_dir_all(root.join("node_modules/package")).expect("excluded directory");
+    fs::create_dir_all(root.join("packages/app/node_modules/package"))
+        .expect("nested built-in exclusion directory");
     fs::write(root.join("src/main.ts"), "export {};").expect("source file");
     fs::write(root.join("node_modules/package/index.js"), "ignored").expect("excluded file");
+    fs::write(
+        root.join("packages/app/node_modules/package/index.js"),
+        "ignored",
+    )
+    .expect("nested excluded file");
     let root_file = workspace.path().join("not-a-directory.txt");
     fs::write(&root_file, "not a root").expect("root-shaped file");
 
@@ -37,17 +44,13 @@ fn scan_rejects_traversal_and_never_enters_excluded_directories() {
     ));
 
     let configuration = filesystem
-        .validate_configuration(
-            root.to_str().expect("UTF-8 path"),
-            &[".".to_owned()],
-            &["node_modules".to_owned(), "node_modules/".to_owned()],
-        )
+        .validate_configuration(root.to_str().expect("UTF-8 path"), &[".".to_owned()], &[])
         .expect("valid project configuration");
-    assert_eq!(configuration.exclusions, ["node_modules/"]);
+    assert!(configuration.exclusions.is_empty());
     let summary = filesystem.scan(&configuration);
 
     assert_eq!(summary.files_discovered, 1);
-    assert_eq!(summary.entries_excluded, 1);
+    assert_eq!(summary.entries_excluded, 2);
     assert!(summary.completed);
 }
 
@@ -71,7 +74,7 @@ async fn service_persists_projects_and_rejects_a_duplicate_canonical_root() {
         project_type: ProjectType::Desktop,
         root_path: root.to_string_lossy().into_owned(),
         watched_locations: vec![".".to_owned()],
-        exclusions: vec!["target/".to_owned()],
+        exclusions: vec!["generated/".to_owned()],
     };
 
     let created = service
@@ -93,7 +96,7 @@ async fn service_persists_projects_and_rejects_a_duplicate_canonical_root() {
     assert_eq!(target.root_path, created.root_path);
     assert_eq!(target.watched_locations.len(), 1);
     assert_eq!(target.watched_locations[0].relative_path, ".");
-    assert_eq!(target.exclusions, ["target/"]);
+    assert_eq!(target.exclusions, ["generated/"]);
     assert_eq!(target.watched_locations[0].id.get_version_num(), 4);
 
     let duplicate = service.create(input).await;

@@ -397,6 +397,20 @@ fn push_inventory_filters(builder: &mut QueryBuilder<Sqlite>, query: &InventoryQ
         builder.push(" AND status = ");
         builder.push_bind(status.as_str());
     }
+    if let Some(folder) = &query.parent_folder {
+        let folder = folder.replace('\\', "/");
+        if folder.is_empty() {
+            builder.push(" AND replace(relative_path, '\\', '/') NOT LIKE '%/%'");
+        } else {
+            let prefix = format!("{}/%", escape_like(&folder));
+            let exclude = format!("{}/%/%", escape_like(&folder));
+            builder.push(" AND replace(relative_path, '\\', '/') LIKE ");
+            builder.push_bind(prefix);
+            builder.push(" ESCAPE '\\' AND replace(relative_path, '\\', '/') NOT LIKE ");
+            builder.push_bind(exclude);
+            builder.push(" ESCAPE '\\'");
+        }
+    }
 }
 
 fn escape_like(value: &str) -> String {

@@ -439,6 +439,55 @@ export function installTauriBrowserMocks() {
         ],
       };
     }
+    if (command === 'list_project_directory') {
+      const input = commandArguments(args).input as {
+        page: number;
+        pageSize: number;
+        projectId: string;
+        relativePath: string;
+      };
+      const directoriesByPath: Record<
+        string,
+        Array<{ isWatched: boolean; name: string; relativePath: string }>
+      > = {
+        '.': [
+          { isWatched: false, name: 'assets', relativePath: 'assets' },
+          {
+            isWatched: false,
+            name: 'empty-folder',
+            relativePath: 'empty-folder',
+          },
+          { isWatched: false, name: 'src', relativePath: 'src' },
+        ],
+        assets: [
+          {
+            isWatched: false,
+            name: 'branding',
+            relativePath: 'assets/branding',
+          },
+        ],
+        src: [
+          {
+            isWatched: false,
+            name: 'components',
+            relativePath: 'src/components',
+          },
+        ],
+      };
+      const directories = directoriesByPath[input.relativePath] ?? [];
+      const start = (input.page - 1) * input.pageSize;
+      const items = directories.slice(start, start + input.pageSize);
+      const totalPages = Math.ceil(directories.length / input.pageSize);
+      return {
+        entriesUnreadable: 0,
+        hasMore: input.page < totalPages,
+        items,
+        page: input.page,
+        pageSize: input.pageSize,
+        totalItems: directories.length,
+        totalPages,
+      };
+    }
     if (command === 'list_environments') {
       const projectId = commandArguments(args).input as { projectId: string };
       return environmentsByProject[projectId.projectId] ?? [];

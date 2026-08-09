@@ -1,15 +1,15 @@
 import { z } from 'zod';
 
 export const DEFAULT_PROJECT_EXCLUSIONS = [
-  'node_modules/',
+  '.cache/',
   '.git/',
   '.next/',
-  'dist/',
-  'build/',
-  'target/',
-  'coverage/',
-  '.cache/',
   '.turbo/',
+  'build/',
+  'coverage/',
+  'dist/',
+  'node_modules/',
+  'target/',
   'vendor/',
 ] as const;
 
@@ -98,6 +98,13 @@ const exclusionsSchema = z
     (value) =>
       splitConfigurationLines(value).every(isSafeRelativeConfigurationPath),
     'Use only relative directory prefixes; parent traversal is not allowed.',
+  )
+  .refine(
+    (value) =>
+      splitConfigurationLines(value).every(
+        (entry) => !isBuiltInProjectExclusion(entry),
+      ),
+    'Built-in exclusions are already managed by Devventory. Add only your own additional paths.',
   );
 
 export const projectOnboardingSchema = z.object({
@@ -133,4 +140,15 @@ function isSafeRelativeConfigurationPath(value: string): boolean {
   }
 
   return normalized === '.' || !normalized.split('/').includes('..');
+}
+
+function isBuiltInProjectExclusion(value: string): boolean {
+  const normalized = value
+    .trim()
+    .replace(/\\/g, '/')
+    .replace(/^\/+|\/+$/g, '')
+    .toLowerCase();
+  return DEFAULT_PROJECT_EXCLUSIONS.some(
+    (exclusion) => exclusion.replace(/\/$/, '').toLowerCase() === normalized,
+  );
 }

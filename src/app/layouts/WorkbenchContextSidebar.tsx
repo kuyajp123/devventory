@@ -9,7 +9,10 @@ import {
 } from '@tabler/icons-react';
 import { useEffect } from 'react';
 import { useLocation, useNavigate, useSearchParams } from 'react-router';
-import { useActiveProject } from '@/features/projects';
+import {
+  DEFAULT_PROJECT_EXCLUSIONS,
+  useActiveProject,
+} from '@/features/projects';
 import { ICON_SIZE, ICON_STROKE } from '@/shared/constants/icon.constants';
 import { useAppUiStore } from '../stores/app-ui.store';
 
@@ -143,7 +146,7 @@ export function WorkbenchContextSidebar({
 
               {activeProject?.exclusions &&
                 activeProject.exclusions.length > 0 && (
-                  <SidebarSection title="Exclusions">
+                  <SidebarSection title="Additional Exclusions">
                     <ul className="space-y-1 font-mono text-xs">
                       {activeProject.exclusions.map((ex) => (
                         <li
@@ -161,6 +164,24 @@ export function WorkbenchContextSidebar({
                     </ul>
                   </SidebarSection>
                 )}
+
+              {activeProject && (
+                <SidebarSection title="Built-in Exclusions">
+                  <p className="mb-2 text-[10px] leading-relaxed text-muted">
+                    Applied automatically and managed by Devventory.
+                  </p>
+                  <ul className="flex flex-wrap gap-1 font-mono text-[10px]">
+                    {DEFAULT_PROJECT_EXCLUSIONS.map((exclusion) => (
+                      <li
+                        className="rounded border border-divider bg-panel px-1.5 py-0.5 text-muted"
+                        key={exclusion}
+                      >
+                        {exclusion}
+                      </li>
+                    ))}
+                  </ul>
+                </SidebarSection>
+              )}
             </>
           )}
 

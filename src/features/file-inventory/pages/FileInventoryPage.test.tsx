@@ -46,6 +46,7 @@ vi.mock('@/features/projects', () => ({
 vi.mock('../services/file-inventory.gateway', () => ({
   fileInventoryGateway: {
     list: vi.fn(),
+    listDirectory: vi.fn(),
     rescanProject: vi.fn(),
     rescanWatchedLocation: vi.fn(),
   },
@@ -53,6 +54,21 @@ vi.mock('../services/file-inventory.gateway', () => ({
 
 describe('FileInventoryPage', () => {
   beforeEach(() => {
+    vi.mocked(fileInventoryGateway.listDirectory).mockResolvedValue({
+      entriesUnreadable: 0,
+      hasMore: false,
+      items: [
+        {
+          isWatched: false,
+          name: 'src',
+          relativePath: 'src',
+        },
+      ],
+      page: 1,
+      pageSize: 100,
+      totalItems: 1,
+      totalPages: 1,
+    });
     vi.mocked(fileInventoryGateway.list).mockResolvedValue({
       items: [
         {
@@ -106,8 +122,7 @@ describe('FileInventoryPage', () => {
     });
   });
 
-  it('renders paginated metadata and applies accessible filters', async () => {
-    const user = userEvent.setup();
+  it('renders Explorer view by default with project tree and summary bar', async () => {
     renderWithProviders(
       <MemoryRouter initialEntries={['/files']}>
         <Routes>
@@ -119,8 +134,42 @@ describe('FileInventoryPage', () => {
     expect(
       await screen.findByRole('heading', { name: 'File inventory' }),
     ).toBeVisible();
+    expect(screen.getByRole('button', { name: 'Explorer' })).toBeVisible();
+    expect(await screen.findByText('files')).toBeVisible();
+    expect((await screen.findAllByText('src')).length).toBeGreaterThan(0);
+  });
+
+  it('allows rescanning project from the scan bar', async () => {
+    const user = userEvent.setup();
+    renderWithProviders(
+      <MemoryRouter initialEntries={['/files']}>
+        <Routes>
+          <Route element={<FileInventoryPage />} path="/files" />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    await user.click(
+      await screen.findByRole('button', { name: 'Rescan project' }),
+    );
+    expect(
+      await screen.findByText('Project inventory scan completed'),
+    ).toBeVisible();
+  });
+
+  it('switches to All Files view and applies filters, sorting, and pagination', async () => {
+    const user = userEvent.setup();
+    renderWithProviders(
+      <MemoryRouter initialEntries={['/files']}>
+        <Routes>
+          <Route element={<FileInventoryPage />} path="/files" />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    // Switch to All Files view
+    await user.click(await screen.findByRole('button', { name: 'All files' }));
     expect((await screen.findAllByText('src/main.ts'))[0]).toBeVisible();
-    expect(screen.getByText('1 file')).toBeVisible();
 
     await user.type(screen.getByLabelText('Search file name or path'), 'main');
     await user.click(screen.getByRole('button', { name: /Category/ }));
@@ -176,10 +225,5 @@ describe('FileInventoryPage', () => {
         },
       ),
     );
-
-    await user.click(screen.getByRole('button', { name: 'Rescan project' }));
-    expect(
-      await screen.findByText('Project inventory scan completed'),
-    ).toBeVisible();
   }, 10_000);
 });

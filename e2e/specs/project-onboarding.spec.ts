@@ -28,6 +28,14 @@ test('adds a project through the selector and restores it after reload', async (
   await page.getByLabel('Description (optional)').fill('Playwright onboarding');
   await page.getByRole('button', { name: /Project type/ }).click();
   await page.getByRole('option', { name: 'Desktop application' }).click();
+  await expect(
+    page.getByText('Built-in exclusions', { exact: true }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole('list', { name: 'Built-in exclusions' }),
+  ).toContainText('node_modules/');
+  await expect(page.getByLabel('Additional exclusions')).toHaveValue('');
+  await page.getByLabel('Additional exclusions').fill('generated/');
   await page.getByRole('button', { name: 'Choose folder' }).click();
 
   await expect(
@@ -50,15 +58,26 @@ test('adds a project through the selector and restores it after reload', async (
   ).toBeVisible();
   await expect(page.getByText('Playwright onboarding')).toBeVisible();
   await expect(page.getByRole('main').getByText('node_modules/')).toBeVisible();
+  await expect(page.getByRole('main').getByText('generated/')).toBeVisible();
 
   await primaryNavigation.getByRole('link', { name: 'File Inventory' }).click();
   await expect(page).toHaveURL('/files');
   await expect(
     page.getByRole('heading', { name: 'File inventory' }),
   ).toBeVisible();
-  await expect(page.getByText('src/main.ts').first()).toBeVisible();
+  await expect(
+    page.getByRole('tree', { name: 'Live project directories' }),
+  ).toBeVisible();
+  await expect(page.getByText('empty-folder').first()).toBeVisible();
+  await page
+    .getByRole('tree', { name: 'Live project directories' })
+    .getByRole('button', { name: 'src', exact: true })
+    .click();
+  await expect(page.getByText('main.ts').first()).toBeVisible();
   await page.getByRole('button', { name: 'Rescan project' }).click();
-  await expect(page.getByText(/Completed: 1 files found/)).toBeVisible();
+  await expect(
+    page.getByText('Project inventory scan completed'),
+  ).toBeVisible();
 
   await primaryNavigation.getByRole('link', { name: 'Asset Library' }).click();
   await expect(page).toHaveURL('/assets');
