@@ -4,12 +4,14 @@ use uuid::Uuid;
 use super::error::FileInventoryError;
 use super::model::{
     FileCategory, FileSourceType, FileStatus, IndexedFile, InventoryPage, InventoryQuery,
-    InventorySortField, InventoryWatchedLocation, ScanRun, ScanStatus, ScanType, SortDirection,
+    InventorySortField, InventoryWatchedLocation, ProjectDirectoryEntry, ProjectDirectoryPage,
+    ProjectDirectoryQuery, ScanRun, ScanStatus, ScanType, SortDirection,
 };
 
 const MAX_SEARCH_LENGTH: usize = 128;
 const MAX_EXTENSION_LENGTH: usize = 32;
 const MAX_PAGE_SIZE: u32 = 100;
+const MAX_RELATIVE_DIRECTORY_LENGTH: usize = 1_024;
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -23,6 +25,41 @@ pub(crate) struct FileInventoryQueryInput {
     sort_direction: Option<SortDirection>,
     page: u32,
     page_size: u32,
+    parent_folder: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub(crate) struct ListProjectDirectoryInput {
+    project_id: String,
+    relative_path: String,
+    page: u32,
+    page_size: u32,
+}
+
+impl TryFrom<ListProjectDirectoryInput> for ProjectDirectoryQuery {
+    type Error = FileInventoryError;
+
+    fn try_from(input: ListProjectDirectoryInput) -> Result<Self, Self::Error> {
+        let project_id =
+            Uuid::parse_str(&input.project_id).map_err(|_| FileInventoryError::InvalidFilter)?;
+        let relative_path = input.relative_path.trim().to_owned();
+        if relative_path.is_empty()
+            || relative_path.chars().count() > MAX_RELATIVE_DIRECTORY_LENGTH
+            || input.page == 0
+            || input.page_size == 0
+            || input.page_size > MAX_PAGE_SIZE
+        {
+            return Err(FileInventoryError::InvalidFilter);
+        }
+
+        Ok(Self {
+            project_id,
+            relative_path,
+            page: input.page,
+            page_size: input.page_size,
+        })
+    }
 }
 
 impl TryFrom<FileInventoryQueryInput> for InventoryQuery {
@@ -58,6 +95,13 @@ impl TryFrom<FileInventoryQueryInput> for InventoryQuery {
             return Err(FileInventoryError::InvalidFilter);
         }
 
+        let parent_folder = input.parent_folder.map(|v| v.trim().to_owned());
+        if let Some(ref folder) = parent_folder {
+            if folder.contains("..") || folder.starts_with('/') || folder.contains('\\') {
+                return Err(FileInventoryError::InvalidFilter);
+            }
+        }
+
         Ok(Self {
             project_id,
             search,
@@ -68,6 +112,7 @@ impl TryFrom<FileInventoryQueryInput> for InventoryQuery {
             sort_direction: input.sort_direction.unwrap_or(SortDirection::Ascending),
             page: input.page,
             page_size: input.page_size,
+            parent_folder,
         })
     }
 }
@@ -202,10 +247,54 @@ impl From<ScanRun> for ScanRunDto {
     }
 }
 
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct ProjectDirectoryEntryDto {
+    name: String,
+    relative_path: String,
+    is_watched: bool,
+}
+
+impl From<ProjectDirectoryEntry> for ProjectDirectoryEntryDto {
+    fn from(entry: ProjectDirectoryEntry) -> Self {
+        Self {
+            name: entry.name,
+            relative_path: entry.relative_path,
+            is_watched: entry.is_watched,
+        }
+    }
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct ProjectDirectoryPageDto {
+    items: Vec<ProjectDirectoryEntryDto>,
+    total_items: u64,
+    page: u32,
+    page_size: u32,
+    total_pages: u32,
+    has_more: bool,
+    entries_unreadable: u64,
+}
+
+impl From<ProjectDirectoryPage> for ProjectDirectoryPageDto {
+    fn from(page: ProjectDirectoryPage) -> Self {
+        Self {
+            items: page.items.into_iter().map(Into::into).collect(),
+            total_items: page.total_items,
+            page: page.page,
+            page_size: page.page_size,
+            total_pages: page.total_pages,
+            has_more: page.has_more,
+            entries_unreadable: page.entries_unreadable,
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
-    use super::FileInventoryQueryInput;
-    use crate::features::file_inventory::model::InventoryQuery;
+    use super::{FileInventoryQueryInput, ListProjectDirectoryInput};
+    use crate::features::file_inventory::model::{InventoryQuery, ProjectDirectoryQuery};
 
     #[test]
     fn normalizes_safe_inventory_filters_and_rejects_unbounded_inputs() {
@@ -220,6 +309,7 @@ mod tests {
             sort_direction: Some(super::SortDirection::Descending),
             page: 1,
             page_size: 50,
+            parent_folder: None,
         })
         .expect("valid query");
         assert_eq!(query.project_id, project_id);
@@ -238,6 +328,31 @@ mod tests {
             sort_direction: None,
             page: 1,
             page_size: 50,
+            parent_folder: None,
+        })
+        .is_err());
+    }
+
+    #[test]
+    fn validates_bounded_project_directory_queries() {
+        let project_id = uuid::Uuid::new_v4();
+        let query = ProjectDirectoryQuery::try_from(ListProjectDirectoryInput {
+            project_id: project_id.to_string(),
+            relative_path: "  src/components  ".to_owned(),
+            page: 2,
+            page_size: 25,
+        })
+        .expect("valid directory query");
+        assert_eq!(query.project_id, project_id);
+        assert_eq!(query.relative_path, "src/components");
+        assert_eq!(query.page, 2);
+        assert_eq!(query.page_size, 25);
+
+        assert!(ProjectDirectoryQuery::try_from(ListProjectDirectoryInput {
+            project_id: project_id.to_string(),
+            relative_path: ".".to_owned(),
+            page: 1,
+            page_size: 101,
         })
         .is_err());
     }

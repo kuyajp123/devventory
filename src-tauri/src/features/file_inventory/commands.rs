@@ -4,8 +4,11 @@ use uuid::Uuid;
 use crate::app::state::AppState;
 use crate::shared::errors::command::CommandError;
 
-use super::dto::{FileInventoryQueryInput, InventoryPageDto, ScanRunDto};
-use super::model::{InventoryQuery, ScanType};
+use super::dto::{
+    FileInventoryQueryInput, InventoryPageDto, ListProjectDirectoryInput, ProjectDirectoryPageDto,
+    ScanRunDto,
+};
+use super::model::{InventoryQuery, ProjectDirectoryQuery, ScanType};
 
 #[tauri::command]
 pub(crate) async fn list_project_files(
@@ -16,6 +19,20 @@ pub(crate) async fn list_project_files(
     state
         .file_inventory_service()
         .query(query)
+        .await
+        .map(Into::into)
+        .map_err(Into::into)
+}
+
+#[tauri::command]
+pub(crate) async fn list_project_directory(
+    state: State<'_, AppState>,
+    input: ListProjectDirectoryInput,
+) -> Result<ProjectDirectoryPageDto, CommandError> {
+    let query = ProjectDirectoryQuery::try_from(input)?;
+    state
+        .file_inventory_service()
+        .list_directory(query)
         .await
         .map(Into::into)
         .map_err(Into::into)

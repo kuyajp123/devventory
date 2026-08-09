@@ -142,6 +142,15 @@ pub(crate) struct Project {
     pub(super) initial_scan: InitialScanSummary,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct ResolvedProjectDirectory {
+    pub(crate) root_path: PathBuf,
+    pub(crate) absolute_path: PathBuf,
+    pub(crate) relative_path: String,
+    pub(crate) exclusions: Vec<String>,
+    pub(crate) watched_locations: Vec<WatchedLocationScanTarget>,
+}
+
 #[cfg(test)]
 impl Project {
     pub(crate) fn id(&self) -> Uuid {

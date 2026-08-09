@@ -113,3 +113,23 @@ pub(crate) enum ProjectFileError {
     #[error("project file cannot be read")]
     Unreadable,
 }
+
+#[derive(Debug, Error)]
+pub(crate) enum ProjectDirectoryError {
+    #[error("project directory path is invalid")]
+    InvalidRelativePath,
+    #[error("project directory cannot be represented safely")]
+    InvalidPathEncoding,
+    #[error("project directory cannot be a symbolic link or junction")]
+    LinkNotAllowed,
+    #[error("project directory does not exist")]
+    NotFound,
+    #[error("project path is not a directory")]
+    NotDirectory,
+    #[error("project was not found")]
+    ProjectNotFound,
+    #[error("project root cannot be read")]
+    RootUnavailable,
+    #[error("project directory cannot be read")]
+    Unreadable,
+}

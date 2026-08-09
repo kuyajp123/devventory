@@ -3,10 +3,11 @@ use std::fs::{self, FileType};
 use std::path::{Component, Path, PathBuf};
 use std::time::{Instant, UNIX_EPOCH};
 
-use super::error::{ProjectError, ProjectFileError};
+use super::error::{ProjectDirectoryError, ProjectError, ProjectFileError};
+use super::exclusions::{is_built_in_exclusion, is_project_path_excluded};
 use super::model::{
-    InitialScanSummary, ResolvedProjectFile, ValidatedProjectConfiguration,
-    ValidatedWatchedLocation,
+    InitialScanSummary, ResolvedProjectDirectory, ResolvedProjectFile,
+    ValidatedProjectConfiguration, ValidatedWatchedLocation,
 };
 
 const MAX_EXCLUSIONS: usize = 128;
@@ -17,6 +18,57 @@ const MAX_SCAN_ENTRIES: u64 = 1_000_000;
 pub(crate) struct LocalProjectFilesystem;
 
 impl LocalProjectFilesystem {
+    pub(crate) fn resolve_directory(
+        &self,
+        root_path: &str,
+        relative_path: &str,
+        exclusions: Vec<String>,
+        watched_locations: Vec<super::model::WatchedLocationScanTarget>,
+    ) -> Result<ResolvedProjectDirectory, ProjectDirectoryError> {
+        let root = canonicalize_root(Path::new(root_path.trim()))
+            .map_err(|_| ProjectDirectoryError::RootUnavailable)?;
+        ensure_readable_directory(&root, true)
+            .map_err(|_| ProjectDirectoryError::RootUnavailable)?;
+        let relative_path = normalize_relative_path(relative_path, true)
+            .map_err(|_| ProjectDirectoryError::InvalidRelativePath)?;
+        let requested_path = if relative_path == "." {
+            root.clone()
+        } else {
+            root.join(&relative_path)
+        };
+        if contains_link_or_reparse_component(&root, &requested_path)
+            .map_err(|_| ProjectDirectoryError::Unreadable)?
+        {
+            return Err(ProjectDirectoryError::LinkNotAllowed);
+        }
+        let canonical_path = fs::canonicalize(&requested_path).map_err(|error| {
+            if error.kind() == std::io::ErrorKind::NotFound {
+                ProjectDirectoryError::NotFound
+            } else {
+                ProjectDirectoryError::Unreadable
+            }
+        })?;
+        if canonical_path.strip_prefix(&root).is_err() {
+            return Err(ProjectDirectoryError::InvalidRelativePath);
+        }
+        let metadata =
+            fs::metadata(&canonical_path).map_err(|_| ProjectDirectoryError::Unreadable)?;
+        if !metadata.is_dir() {
+            return Err(ProjectDirectoryError::NotDirectory);
+        }
+        fs::read_dir(&canonical_path).map_err(|_| ProjectDirectoryError::Unreadable)?;
+        let relative_path = relative_from_root(&root, &canonical_path)
+            .map_err(|_| ProjectDirectoryError::InvalidPathEncoding)?;
+
+        Ok(ResolvedProjectDirectory {
+            root_path: root,
+            absolute_path: canonical_path,
+            relative_path,
+            exclusions,
+            watched_locations,
+        })
+    }
+
     pub(crate) fn resolve_regular_file(
         &self,
         root_path: &str,
@@ -139,6 +191,7 @@ impl LocalProjectFilesystem {
             .iter()
             .map(|exclusion| normalize_exclusion(exclusion))
             .collect::<Result<Vec<_>, _>>()?;
+        normalized_exclusions.retain(|exclusion| !is_built_in_exclusion(exclusion));
         normalized_exclusions.sort();
         normalized_exclusions.dedup();
 
@@ -208,11 +261,6 @@ impl LocalProjectFilesystem {
                     }
                 };
 
-                if is_excluded(&relative, &configuration.exclusions) {
-                    summary.entries_excluded += 1;
-                    continue;
-                }
-
                 let file_type = match entry.file_type() {
                     Ok(file_type) => file_type,
                     Err(_) => {
@@ -221,6 +269,15 @@ impl LocalProjectFilesystem {
                         continue;
                     }
                 };
+
+                if is_project_path_excluded(
+                    &relative,
+                    file_type.is_dir(),
+                    &configuration.exclusions,
+                ) {
+                    summary.entries_excluded += 1;
+                    continue;
+                }
 
                 match is_link_or_reparse_point(&path, &file_type) {
                     Ok(true) => summary.entries_excluded += 1,
@@ -344,13 +401,6 @@ fn path_to_portable_string(path: &Path) -> String {
         .join("/")
 }
 
-fn is_excluded(relative_path: &str, exclusions: &[String]) -> bool {
-    exclusions.iter().any(|exclusion| {
-        let prefix = exclusion.trim_end_matches('/');
-        relative_path == prefix || relative_path.starts_with(&format!("{prefix}/"))
-    })
-}
-
 fn display_path(path: &Path) -> Result<String, ProjectError> {
     let value = path.to_str().ok_or(ProjectError::RootPathEncoding)?;
 
@@ -379,7 +429,7 @@ fn root_key(display_path: &str) -> String {
     }
 }
 
-fn is_link_or_reparse_point(path: &Path, file_type: &FileType) -> std::io::Result<bool> {
+pub(crate) fn is_link_or_reparse_point(path: &Path, file_type: &FileType) -> std::io::Result<bool> {
     if file_type.is_symlink() {
         return Ok(true);
     }

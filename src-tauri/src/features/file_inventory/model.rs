@@ -269,6 +269,33 @@ pub(crate) struct InventoryQuery {
     pub(crate) sort_direction: SortDirection,
     pub(crate) page: u32,
     pub(crate) page_size: u32,
+    pub(crate) parent_folder: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct ProjectDirectoryEntry {
+    pub(crate) name: String,
+    pub(crate) relative_path: String,
+    pub(crate) is_watched: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct ProjectDirectoryPage {
+    pub(crate) items: Vec<ProjectDirectoryEntry>,
+    pub(crate) total_items: u64,
+    pub(crate) page: u32,
+    pub(crate) page_size: u32,
+    pub(crate) total_pages: u32,
+    pub(crate) has_more: bool,
+    pub(crate) entries_unreadable: u64,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct ProjectDirectoryQuery {
+    pub(crate) project_id: Uuid,
+    pub(crate) relative_path: String,
+    pub(crate) page: u32,
+    pub(crate) page_size: u32,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]

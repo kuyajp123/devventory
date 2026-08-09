@@ -1,5 +1,5 @@
 import { Card } from '@heroui/react';
-import type { Project } from '../models/project';
+import { DEFAULT_PROJECT_EXCLUSIONS, type Project } from '../models/project';
 
 export function ProjectConfigurationPanel({ project }: { project: Project }) {
   return (
@@ -23,7 +23,12 @@ export function ProjectConfigurationPanel({ project }: { project: Project }) {
             label="Watched locations"
             values={project.watchedLocations}
           />
-          <PathList label="Exclusions" values={project.exclusions} />
+          <PathList
+            label="Built-in exclusions"
+            note="Managed by Devventory"
+            values={[...DEFAULT_PROJECT_EXCLUSIONS]}
+          />
+          <PathList label="Additional exclusions" values={project.exclusions} />
           <Metadata
             label="Created"
             value={formatTimestamp(project.createdAt)}
@@ -38,11 +43,24 @@ export function ProjectConfigurationPanel({ project }: { project: Project }) {
   );
 }
 
-function PathList({ label, values }: { label: string; values: string[] }) {
+function PathList({
+  label,
+  note,
+  values,
+}: {
+  label: string;
+  note?: string;
+  values: string[];
+}) {
   return (
     <div>
       <dt className="font-mono text-[11px] uppercase tracking-wide text-muted">
         {label}
+        {note && (
+          <span className="ml-2 normal-case tracking-normal text-secondary">
+            {note}
+          </span>
+        )}
       </dt>
       <dd className="mt-1">
         {values.length > 0 ? (

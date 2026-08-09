@@ -41,6 +41,45 @@ describe('fileInventoryGateway', () => {
     ).resolves.toMatchObject({ totalItems: 0 });
   });
 
+  it('requests one bounded live directory page through the typed command boundary', async () => {
+    const projectId = '30af17bd-2dd6-4b89-a5e7-8517191815a7';
+    mockIPC((command, args) => {
+      expect(command).toBe('list_project_directory');
+      expect(args).toEqual({
+        input: { page: 2, pageSize: 25, projectId, relativePath: 'src' },
+      });
+      return {
+        entriesUnreadable: 0,
+        hasMore: false,
+        items: [
+          {
+            isWatched: true,
+            name: 'components',
+            relativePath: 'src/components',
+          },
+        ],
+        page: 2,
+        pageSize: 25,
+        totalItems: 26,
+        totalPages: 2,
+      };
+    });
+
+    await expect(
+      fileInventoryGateway.listDirectory(projectId, 'src', 2, 25),
+    ).resolves.toEqual({
+      entriesUnreadable: 0,
+      hasMore: false,
+      items: [
+        { isWatched: true, name: 'components', relativePath: 'src/components' },
+      ],
+      page: 2,
+      pageSize: 25,
+      totalItems: 26,
+      totalPages: 2,
+    });
+  });
+
   it('rejects malformed backend metadata', async () => {
     mockIPC(() => ({ items: [{ relativePath: '../escape' }] }));
     await expect(

@@ -1,5 +1,6 @@
 mod categorization;
 pub(crate) mod commands;
+mod directory;
 mod dto;
 mod error;
 mod model;
