@@ -47,4 +47,20 @@ describe('invokeCommand', () => {
       recoverable: true,
     });
   });
+
+  it('uses a quota-label-specific safe message for quota conflicts', async () => {
+    mockIPC(() => {
+      throw {
+        code: 'AGENT_USAGE_CONFLICT',
+        message: 'untrusted backend details',
+        recoverable: true,
+      };
+    });
+
+    await expect(invokeCommand('save_agent_quota')).rejects.toMatchObject({
+      code: 'AGENT_USAGE_CONFLICT',
+      message: 'That quota window label is already used for this account.',
+      recoverable: true,
+    });
+  });
 });

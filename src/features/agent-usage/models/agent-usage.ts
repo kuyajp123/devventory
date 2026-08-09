@@ -175,6 +175,11 @@ export interface SaveAgentQuotaInput {
   trackingSource: 'manual' | 'pasted';
 }
 
+export interface AgentQuotaSaveError {
+  field: 'form' | 'label';
+  message: string;
+}
+
 export type ResetPreviewInput =
   | { date: string; method: 'exact'; time: string; timezone: string }
   | {

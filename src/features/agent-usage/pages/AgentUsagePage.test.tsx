@@ -1,6 +1,7 @@
-import { screen, waitFor } from '@testing-library/react';
+import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { TauriCommandError } from '@/shared/infrastructure/tauri/tauri-error';
 import { renderWithProviders } from '@/test/render';
 import { agentUsageGateway } from '../services/agent-usage.gateway';
 import { AgentUsagePage } from './AgentUsagePage';
@@ -43,6 +44,183 @@ describe('AgentUsagePage', () => {
     ).toBeVisible();
     expect(await screen.findByText('paul+codex@example.com')).toBeVisible();
     expect(screen.getAllByText('Exhausted').length).toBeGreaterThan(0);
+  });
+
+  it('groups accounts by platform and gives every availability a stable semantic treatment', async () => {
+    const user = userEvent.setup();
+    vi.mocked(agentUsageGateway.listAccounts).mockResolvedValue([
+      accountResponse({
+        availability: 'available',
+        id: '04675d66-b8a5-45f3-b281-62524aa70001',
+        identifier: 'available@example.com',
+        quotas: [
+          quotaResponse({
+            accountId: '04675d66-b8a5-45f3-b281-62524aa70001',
+            id: '84675d66-b8a5-45f3-b281-62524aa70001',
+            remainingPercent: 75,
+            status: 'available',
+          }),
+        ],
+      }),
+      accountResponse({
+        availability: 'limited',
+        id: '04675d66-b8a5-45f3-b281-62524aa70002',
+        identifier: 'limited@example.com',
+        quotas: [
+          quotaResponse({
+            accountId: '04675d66-b8a5-45f3-b281-62524aa70002',
+            id: '84675d66-b8a5-45f3-b281-62524aa70002',
+            remainingPercent: 8,
+            status: 'limited',
+          }),
+        ],
+      }),
+      accountResponse({
+        id: '04675d66-b8a5-45f3-b281-62524aa70003',
+        identifier: 'exhausted@example.com',
+        quotas: [
+          quotaResponse({
+            accountId: '04675d66-b8a5-45f3-b281-62524aa70003',
+            id: '84675d66-b8a5-45f3-b281-62524aa70003',
+          }),
+        ],
+      }),
+      accountResponse({
+        availability: 'unknown',
+        id: '04675d66-b8a5-45f3-b281-62524aa70004',
+        identifier: 'unknown@example.com',
+        nextResetAt: null,
+        quotas: [],
+      }),
+    ]);
+    renderWithProviders(<AgentUsagePage />);
+
+    const codexGroup = await screen.findByRole('region', {
+      name: 'Codex platform accounts',
+    });
+    expect(codexGroup).toBeVisible();
+    expect(within(codexGroup).getAllByText('Codex')).toHaveLength(1);
+    expectStatusColor('Available', 'bg-success/15');
+    expectStatusColor('Limited', 'bg-warning/15');
+    expectStatusColor('Exhausted', 'bg-danger/15');
+    expectStatusColor('Unknown', 'bg-default/40');
+
+    await user.click(
+      screen.getByRole('button', {
+        name: 'Expand account limited@example.com',
+      }),
+    );
+    const limitedStatus = statusElement('Limited');
+    expect(limitedStatus).toHaveClass('bg-warning/15');
+    expect(limitedStatus).not.toHaveClass('bg-success/15');
+  });
+
+  it('keeps multiple quota windows inside an expandable account row', async () => {
+    vi.mocked(agentUsageGateway.listAccounts).mockResolvedValue([
+      accountResponse({
+        quotas: [
+          quotaResponse(),
+          quotaResponse({
+            id: 'e49c4e06-a95f-481d-a456-9dd066591068',
+            label: 'Daily',
+            remainingPercent: 42,
+            status: 'available',
+          }),
+        ],
+      }),
+    ]);
+    const user = userEvent.setup();
+    renderWithProviders(<AgentUsagePage />);
+
+    const expandAccount = await screen.findByRole('button', {
+      name: 'Expand account paul+codex@example.com',
+    });
+    expect(screen.queryByText('Daily')).not.toBeInTheDocument();
+
+    await user.click(expandAccount);
+
+    expect(screen.getByText('Weekly')).toBeVisible();
+    expect(screen.getByText('Daily')).toBeVisible();
+    expect(expandAccount).toHaveAttribute('aria-expanded', 'true');
+  });
+
+  it('collapses platform groups without losing their accounts', async () => {
+    const user = userEvent.setup();
+    renderWithProviders(<AgentUsagePage />);
+
+    await screen.findByText('paul+codex@example.com');
+    await user.click(
+      screen.getByRole('button', {
+        name: 'Collapse Codex platform accounts',
+      }),
+    );
+    expect(
+      screen
+        .getByText('paul+codex@example.com')
+        .closest('[data-slot="disclosure-content"]'),
+    ).not.toHaveAttribute('data-expanded', 'true');
+
+    await user.click(
+      screen.getByRole('button', {
+        name: 'Expand Codex platform accounts',
+      }),
+    );
+    expect(await screen.findByText('paul+codex@example.com')).toBeVisible();
+    expect(
+      screen
+        .getByText('paul+codex@example.com')
+        .closest('[data-slot="disclosure-content"]'),
+    ).toHaveAttribute('data-expanded', 'true');
+  });
+
+  it('retains platform grouping while searching and exposes filtered recovery', async () => {
+    const user = userEvent.setup();
+    vi.mocked(agentUsageGateway.listAccounts).mockResolvedValue([
+      accountResponse(),
+      accountResponse({
+        availability: 'available',
+        id: '04675d66-b8a5-45f3-b281-62524aa70005',
+        identifier: 'cursor@example.com',
+        platform: 'cursor',
+        quotas: [],
+      }),
+    ]);
+    renderWithProviders(<AgentUsagePage />);
+
+    const search = await screen.findByLabelText('Search account identifier');
+    await user.type(search, 'cursor@example.com');
+    expect(
+      await screen.findByRole('region', { name: 'Cursor platform accounts' }),
+    ).toBeVisible();
+    expect(
+      screen.queryByRole('region', { name: 'Codex platform accounts' }),
+    ).not.toBeInTheDocument();
+
+    await user.clear(search);
+    await user.type(search, 'missing-account');
+    expect(
+      await screen.findByText('No accounts match the current filters'),
+    ).toBeVisible();
+    await user.click(screen.getByRole('button', { name: 'Clear filters' }));
+    expect(
+      await screen.findByRole('region', { name: 'Codex platform accounts' }),
+    ).toBeVisible();
+    expect(
+      screen.getByRole('region', { name: 'Cursor platform accounts' }),
+    ).toBeVisible();
+  });
+
+  it('starts account creation with the selected platform group', async () => {
+    const user = userEvent.setup();
+    renderWithProviders(<AgentUsagePage />);
+
+    await user.click(
+      await screen.findByRole('button', { name: 'Add account to Codex' }),
+    );
+
+    expect(
+      screen.getByRole('button', { name: /Coding-agent platform/ }),
+    ).toHaveTextContent('Codex');
   });
 
   it('adds a manual built-in provider account with its selected sign-in method', async () => {
@@ -125,11 +303,7 @@ describe('AgentUsagePage', () => {
     );
     renderWithProviders(<AgentUsagePage />);
 
-    await user.click(
-      await screen.findByRole('button', {
-        name: 'Edit account paul+codex@example.com',
-      }),
-    );
+    await openAccountAction(user, 'Edit account');
     const identifier = screen.getByLabelText('Full account identifier');
     await user.clear(identifier);
     await user.type(identifier, 'updated@example.com');
@@ -143,11 +317,7 @@ describe('AgentUsagePage', () => {
       ),
     );
 
-    await user.click(
-      screen.getByRole('button', {
-        name: 'Delete account paul+codex@example.com',
-      }),
-    );
+    await openAccountAction(user, 'Delete account');
     await user.click(screen.getByRole('button', { name: 'Confirm' }));
     await waitFor(() =>
       expect(agentUsageGateway.deleteAccount).toHaveBeenCalledWith(
@@ -160,8 +330,9 @@ describe('AgentUsagePage', () => {
     const user = userEvent.setup();
     renderWithProviders(<AgentUsagePage />);
 
+    await expandAccount(user);
     await user.click(
-      await screen.findByRole('button', {
+      screen.getByRole('button', {
         name: 'Add quota for paul+codex@example.com',
       }),
     );
@@ -196,12 +367,54 @@ describe('AgentUsagePage', () => {
     );
   });
 
+  it('shows duplicate quota-label conflicts on the label field instead of a toast', async () => {
+    const user = userEvent.setup();
+    vi.mocked(agentUsageGateway.saveQuota).mockRejectedValue(
+      new TauriCommandError('save_agent_quota', {
+        code: 'AGENT_USAGE_CONFLICT',
+        message: 'That quota window label is already used for this account.',
+      }),
+    );
+    renderWithProviders(<AgentUsagePage />);
+
+    await expandAccount(user);
+    await user.click(
+      screen.getByRole('button', {
+        name: 'Add quota for paul+codex@example.com',
+      }),
+    );
+    await user.click(screen.getByRole('button', { name: 'Paste message' }));
+    await user.type(
+      screen.getByLabelText('Provider reset message'),
+      'Your limit resets Friday at 3:00 PM',
+    );
+    await user.click(screen.getByRole('button', { name: 'Preview reset' }));
+    await user.click(
+      await screen.findByRole('checkbox', {
+        name: 'I confirm this interpreted reset time',
+      }),
+    );
+    await user.click(screen.getByRole('button', { name: 'Save quota' }));
+
+    const label = screen.getByLabelText('Quota window label');
+    const message = 'That quota window label is already used for this account.';
+    await waitFor(() => expect(label).toHaveAttribute('aria-invalid', 'true'));
+    expect(label).toHaveAccessibleDescription(message);
+    expect(screen.getAllByText(message)).toHaveLength(1);
+
+    await user.clear(label);
+    await user.type(label, 'Monthly');
+    expect(label).not.toHaveAttribute('aria-invalid', 'true');
+    expect(screen.queryByText(message)).not.toBeInTheDocument();
+  });
+
   it('previews exact and normalized relative reset inputs in the account timezone', async () => {
     const user = userEvent.setup();
     renderWithProviders(<AgentUsagePage />);
 
+    await expandAccount(user);
     await user.click(
-      await screen.findByRole('button', {
+      screen.getByRole('button', {
         name: 'Add quota for paul+codex@example.com',
       }),
     );
@@ -237,8 +450,9 @@ describe('AgentUsagePage', () => {
     const user = userEvent.setup();
     renderWithProviders(<AgentUsagePage />);
 
+    await expandAccount(user);
     await user.click(
-      await screen.findByRole('button', {
+      screen.getByRole('button', {
         name: 'Edit Weekly quota for paul+codex@example.com',
       }),
     );
@@ -284,9 +498,10 @@ describe('AgentUsagePage', () => {
     ]);
     renderWithProviders(<AgentUsagePage />);
 
+    await expandAccount(userEvent.setup());
     expect(await screen.findByText(/Resets today at/)).toBeVisible();
     expect(screen.getByText(/Source: Pasted message/)).toBeVisible();
-    expect(screen.getByText(/30% remaining/)).toBeVisible();
+    expect(screen.getAllByText(/30% remaining/).length).toBeGreaterThan(0);
   });
 });
 
@@ -331,4 +546,40 @@ function quotaResponse(extra: Record<string, unknown> = {}) {
     usageUpdatedAt: '2026-08-08T00:00:00Z',
     ...extra,
   };
+}
+
+function expectStatusColor(label: string, colorClass: string) {
+  const status = statusElement(label);
+  expect(status).toHaveAttribute(
+    'data-status',
+    label === 'Reset soon' ? 'resetSoon' : label.toLocaleLowerCase(),
+  );
+  expect(status).toHaveClass(colorClass);
+}
+
+function statusElement(label: string) {
+  return screen
+    .getAllByText(label)
+    .map((element) => element.closest('[data-status]'))
+    .find(Boolean);
+}
+
+async function expandAccount(user: ReturnType<typeof userEvent.setup>) {
+  await user.click(
+    await screen.findByRole('button', {
+      name: 'Expand account paul+codex@example.com',
+    }),
+  );
+}
+
+async function openAccountAction(
+  user: ReturnType<typeof userEvent.setup>,
+  action: 'Delete account' | 'Edit account',
+) {
+  await user.click(
+    await screen.findByRole('button', {
+      name: 'Open actions for paul+codex@example.com',
+    }),
+  );
+  await user.click(await screen.findByRole('menuitem', { name: action }));
 }

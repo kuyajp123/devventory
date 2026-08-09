@@ -150,6 +150,19 @@ export function installTauriBrowserMocks() {
       );
       if (!account) throw new Error('Missing mock Agent Usage account');
       const quotas = account.quotas as Array<Record<string, unknown>>;
+      const normalizedLabel = input.label.trim().toLocaleLowerCase();
+      const hasDuplicateLabel = quotas.some(
+        (item) =>
+          item.id !== input.id &&
+          String(item.label).trim().toLocaleLowerCase() === normalizedLabel,
+      );
+      if (hasDuplicateLabel) {
+        throw {
+          code: 'AGENT_USAGE_CONFLICT',
+          message: 'untrusted mock backend details',
+          recoverable: true,
+        };
+      }
       const quota = {
         accountId: input.accountId,
         createdAt: '2026-08-08T00:00:00.000Z',

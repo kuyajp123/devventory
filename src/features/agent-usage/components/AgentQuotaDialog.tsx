@@ -31,6 +31,7 @@ import {
   type AgentAccount,
   type AgentQuota,
   type AgentQuotaFormValues,
+  type AgentQuotaSaveError,
   type ResetPreview,
   type SaveAgentQuotaInput,
 } from '../models/agent-usage';
@@ -42,8 +43,10 @@ interface AgentQuotaDialogProps {
   isOpen: boolean;
   isSaving: boolean;
   onOpenChange: (isOpen: boolean) => void;
+  onSaveErrorClear: () => void;
   onSubmit: (values: SaveAgentQuotaInput) => Promise<void>;
   quota: AgentQuota | null;
+  saveError: AgentQuotaSaveError | null;
 }
 
 export function AgentQuotaDialog({
@@ -51,8 +54,10 @@ export function AgentQuotaDialog({
   isOpen,
   isSaving,
   onOpenChange,
+  onSaveErrorClear,
   onSubmit,
   quota,
+  saveError,
 }: AgentQuotaDialogProps) {
   const previewReset = usePreviewAgentResetMutation();
   const {
@@ -173,6 +178,16 @@ export function AgentQuotaDialog({
             </p>
           </div>
 
+          {saveError?.field === 'form' && (
+            <Alert status="danger">
+              <Alert.Indicator />
+              <Alert.Content>
+                <Alert.Title>Quota window could not be saved</Alert.Title>
+                <Alert.Description>{saveError.message}</Alert.Description>
+              </Alert.Content>
+            </Alert>
+          )}
+
           <div className="grid gap-4 sm:grid-cols-2">
             <Controller
               control={control}
@@ -180,18 +195,28 @@ export function AgentQuotaDialog({
               render={({ field }) => (
                 <TextField
                   fullWidth
-                  isInvalid={Boolean(errors.label)}
+                  isInvalid={Boolean(
+                    errors.label || saveError?.field === 'label',
+                  )}
                   variant="secondary"
                 >
                   <Label>Quota window label</Label>
                   <Input
                     autoFocus
                     disabled={isSaving}
-                    onChange={(event) => field.onChange(event.target.value)}
+                    onChange={(event) => {
+                      field.onChange(event.target.value);
+                      if (saveError?.field === 'label') onSaveErrorClear();
+                    }}
                     placeholder="Weekly"
                     value={field.value}
                   />
-                  <FieldError>{errors.label?.message}</FieldError>
+                  <FieldError>
+                    {errors.label?.message ??
+                      (saveError?.field === 'label'
+                        ? saveError.message
+                        : undefined)}
+                  </FieldError>
                 </TextField>
               )}
             />

@@ -29,10 +29,15 @@ import {
   TIMEZONE_OPTIONS,
   type AgentAccount,
   type AgentAccountFormValues,
+  type AgentPlatform,
 } from '../models/agent-usage';
 
 interface AgentAccountDialogProps {
   account: AgentAccount | null;
+  initialPlatform?: {
+    customPlatform: string | null;
+    platform: AgentPlatform;
+  } | null;
   isOpen: boolean;
   isSaving: boolean;
   onOpenChange: (isOpen: boolean) => void;
@@ -41,6 +46,7 @@ interface AgentAccountDialogProps {
 
 export function AgentAccountDialog({
   account,
+  initialPlatform,
   isOpen,
   isSaving,
   onOpenChange,
@@ -53,12 +59,15 @@ export function AgentAccountDialog({
     register,
     reset,
   } = useForm<AgentAccountFormValues>({
-    defaultValues: defaults(account),
+    defaultValues: defaults(account, initialPlatform),
     resolver: zodResolver(agentAccountFormSchema),
   });
   const platform = useWatch({ control, name: 'platform' });
 
-  useEffect(() => reset(defaults(account)), [account, isOpen, reset]);
+  useEffect(
+    () => reset(defaults(account, initialPlatform)),
+    [account, initialPlatform, isOpen, reset],
+  );
 
   const submit = handleSubmit(async (values) => {
     await onSubmit({
@@ -260,12 +269,19 @@ export function AgentAccountDialog({
   );
 }
 
-function defaults(account: AgentAccount | null): AgentAccountFormValues {
+function defaults(
+  account: AgentAccount | null,
+  initialPlatform?: {
+    customPlatform: string | null;
+    platform: AgentPlatform;
+  } | null,
+): AgentAccountFormValues {
   return {
-    customPlatform: account?.customPlatform ?? '',
+    customPlatform:
+      account?.customPlatform ?? initialPlatform?.customPlatform ?? '',
     defaultTimezone: account?.defaultTimezone ?? DEFAULT_TIMEZONE,
     identifier: account?.identifier ?? '',
-    platform: account?.platform ?? 'codex',
+    platform: account?.platform ?? initialPlatform?.platform ?? 'codex',
     signInMethod: account?.signInMethod ?? 'google',
     trackingMode: 'manual',
   };

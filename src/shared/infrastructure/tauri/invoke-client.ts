@@ -41,6 +41,13 @@ const safeMessages: Record<string, string> = {
     'A rule of that type already exists for this environment key.',
 };
 
+const commandSafeMessages: Record<string, Record<string, string>> = {
+  save_agent_quota: {
+    AGENT_USAGE_CONFLICT:
+      'That quota window label is already used for this account.',
+  },
+};
+
 function normalizeCommandError(
   command: string,
   error: unknown,
@@ -51,7 +58,7 @@ function normalizeCommandError(
 
   const candidate = error as Record<string, unknown>;
   const code = typeof candidate.code === 'string' ? candidate.code : 'UNKNOWN';
-  const message = safeMessages[code];
+  const message = commandSafeMessages[command]?.[code] ?? safeMessages[code];
   if (!message) {
     return new TauriCommandError(command);
   }
