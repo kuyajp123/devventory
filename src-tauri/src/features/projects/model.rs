@@ -142,6 +142,13 @@ pub(crate) struct Project {
     pub(super) initial_scan: InitialScanSummary,
 }
 
+#[cfg(test)]
+impl Project {
+    pub(crate) fn id(&self) -> Uuid {
+        self.id
+    }
+}
+
 #[derive(Debug)]
 pub(super) struct NewProjectRecord {
     pub(super) id: Uuid,

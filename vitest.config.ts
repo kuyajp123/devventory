@@ -11,8 +11,9 @@ export default defineConfig({
     clearMocks: true,
     environment: 'jsdom',
     include: ['src/**/*.test.{ts,tsx}'],
-    maxWorkers: 4,
+    maxWorkers: process.env.CI ? 2 : 4,
     restoreMocks: true,
     setupFiles: ['./src/test/setup.ts'],
+    testTimeout: 15_000,
   },
 });

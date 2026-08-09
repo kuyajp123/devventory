@@ -757,7 +757,7 @@ impl TestContext {
             SqliteProjectRepository::new(pool.clone()),
             LocalProjectFilesystem,
         );
-        project_service
+        let project = project_service
             .create(CreateProject {
                 name: name.to_owned(),
                 description: None,
@@ -768,15 +768,7 @@ impl TestContext {
             })
             .await
             .expect("project creation");
-        let root_display = root.to_string_lossy();
-        let project_id = project_service
-            .scan_targets()
-            .await
-            .expect("project targets")
-            .into_iter()
-            .find(|target| target.root_path == root_display)
-            .expect("persisted project")
-            .id;
+        let project_id = project.id();
         let environment_service = EnvironmentService::new(
             SqliteEnvironmentRepository::new(pool.clone()),
             project_service.clone(),

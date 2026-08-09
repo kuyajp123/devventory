@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use sqlx::{FromRow, QueryBuilder, Sqlite, SqlitePool};
+use sqlx::{FromRow, QueryBuilder, Sqlite, SqlitePool, Transaction};
 use uuid::Uuid;
 
 use super::error::FileInventoryError;
@@ -54,6 +54,7 @@ impl SqliteFileInventoryRepository {
 
     async fn existing_batch(
         &self,
+        transaction: &mut Transaction<'_, Sqlite>,
         project_id: Uuid,
         files: &[ScannedFile],
     ) -> Result<HashMap<String, ExistingFileRow>, FileInventoryError> {
@@ -76,7 +77,7 @@ impl SqliteFileInventoryRepository {
 
         Ok(builder
             .build_query_as::<ExistingFileRow>()
-            .fetch_all(&self.pool)
+            .fetch_all(&mut **transaction)
             .await?
             .into_iter()
             .map(|row| (row.relative_path.clone(), row))
@@ -144,8 +145,10 @@ impl FileInventoryRepository for SqliteFileInventoryRepository {
             return Ok(PersistenceSummary::default());
         }
 
-        let existing = self.existing_batch(project_id, files).await?;
-        let mut transaction = self.pool.begin().await?;
+        let mut transaction = self.pool.begin_with("BEGIN IMMEDIATE").await?;
+        let existing = self
+            .existing_batch(&mut transaction, project_id, files)
+            .await?;
         let mut summary = PersistenceSummary::default();
 
         for file in files {
