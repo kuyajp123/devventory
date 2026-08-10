@@ -54,6 +54,35 @@ fn scan_rejects_traversal_and_never_enters_excluded_directories() {
     assert!(summary.completed);
 }
 
+#[test]
+fn validate_subdirectory_returns_relative_path_and_rejects_outside_paths() {
+    let workspace = tempdir().expect("temporary workspace");
+    let root = workspace.path().join("project");
+    let nested = root.join("src/components");
+    let outside = workspace.path().join("outside");
+    fs::create_dir_all(&nested).expect("nested directory");
+    fs::create_dir_all(&outside).expect("outside directory");
+
+    let filesystem = LocalProjectFilesystem;
+    let root_str = root.to_str().expect("UTF-8 path");
+
+    // Exact root returns "."
+    let root_res = filesystem.validate_subdirectory(root_str, root_str);
+    assert_eq!(root_res.expect("exact root"), ".");
+
+    // Valid nested returns "src/components/"
+    let nested_res = filesystem.validate_subdirectory(root_str, nested.to_str().expect("UTF-8 path"));
+    assert_eq!(nested_res.expect("nested path"), "src/components/");
+
+    // Outside path returns error
+    let outside_res = filesystem.validate_subdirectory(root_str, outside.to_str().expect("UTF-8 path"));
+    assert!(matches!(outside_res, Err(ProjectError::WatchedLocationOutsideRoot)));
+
+    // Relative parent traversal escape returns error
+    let escape_res = filesystem.validate_subdirectory(root_str, "../outside");
+    assert!(matches!(escape_res, Err(ProjectError::WatchedLocationOutsideRoot)));
+}
+
 #[tokio::test]
 async fn service_persists_projects_and_rejects_a_duplicate_canonical_root() {
     let workspace = tempdir().expect("temporary workspace");

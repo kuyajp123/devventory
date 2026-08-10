@@ -131,6 +131,57 @@ impl LocalProjectFilesystem {
         display_path(&canonical)
     }
 
+    pub(super) fn validate_subdirectory(
+        &self,
+        root_path: &str,
+        target_path: &str,
+    ) -> Result<String, ProjectError> {
+        let root_requested = Path::new(root_path.trim());
+        if !root_requested.is_absolute() {
+            return Err(ProjectError::RootNotAbsolute);
+        }
+        let root = canonicalize_root(root_requested)?;
+        ensure_readable_directory(&root, true)?;
+
+        let target_requested = Path::new(target_path.trim());
+        let canonical_target = if target_requested.is_absolute() {
+            canonicalize_watched_location(target_requested)?
+        } else {
+            let relative = normalize_relative_path(target_path, true)
+                .map_err(|_| ProjectError::WatchedLocationOutsideRoot)?;
+            let requested = if relative == "." {
+                root.clone()
+            } else {
+                root.join(relative)
+            };
+            canonicalize_watched_location(&requested)?
+        };
+
+        if canonical_target.strip_prefix(&root).is_err() {
+            return Err(ProjectError::WatchedLocationOutsideRoot);
+        }
+
+        if contains_link_or_reparse_component(&root, &canonical_target)
+            .map_err(|_| ProjectError::WatchedLocationUnreadable)?
+        {
+            return Err(ProjectError::WatchedLocationLinkNotAllowed);
+        }
+
+        let is_root_target = canonical_target == root;
+        ensure_readable_directory(&canonical_target, is_root_target)?;
+
+        if is_root_target {
+            Ok(".".to_string())
+        } else {
+            let relative = relative_from_root(&root, &canonical_target)?;
+            let mut formatted = relative.replace('\\', "/");
+            if !formatted.ends_with('/') {
+                formatted.push('/');
+            }
+            Ok(formatted)
+        }
+    }
+
     pub(super) fn validate_configuration(
         &self,
         root_path: &str,

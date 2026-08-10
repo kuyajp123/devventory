@@ -1,40 +1,53 @@
 import { zodResolver } from '@hookform/resolvers/zod';
-import { Alert, Button, Form, Spinner, toast } from '@heroui/react';
-import { IconDeviceFloppy, IconScan } from '@tabler/icons-react';
+import { Alert, Form, toast } from '@heroui/react';
 import { useState } from 'react';
 import { useForm, useWatch } from 'react-hook-form';
 import { Link, useNavigate } from 'react-router';
-import { ICON_SIZE, ICON_STROKE } from '@/shared/constants/icon.constants';
 import { TauriCommandError } from '@/shared/infrastructure/tauri/tauri-error';
+import { OnboardingSummaryPanel } from '../components/OnboardingSummaryPanel';
 import { ProjectDetailsFields } from '../components/ProjectDetailsFields';
 import { ProjectFolderFields } from '../components/ProjectFolderFields';
-import { ScanSummaryCard } from '../components/ScanSummaryCard';
+import { useActiveProject } from '../hooks/use-active-project';
 import {
   useCreateProjectMutation,
   useFolderPickerMutation,
   useScanProjectMutation,
   useValidateProjectRootMutation,
+  useValidateProjectSubdirectoryMutation,
 } from '../hooks/use-projects';
 import {
+  getConfigurationFingerprint,
+  isBuiltInProjectExclusion,
+  isSafeRelativeConfigurationPath,
+  normalizeConfigurationPath,
   projectOnboardingSchema,
-  splitConfigurationLines,
   type InitialScanSummary,
   type ProjectOnboardingValues,
+  type WatchScope,
 } from '../models/project';
-import { useActiveProject } from '../hooks/use-active-project';
 
 export function ProjectOnboardingPage() {
   const navigate = useNavigate();
   const { selectProject } = useActiveProject();
   const folderPicker = useFolderPickerMutation();
   const validateRoot = useValidateProjectRootMutation();
+  const validateSubdirectory = useValidateProjectSubdirectoryMutation();
   const scanProject = useScanProjectMutation();
   const createProject = useCreateProjectMutation();
+
+  const [watchScope, setWatchScope] = useState<WatchScope>('entire-project');
+  const [selectedFoldersDraft, setSelectedFoldersDraft] = useState<string[]>(
+    [],
+  );
   const [scanSummary, setScanSummary] = useState<InitialScanSummary | null>(
+    null,
+  );
+  const [scannedFingerprint, setScannedFingerprint] = useState<string | null>(
     null,
   );
   const [rootValidated, setRootValidated] = useState(false);
   const [operationError, setOperationError] = useState<string | null>(null);
+
   const {
     control,
     formState: { errors },
@@ -44,60 +57,257 @@ export function ProjectOnboardingPage() {
   } = useForm<ProjectOnboardingValues>({
     defaultValues: {
       description: '',
-      exclusionsText: '',
+      exclusions: [],
       name: '',
       projectType: 'web',
       rootPath: '',
-      watchedLocationsText: '.',
+      watchScope: 'entire-project',
+      watchedLocations: ['.'],
     },
     resolver: zodResolver(projectOnboardingSchema),
   });
+
   const rootPath = useWatch({ control, name: 'rootPath' });
+  const exclusions = useWatch({ control, name: 'exclusions' });
+
+  const effectiveWatchedLocations =
+    watchScope === 'entire-project' ? ['.'] : selectedFoldersDraft;
+
+  const currentFingerprint = rootPath
+    ? getConfigurationFingerprint({
+        exclusions,
+        rootPath,
+        watchedLocations: effectiveWatchedLocations,
+      })
+    : '';
+
+  const isScanValid =
+    Boolean(scanSummary) && scannedFingerprint === currentFingerprint;
+  const isScanStale = Boolean(scanSummary) && !isScanValid;
 
   const isBusy =
     folderPicker.isPending ||
     validateRoot.isPending ||
+    validateSubdirectory.isPending ||
     scanProject.isPending ||
     createProject.isPending;
 
-  async function chooseFolder() {
+  function handleWatchScopeChange(scope: WatchScope) {
+    setWatchScope(scope);
+    setValue('watchScope', scope, { shouldDirty: true, shouldValidate: true });
+    const newEffective =
+      scope === 'entire-project' ? ['.'] : selectedFoldersDraft;
+    setValue('watchedLocations', newEffective, {
+      shouldDirty: true,
+      shouldValidate: true,
+    });
+  }
+
+  async function chooseRootFolder() {
     setOperationError(null);
     try {
-      const selected = await folderPicker.mutateAsync();
+      const selected = await folderPicker.mutateAsync(
+        'Choose a project folder',
+      );
       if (!selected) return;
 
       setRootValidated(false);
       setScanSummary(null);
+      setScannedFingerprint(null);
+      setSelectedFoldersDraft([]);
       setValue('rootPath', selected, {
         shouldDirty: true,
         shouldValidate: true,
       });
+
       const validated = await validateRoot.mutateAsync(selected);
       setValue('rootPath', validated.rootPath, {
         shouldDirty: true,
         shouldValidate: true,
       });
+
+      // Reconcile child paths on root change: reset draft & exclusions
+      const newEffective = watchScope === 'entire-project' ? ['.'] : [];
+      setValue('watchedLocations', newEffective, {
+        shouldDirty: true,
+        shouldValidate: true,
+      });
+      setValue('exclusions', [], { shouldDirty: true, shouldValidate: true });
+
       setRootValidated(true);
-      toast.success('Project folder validated');
+      toast.success(
+        'Project folder validated. Reset watched locations and exclusions for the new folder.',
+      );
     } catch (error) {
       setOperationError(errorMessage(error));
     }
   }
 
-  function configurationFrom(values: ProjectOnboardingValues) {
-    return {
-      exclusions: splitConfigurationLines(values.exclusionsText),
-      rootPath: values.rootPath,
-      watchedLocations: splitConfigurationLines(values.watchedLocationsText),
-    };
+  async function chooseWatchedFolder() {
+    if (!rootPath || !rootValidated) return;
+    setOperationError(null);
+    try {
+      const selected = await folderPicker.mutateAsync(
+        'Choose a watched folder inside project root',
+      );
+      if (!selected) return;
+
+      const validated = await validateSubdirectory.mutateAsync({
+        rootPath,
+        targetPath: selected,
+      });
+
+      const normalized = normalizeConfigurationPath(validated.relativePath);
+      if (normalized === '.') {
+        toast.warning(
+          'Project root cannot be added as a custom watched folder.',
+        );
+        return;
+      }
+
+      const existingNormalized = selectedFoldersDraft.map(
+        normalizeConfigurationPath,
+      );
+
+      if (existingNormalized.includes(normalized)) {
+        toast.warning(`"${normalized}" is already in watched locations.`);
+        return;
+      }
+
+      const nextDraft = [...selectedFoldersDraft, normalized];
+      setSelectedFoldersDraft(nextDraft);
+      setValue('watchedLocations', nextDraft, {
+        shouldDirty: true,
+        shouldValidate: true,
+      });
+      toast.success(`Added watched folder: ${normalized}`);
+    } catch (error) {
+      setOperationError(errorMessage(error));
+    }
+  }
+
+  async function chooseExclusionFolder() {
+    if (!rootPath || !rootValidated) return;
+    setOperationError(null);
+    try {
+      const selected = await folderPicker.mutateAsync(
+        'Choose an exclusion folder inside project root',
+      );
+      if (!selected) return;
+
+      const validated = await validateSubdirectory.mutateAsync({
+        rootPath,
+        targetPath: selected,
+      });
+
+      const normalized = normalizeConfigurationPath(validated.relativePath);
+      if (normalized === '.') {
+        toast.warning('Cannot exclude the entire project root.');
+        return;
+      }
+
+      if (isBuiltInProjectExclusion(normalized)) {
+        toast.warning(`"${normalized}" is already a built-in exclusion.`);
+        return;
+      }
+
+      const existingNormalized = exclusions.map(normalizeConfigurationPath);
+      if (existingNormalized.includes(normalized)) {
+        toast.warning(`"${normalized}" is already in additional exclusions.`);
+        return;
+      }
+
+      setValue('exclusions', [...exclusions, normalized], {
+        shouldDirty: true,
+        shouldValidate: true,
+      });
+      toast.success(`Added exclusion: ${normalized}`);
+    } catch (error) {
+      setOperationError(errorMessage(error));
+    }
+  }
+
+  function addManualWatchedLocation(path: string) {
+    const normalized = normalizeConfigurationPath(path);
+    if (!isSafeRelativeConfigurationPath(normalized)) {
+      toast.danger('Invalid relative path or parent traversal.');
+      return;
+    }
+    if (normalized === '.') {
+      toast.warning('Project root cannot be added as a custom watched folder.');
+      return;
+    }
+
+    const existingNormalized = selectedFoldersDraft.map(
+      normalizeConfigurationPath,
+    );
+    if (existingNormalized.includes(normalized)) {
+      toast.warning(`"${normalized}" is already in watched locations.`);
+      return;
+    }
+
+    const nextDraft = [...selectedFoldersDraft, normalized];
+    setSelectedFoldersDraft(nextDraft);
+    setValue('watchedLocations', nextDraft, {
+      shouldDirty: true,
+      shouldValidate: true,
+    });
+  }
+
+  function addManualExclusion(path: string) {
+    const normalized = normalizeConfigurationPath(path);
+    if (!isSafeRelativeConfigurationPath(normalized)) {
+      toast.danger('Invalid relative path or parent traversal.');
+      return;
+    }
+    if (normalized === '.') {
+      toast.warning('Cannot exclude the entire project root.');
+      return;
+    }
+    if (isBuiltInProjectExclusion(normalized)) {
+      toast.warning(`"${normalized}" is already a built-in exclusion.`);
+      return;
+    }
+
+    const existingNormalized = exclusions.map(normalizeConfigurationPath);
+    if (existingNormalized.includes(normalized)) {
+      toast.warning(`"${normalized}" is already in additional exclusions.`);
+      return;
+    }
+
+    setValue('exclusions', [...exclusions, normalized], {
+      shouldDirty: true,
+      shouldValidate: true,
+    });
+  }
+
+  function removeWatchedLocation(index: number) {
+    const nextDraft = selectedFoldersDraft.filter((_, i) => i !== index);
+    setSelectedFoldersDraft(nextDraft);
+    setValue('watchedLocations', nextDraft, {
+      shouldDirty: true,
+      shouldValidate: true,
+    });
+  }
+
+  function removeExclusion(index: number) {
+    const updated = exclusions.filter((_, i) => i !== index);
+    setValue('exclusions', updated, {
+      shouldDirty: true,
+      shouldValidate: true,
+    });
   }
 
   const runScan = handleSubmit(async (values) => {
     setOperationError(null);
-    setScanSummary(null);
     try {
-      const summary = await scanProject.mutateAsync(configurationFrom(values));
+      const summary = await scanProject.mutateAsync({
+        exclusions: values.exclusions,
+        rootPath: values.rootPath,
+        watchedLocations: values.watchedLocations,
+      });
       setScanSummary(summary);
+      setScannedFingerprint(getConfigurationFingerprint(values));
       toast.success('Initial project scan completed');
     } catch (error) {
       setOperationError(errorMessage(error));
@@ -105,7 +315,7 @@ export function ProjectOnboardingPage() {
   });
 
   const saveProject = handleSubmit(async (values) => {
-    if (!scanSummary) {
+    if (!isScanValid || !scanSummary) {
       const message = 'Run and review the initial scan before saving.';
       setOperationError(message);
       toast.warning(message);
@@ -115,10 +325,12 @@ export function ProjectOnboardingPage() {
     setOperationError(null);
     try {
       const project = await createProject.mutateAsync({
-        ...configurationFrom(values),
         description: values.description || undefined,
+        exclusions: values.exclusions,
         name: values.name,
         projectType: values.projectType,
+        rootPath: values.rootPath,
+        watchedLocations: values.watchedLocations,
       });
       await selectProject(project.id);
       toast.success('Project saved to this device');
@@ -129,22 +341,24 @@ export function ProjectOnboardingPage() {
   });
 
   return (
-    <section className="mx-auto w-full max-w-5xl space-y-8">
-      <header className="space-y-3">
+    <section className="mx-auto w-full max-w-6xl space-y-8">
+      <header className="space-y-2 border-b border-divider pb-6">
         <Link
-          className="text-sm font-medium text-accent hover:underline"
+          className="text-xs font-medium text-accent hover:underline font-mono"
           to="/dashboard"
         >
-          Back to dashboard
+          &larr; Back to dashboard
         </Link>
         <div>
-          <p className="text-sm font-medium text-muted">Project onboarding</p>
-          <h1 className="mt-1 text-3xl font-semibold tracking-tight sm:text-4xl">
+          <p className="text-xs font-semibold uppercase tracking-wider text-muted font-mono">
+            Project onboarding
+          </p>
+          <h1 className="font-mono mt-1 text-2xl font-semibold tracking-tight sm:text-3xl text-foreground">
             Add a local project
           </h1>
-          <p className="mt-2 max-w-3xl leading-7 text-muted">
-            Choose the folder Devventory may inspect, configure the allowed
-            locations, then review a summary-only scan before saving locally.
+          <p className="font-mono mt-1 max-w-3xl leading-relaxed text-sm text-muted">
+            Configure the project root, inspectable locations, and exclusions.
+            Review an initial filesystem scan before saving locally.
           </p>
         </div>
       </header>
@@ -154,23 +368,6 @@ export function ProjectOnboardingPage() {
         onSubmit={(event) => event.preventDefault()}
         validationBehavior="aria"
       >
-        <ProjectDetailsFields
-          control={control}
-          errors={errors}
-          isDisabled={isBusy}
-          register={register}
-        />
-        <ProjectFolderFields
-          control={control}
-          errors={errors}
-          isDisabled={isBusy}
-          onChooseFolder={chooseFolder}
-          onConfigurationChange={() => setScanSummary(null)}
-          register={register}
-          rootPath={rootPath}
-          rootValidated={rootValidated}
-        />
-
         {operationError && (
           <Alert role="alert" status="danger">
             <Alert.Indicator />
@@ -181,43 +378,48 @@ export function ProjectOnboardingPage() {
           </Alert>
         )}
 
-        {scanSummary && <ScanSummaryCard summary={scanSummary} />}
+        <div className="grid gap-8 lg:grid-cols-[1fr_340px] items-start">
+          <main className="space-y-8">
+            <ProjectDetailsFields
+              control={control}
+              errors={errors}
+              isDisabled={isBusy}
+              register={register}
+            />
+            <ProjectFolderFields
+              errors={errors}
+              exclusions={exclusions}
+              isDisabled={isBusy}
+              onAddExclusion={addManualExclusion}
+              onAddWatchedLocation={addManualWatchedLocation}
+              onChooseExclusionFolder={() => void chooseExclusionFolder()}
+              onChooseFolder={() => void chooseRootFolder()}
+              onChooseWatchedFolder={() => void chooseWatchedFolder()}
+              onRemoveExclusion={removeExclusion}
+              onRemoveWatchedLocation={removeWatchedLocation}
+              onWatchScopeChange={handleWatchScopeChange}
+              rootPath={rootPath}
+              rootValidated={rootValidated}
+              watchScope={watchScope}
+              watchedLocations={effectiveWatchedLocations}
+            />
+          </main>
 
-        <div className="flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
-          <Button
-            isDisabled={isBusy}
-            onPress={() => void runScan()}
-            type="button"
-            variant="secondary"
-          >
-            {scanProject.isPending ? (
-              <Spinner aria-label="Scanning project" size="sm" />
-            ) : (
-              <IconScan
-                aria-hidden="true"
-                size={ICON_SIZE.button}
-                stroke={ICON_STROKE}
-              />
-            )}
-            {scanProject.isPending ? 'Scanning…' : 'Run initial scan'}
-          </Button>
-          <Button
-            isDisabled={isBusy || !scanSummary}
-            onPress={() => void saveProject()}
-            type="button"
-            variant="primary"
-          >
-            {createProject.isPending ? (
-              <Spinner aria-label="Saving project" size="sm" />
-            ) : (
-              <IconDeviceFloppy
-                aria-hidden="true"
-                size={ICON_SIZE.button}
-                stroke={ICON_STROKE}
-              />
-            )}
-            {createProject.isPending ? 'Saving…' : 'Save project'}
-          </Button>
+          <OnboardingSummaryPanel
+            customExclusionCount={exclusions.length}
+            isBusy={isBusy}
+            isCreatePending={createProject.isPending}
+            isScanPending={scanProject.isPending}
+            isScanStale={isScanStale}
+            isScanValid={isScanValid}
+            onRunScan={() => void runScan()}
+            onSaveProject={() => void saveProject()}
+            rootPath={rootPath}
+            rootValidated={rootValidated}
+            scanSummary={scanSummary}
+            watchScope={watchScope}
+            watchedLocationCount={effectiveWatchedLocations.length}
+          />
         </div>
       </Form>
     </section>

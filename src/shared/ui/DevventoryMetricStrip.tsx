@@ -20,10 +20,10 @@ export interface DevventoryMetricStripProps {
 }
 
 const columnGridClasses: Record<number, string> = {
-  2: 'grid-cols-1 sm:grid-cols-2',
-  3: 'grid-cols-1 sm:grid-cols-3',
+  2: 'grid-cols-2',
+  3: 'grid-cols-2 sm:grid-cols-3',
   4: 'grid-cols-2 sm:grid-cols-4',
-  5: 'grid-cols-2 sm:grid-cols-5',
+  5: 'grid-cols-2 sm:grid-cols-3 lg:grid-cols-5',
   6: 'grid-cols-2 sm:grid-cols-3 lg:grid-cols-6',
   8: 'grid-cols-2 sm:grid-cols-4 lg:grid-cols-8',
 };
@@ -42,32 +42,34 @@ export function DevventoryMetricStrip({
   return (
     <Card
       aria-label={ariaLabel}
-      className={`border border-divider bg-surface shadow-none rounded-[4px] ${className}`}
+      className={`border border-divider bg-surface shadow-none rounded-[4px] overflow-hidden ${className}`}
     >
       <Card.Content className="p-0">
         <dl
-          className={`grid ${gridClass} divide-x divide-y divide-divider sm:divide-y-0`}
+          className={`grid ${gridClass} gap-px bg-divider [&>div]:bg-surface`}
         >
           {items.map((item) => {
             const Icon = item.icon;
             const content = (
               <div
-                className={`min-w-0 px-3 py-2.5 ${item.className ?? ''}`}
+                className={`flex flex-col justify-between min-w-0 px-3 py-2.5 ${item.className ?? ''}`}
                 key={item.id ?? item.label}
               >
-                <dt className="flex items-center gap-1.5 font-mono text-[10px] uppercase tracking-wider text-muted truncate">
+                <dt className="flex items-start gap-1.5 font-mono text-[10px] uppercase tracking-wider leading-tight text-muted">
                   {Icon && (
                     <Icon
                       aria-hidden="true"
-                      className="shrink-0 text-muted"
+                      className="shrink-0 text-muted mt-0.5"
                       size={ICON_SIZE.small}
                       stroke={ICON_STROKE}
                     />
                   )}
-                  <span className="truncate">{item.label}</span>
+                  <span className="whitespace-normal break-words">
+                    {item.label}
+                  </span>
                 </dt>
                 <dd
-                  className={`mt-0.5 font-mono text-base font-semibold tabular-nums text-foreground truncate ${
+                  className={`mt-1.5 font-mono text-base font-semibold tabular-nums text-foreground ${
                     item.valueClassName ?? ''
                   }`}
                 >

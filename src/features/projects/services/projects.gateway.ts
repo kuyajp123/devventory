@@ -1,3 +1,4 @@
+import { z } from 'zod';
 import { invokeCommand } from '@/shared/infrastructure/tauri/invoke-client';
 import {
   initialScanSummarySchema,
@@ -14,6 +15,14 @@ export const projectsGateway = {
       input: { rootPath },
     });
     return validatedProjectRootSchema.parse(response);
+  },
+
+  async validateSubdirectory(rootPath: string, targetPath: string) {
+    const response = await invokeCommand<unknown>(
+      'validate_project_subdirectory',
+      { input: { rootPath, targetPath } },
+    );
+    return z.object({ relativePath: z.string() }).parse(response);
   },
 
   async scan(input: ProjectConfigurationInput) {

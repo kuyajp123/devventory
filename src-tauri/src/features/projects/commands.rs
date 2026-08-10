@@ -5,7 +5,8 @@ use crate::shared::errors::command::CommandError;
 
 use super::dto::{
     CreateProjectInput, ProjectDto, ScanProjectRootInput, ValidateProjectRootInput,
-    ValidatedProjectRootDto,
+    ValidateProjectSubdirectoryInput, ValidatedProjectRootDto,
+    ValidatedProjectSubdirectoryDto,
 };
 use super::model::InitialScanSummary;
 use crate::features::file_inventory::ScanType;
@@ -19,6 +20,18 @@ pub(crate) async fn validate_project_root(
         .project_service()
         .validate_root(&input.root_path)
         .map(ValidatedProjectRootDto::new)
+        .map_err(Into::into)
+}
+
+#[tauri::command]
+pub(crate) async fn validate_project_subdirectory(
+    state: State<'_, AppState>,
+    input: ValidateProjectSubdirectoryInput,
+) -> Result<ValidatedProjectSubdirectoryDto, CommandError> {
+    state
+        .project_service()
+        .validate_subdirectory(&input.root_path, &input.target_path)
+        .map(ValidatedProjectSubdirectoryDto::new)
         .map_err(Into::into)
 }
 

@@ -82,45 +82,93 @@ export interface CreateProjectInput extends ProjectConfigurationInput {
   projectType: ProjectType;
 }
 
-const watchedLocationsSchema = z
+const watchedLocationItemSchema = z
   .string()
   .trim()
-  .min(1, 'Enter at least one relative location.')
+  .min(1, 'Path cannot be empty.')
   .refine(
-    (value) =>
-      splitConfigurationLines(value).every(isSafeRelativeConfigurationPath),
+    isSafeRelativeConfigurationPath,
     'Use only relative paths inside the selected project folder; parent traversal is not allowed.',
   );
 
-const exclusionsSchema = z
+const exclusionItemSchema = z
   .string()
+  .trim()
+  .min(1, 'Path cannot be empty.')
   .refine(
-    (value) =>
-      splitConfigurationLines(value).every(isSafeRelativeConfigurationPath),
+    isSafeRelativeConfigurationPath,
     'Use only relative directory prefixes; parent traversal is not allowed.',
   )
   .refine(
-    (value) =>
-      splitConfigurationLines(value).every(
-        (entry) => !isBuiltInProjectExclusion(entry),
-      ),
-    'Built-in exclusions are already managed by Devventory. Add only your own additional paths.',
+    (value) => !isBuiltInProjectExclusion(value),
+    'Built-in exclusions are already managed by Devventory.',
   );
 
-export const projectOnboardingSchema = z.object({
-  description: z.string().trim().max(2000, 'Use 2,000 characters or fewer.'),
-  exclusionsText: exclusionsSchema,
-  name: z
-    .string()
-    .trim()
-    .min(1, 'Enter a project name.')
-    .max(120, 'Use 120 characters or fewer.'),
-  projectType: projectTypeSchema,
-  rootPath: z.string().trim().min(1, 'Choose a project folder.'),
-  watchedLocationsText: watchedLocationsSchema,
-});
+export const watchScopeSchema = z.enum(['entire-project', 'selected-folders']);
+export type WatchScope = z.infer<typeof watchScopeSchema>;
+
+export const projectOnboardingSchema = z
+  .object({
+    description: z.string().trim().max(2000, 'Use 2,000 characters or fewer.'),
+    exclusions: z.array(exclusionItemSchema),
+    name: z
+      .string()
+      .trim()
+      .min(1, 'Enter a project name.')
+      .max(120, 'Use 120 characters or fewer.'),
+    projectType: projectTypeSchema,
+    rootPath: z.string().trim().min(1, 'Choose a project folder.'),
+    watchScope: watchScopeSchema,
+    watchedLocations: z
+      .array(watchedLocationItemSchema)
+      .min(1, 'Add at least one watched location.'),
+  })
+  .refine(
+    (data) => {
+      if (data.watchScope === 'selected-folders') {
+        return (
+          data.watchedLocations.length > 0 &&
+          !data.watchedLocations.includes('.')
+        );
+      }
+      return (
+        data.watchedLocations.length === 1 && data.watchedLocations[0] === '.'
+      );
+    },
+    {
+      message:
+        'Selected folders mode requires at least one custom folder and cannot contain the project root.',
+      path: ['watchedLocations'],
+    },
+  );
 
 export type ProjectOnboardingValues = z.infer<typeof projectOnboardingSchema>;
+
+export function normalizeConfigurationPath(path: string): string {
+  const normalized = path.trim().replace(/\\/g, '/');
+  if (normalized === '.') return '.';
+  const trimmed = normalized.replace(/^\/+|\/+$/g, '');
+  return trimmed ? `${trimmed}/` : '.';
+}
+
+export function getConfigurationFingerprint(config: {
+  exclusions: string[];
+  rootPath: string;
+  watchedLocations: string[];
+}): string {
+  const normRoot = config.rootPath.trim().replace(/\\/g, '/').toLowerCase();
+  const normWatched = [
+    ...new Set(config.watchedLocations.map(normalizeConfigurationPath)),
+  ]
+    .sort()
+    .join('\n');
+  const normExclusions = [
+    ...new Set(config.exclusions.map(normalizeConfigurationPath)),
+  ]
+    .sort()
+    .join('\n');
+  return `${normRoot}|${normWatched}|${normExclusions}`;
+}
 
 export function splitConfigurationLines(value: string): string[] {
   return [
@@ -133,7 +181,7 @@ export function splitConfigurationLines(value: string): string[] {
   ];
 }
 
-function isSafeRelativeConfigurationPath(value: string): boolean {
+export function isSafeRelativeConfigurationPath(value: string): boolean {
   const normalized = value.replace(/\\/g, '/').replace(/^\/+|\/+$/g, '');
   if (!normalized || /^[a-zA-Z]:\//.test(normalized) || value.startsWith('/')) {
     return false;
@@ -142,7 +190,7 @@ function isSafeRelativeConfigurationPath(value: string): boolean {
   return normalized === '.' || !normalized.split('/').includes('..');
 }
 
-function isBuiltInProjectExclusion(value: string): boolean {
+export function isBuiltInProjectExclusion(value: string): boolean {
   const normalized = value
     .trim()
     .replace(/\\/g, '/')

@@ -10,6 +10,13 @@ pub(crate) struct ValidateProjectRootInput {
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub(crate) struct ValidateProjectSubdirectoryInput {
+    pub(super) root_path: String,
+    pub(super) target_path: String,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub(crate) struct ScanProjectRootInput {
     pub(super) root_path: String,
     pub(super) watched_locations: Vec<String>,
@@ -59,6 +66,18 @@ pub(crate) struct ValidatedProjectRootDto {
 impl ValidatedProjectRootDto {
     pub(super) fn new(root_path: String) -> Self {
         Self { root_path }
+    }
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct ValidatedProjectSubdirectoryDto {
+    relative_path: String,
+}
+
+impl ValidatedProjectSubdirectoryDto {
+    pub(super) fn new(relative_path: String) -> Self {
+        Self { relative_path }
     }
 }
 

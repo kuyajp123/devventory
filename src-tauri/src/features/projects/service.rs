@@ -33,6 +33,14 @@ impl ProjectService {
         self.filesystem.validate_root(root_path)
     }
 
+    pub(crate) fn validate_subdirectory(
+        &self,
+        root_path: &str,
+        target_path: &str,
+    ) -> Result<String, ProjectError> {
+        self.filesystem.validate_subdirectory(root_path, target_path)
+    }
+
     pub(crate) fn preview_scan(
         &self,
         configuration: ScanConfiguration,

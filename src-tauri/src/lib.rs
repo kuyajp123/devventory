@@ -27,7 +27,7 @@ use features::file_inventory::commands::{
 };
 use features::projects::commands::{
     create_project, delete_project, get_project, list_projects, scan_project_root,
-    validate_project_root,
+    validate_project_root, validate_project_subdirectory,
 };
 use features::search::commands::{
     clear_search_history, delete_search_history, list_search_history, record_search_history,
@@ -69,6 +69,7 @@ pub fn run() {
             delete_agent_quota,
             take_due_agent_reminders,
             validate_project_root,
+            validate_project_subdirectory,
             scan_project_root,
             create_project,
             delete_project,

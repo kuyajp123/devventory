@@ -26,13 +26,25 @@ export function useProjectQuery(projectId: string) {
 
 export function useFolderPickerMutation() {
   return useMutation({
-    mutationFn: () => folderPickerGateway.selectProjectRoot(),
+    mutationFn: (title?: string) => folderPickerGateway.selectDirectory(title),
   });
 }
 
 export function useValidateProjectRootMutation() {
   return useMutation({
     mutationFn: (rootPath: string) => projectsGateway.validateRoot(rootPath),
+  });
+}
+
+export function useValidateProjectSubdirectoryMutation() {
+  return useMutation({
+    mutationFn: ({
+      rootPath,
+      targetPath,
+    }: {
+      rootPath: string;
+      targetPath: string;
+    }) => projectsGateway.validateSubdirectory(rootPath, targetPath),
   });
 }
 
