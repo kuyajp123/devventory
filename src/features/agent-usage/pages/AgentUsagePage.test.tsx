@@ -545,7 +545,7 @@ function quotaResponse(extra: Record<string, unknown> = {}) {
     label: 'Weekly',
     remainingPercent: 0,
     reminders: {
-      oneDayBefore: true,
+      beforeResetHours: 24,
       resetDay: true,
       resetReached: true,
     },

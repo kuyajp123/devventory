@@ -40,10 +40,10 @@ describe('Agent Usage contracts', () => {
 
     expect(
       agentQuotaFormSchema.parse({
-        accountIdentifier: 'paul+codex@example.com',
+        customBeforeHours: '24',
         label: 'Weekly',
         remainingPercent: '',
-        remindOneDayBefore: true,
+        remindCustomBefore: true,
         remindResetDay: true,
         remindResetReached: true,
         timezone: 'Asia/Manila',
@@ -60,7 +60,7 @@ function quota(label: string, status: string) {
     label,
     remainingPercent: status === 'available' ? null : 0,
     reminders: {
-      oneDayBefore: true,
+      beforeResetHours: 24,
       resetDay: true,
       resetReached: true,
     },

@@ -20,7 +20,7 @@ import { parseDate, today } from '@internationalized/date';
 import type { CalendarDate, DateValue } from '@internationalized/date';
 import { IconClock } from '@tabler/icons-react';
 import { useState } from 'react';
-import { Controller, useForm } from 'react-hook-form';
+import { Controller, useForm, useWatch } from 'react-hook-form';
 import { ICON_SIZE, ICON_STROKE } from '@/shared/constants/icon.constants';
 import {
   DevventoryDialog,
@@ -58,7 +58,7 @@ interface AgentQuotaDialogProps {
 }
 
 function defaultCalDate(): CalendarDate {
-  return today('UTC').add({ days: 1 });
+  return today('UTC').add({ days: 2 });
 }
 
 function initExactFields(quota: AgentQuota | null, timezone: string) {
@@ -91,6 +91,8 @@ export function AgentQuotaDialog({
     resolver: zodResolver(agentQuotaFormSchema),
   });
 
+  const remindCustomBefore = useWatch({ control, name: 'remindCustomBefore' });
+
   const [mode, setMode] = useState<ResetMode>('exact');
   const [calDate, setCalDate] = useState<CalendarDate>(initialExact.calDate);
   const [time, setTime] = useState(initialExact.time);
@@ -122,6 +124,20 @@ export function AgentQuotaDialog({
         );
         return;
       }
+
+      if (values.remindCustomBefore) {
+        const customHours = Number(values.customBeforeHours.trim());
+        const resetAtMs = new Date(resetAt).getTime();
+        const scheduledForMs = resetAtMs - customHours * 3600 * 1000;
+        // eslint-disable-next-line react-hooks/purity
+        if (scheduledForMs <= Date.now()) {
+          setResetError(
+            'Choose a reminder offset that is still in the future.',
+          );
+          return;
+        }
+      }
+
       setResetError(null);
       await onSubmit({
         accountId: account.id,
@@ -131,7 +147,9 @@ export function AgentQuotaDialog({
           ? Number(values.remainingPercent)
           : null,
         reminders: {
-          oneDayBefore: values.remindOneDayBefore,
+          beforeResetHours: values.remindCustomBefore
+            ? Number(values.customBeforeHours)
+            : null,
           resetDay: values.remindResetDay,
           resetReached: values.remindResetReached,
         },
@@ -216,6 +234,11 @@ export function AgentQuotaDialog({
                   >
                     <Label>Quota window label</Label>
                     <Input
+                      aria-invalid={
+                        errors.label || saveError?.field === 'label'
+                          ? 'true'
+                          : undefined
+                      }
                       autoFocus
                       disabled={isSaving}
                       onChange={(event) => {
@@ -433,33 +456,91 @@ export function AgentQuotaDialog({
           </fieldset>
 
           {/* In-app reminders */}
-          <fieldset className="space-y-1.5 rounded border border-divider bg-workspace p-2.5">
+          <fieldset className="space-y-2 rounded border border-divider bg-workspace p-2.5">
             <legend className="px-1 text-sm font-medium">
               In-app reminders
             </legend>
-            {(
-              [
-                ['remindOneDayBefore', 'One day before reset'],
-                ['remindResetDay', 'On reset day'],
-                ['remindResetReached', 'When reset time is reached'],
-              ] as const
-            ).map(([name, label]) => (
+
+            <Controller
+              control={control}
+              name="remindResetDay"
+              render={({ field }) => (
+                <Checkbox isSelected={field.value} onChange={field.onChange}>
+                  <Checkbox.Content>
+                    <Checkbox.Control>
+                      <Checkbox.Indicator />
+                    </Checkbox.Control>
+                    <Label>On reset day</Label>
+                  </Checkbox.Content>
+                </Checkbox>
+              )}
+            />
+
+            <Controller
+              control={control}
+              name="remindResetReached"
+              render={({ field }) => (
+                <Checkbox isSelected={field.value} onChange={field.onChange}>
+                  <Checkbox.Content>
+                    <Checkbox.Control>
+                      <Checkbox.Indicator />
+                    </Checkbox.Control>
+                    <Label>When reset time is reached</Label>
+                  </Checkbox.Content>
+                </Checkbox>
+              )}
+            />
+
+            <div className="border-t border-divider mt-4" />
+
+            <div className="space-y-1.5">
               <Controller
                 control={control}
-                key={name}
-                name={name}
+                name="remindCustomBefore"
                 render={({ field }) => (
                   <Checkbox isSelected={field.value} onChange={field.onChange}>
                     <Checkbox.Content>
                       <Checkbox.Control>
                         <Checkbox.Indicator />
                       </Checkbox.Control>
-                      <Label>{label}</Label>
+                      <Label>Custom reminder</Label>
                     </Checkbox.Content>
                   </Checkbox>
                 )}
               />
-            ))}
+
+              {remindCustomBefore && (
+                <div className="ml-6">
+                  <Controller
+                    control={control}
+                    name="customBeforeHours"
+                    render={({ field }) => (
+                      <TextField
+                        isInvalid={Boolean(errors.customBeforeHours)}
+                        variant="secondary"
+                      >
+                        <div className="flex items-center gap-2 text-xs text-muted">
+                          <span>Remind me</span>
+                          <Input
+                            {...field}
+                            className="w-20 text-center font-mono text-xs"
+                            disabled={isSaving}
+                            inputMode="numeric"
+                            max="720"
+                            min="1"
+                            type="number"
+                          />
+                          <span>hours before reset</span>
+                        </div>
+                        <FieldError>
+                          {errors.customBeforeHours?.message}
+                        </FieldError>
+                      </TextField>
+                    )}
+                  />
+                </div>
+              )}
+            </div>
           </fieldset>
         </Form>
       </DialogBody>
@@ -490,13 +571,20 @@ function defaults(
   account: AgentAccount | null,
   quota: AgentQuota | null,
 ): AgentQuotaFormValues {
+  const hasCustomBefore = quota?.reminders.beforeResetHours != null;
+  const beforeResetHours = quota?.reminders.beforeResetHours;
+
   return {
+    customBeforeHours:
+      hasCustomBefore && beforeResetHours != null
+        ? String(beforeResetHours)
+        : '24',
     label: quota?.label ?? 'Weekly',
     remainingPercent:
       quota?.remainingPercent == null ? '' : String(quota.remainingPercent),
-    remindOneDayBefore: quota?.reminders.oneDayBefore ?? true,
-    remindResetDay: quota?.reminders.resetDay ?? true,
-    remindResetReached: quota?.reminders.resetReached ?? true,
+    remindCustomBefore: quota ? hasCustomBefore : false,
+    remindResetDay: quota ? quota.reminders.resetDay : false,
+    remindResetReached: quota ? quota.reminders.resetReached : true,
     timezone: quota?.timezone ?? account?.defaultTimezone ?? DEFAULT_TIMEZONE,
   };
 }

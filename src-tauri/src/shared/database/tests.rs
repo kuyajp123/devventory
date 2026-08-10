@@ -160,7 +160,7 @@ async fn snapshots_an_existing_database_before_applying_pending_migrations() {
     assert!(snapshot.file_path.starts_with(paths.backups_directory()));
     assert!(snapshot.file_path.is_file());
     assert_eq!(snapshot.from_version, 0);
-    assert_eq!(snapshot.to_version, 9);
+    assert_eq!(snapshot.to_version, 10);
 
     let backup_options = SqliteConnectOptions::new()
         .filename(&snapshot.file_path)
@@ -301,9 +301,9 @@ async fn upgrades_a_database_that_already_applied_the_immutable_asset_migration(
         .expect("latest migration version should load");
 
     assert_eq!(snapshot.from_version, 4);
-    assert_eq!(snapshot.to_version, 9);
+    assert_eq!(snapshot.to_version, 10);
     assert!(snapshot.file_path.is_file());
-    assert_eq!(latest_applied, 9);
+    assert_eq!(latest_applied, 10);
     assert!(index_exists(upgraded.database.pool(), "indexed_files_project_size_idx").await);
     assert!(
         index_exists(

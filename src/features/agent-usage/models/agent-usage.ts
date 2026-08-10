@@ -43,7 +43,7 @@ export type AgentAvailability = z.infer<typeof agentAvailabilitySchema>;
 
 export const reminderPreferencesSchema = z
   .object({
-    oneDayBefore: z.boolean(),
+    beforeResetHours: z.number().int().min(1).max(720).nullable(),
     resetDay: z.boolean(),
     resetReached: z.boolean(),
   })
@@ -94,7 +94,7 @@ export const agentReminderSchema = z
     customPlatform: z.string().nullable(),
     id: z.string().uuid(),
     identifier: z.string().min(1),
-    kind: z.enum(['oneDayBefore', 'resetDay', 'resetReached']),
+    kind: z.enum(['beforeReset', 'resetDay', 'resetReached']),
     platform: agentPlatformSchema,
     quotaLabel: z.string().min(1),
     quotaWindowId: z.string().uuid(),
@@ -128,21 +128,40 @@ export const agentAccountFormSchema = z
   });
 export type AgentAccountFormValues = z.infer<typeof agentAccountFormSchema>;
 
-export const agentQuotaFormSchema = z.object({
-  label: z.string().trim().min(1, 'Enter a quota window label.').max(80),
-  remainingPercent: z.string().refine(
-    (value) => {
-      if (!value.trim()) return true;
-      const number = Number(value);
-      return Number.isFinite(number) && number >= 0 && number <= 100;
-    },
-    { message: 'Enter a percentage from 0 to 100, or leave it blank.' },
-  ),
-  remindOneDayBefore: z.boolean(),
-  remindResetDay: z.boolean(),
-  remindResetReached: z.boolean(),
-  timezone: z.string().trim().min(1, 'Select a timezone.'),
-});
+export const agentQuotaFormSchema = z
+  .object({
+    customBeforeHours: z.string(),
+    label: z.string().trim().min(1, 'Enter a quota window label.').max(80),
+    remainingPercent: z.string().refine(
+      (value) => {
+        if (!value.trim()) return true;
+        const number = Number(value);
+        return Number.isFinite(number) && number >= 0 && number <= 100;
+      },
+      { message: 'Enter a percentage from 0 to 100, or leave it blank.' },
+    ),
+    remindCustomBefore: z.boolean(),
+    remindResetDay: z.boolean(),
+    remindResetReached: z.boolean(),
+    timezone: z.string().trim().min(1, 'Select a timezone.'),
+  })
+  .superRefine((values, context) => {
+    if (values.remindCustomBefore) {
+      const hours = Number(values.customBeforeHours.trim());
+      if (
+        !values.customBeforeHours.trim() ||
+        !Number.isInteger(hours) ||
+        hours < 1 ||
+        hours > 720
+      ) {
+        context.addIssue({
+          code: 'custom',
+          message: 'Enter hours from 1 to 720 (up to 30 days).',
+          path: ['customBeforeHours'],
+        });
+      }
+    }
+  });
 export type AgentQuotaFormValues = z.infer<typeof agentQuotaFormSchema>;
 
 export interface SaveAgentAccountInput extends AgentAccountFormValues {
@@ -155,7 +174,7 @@ export interface SaveAgentQuotaInput {
   label: string;
   remainingPercent: number | null;
   reminders: {
-    oneDayBefore: boolean;
+    beforeResetHours: number | null;
     resetDay: boolean;
     resetReached: boolean;
   };

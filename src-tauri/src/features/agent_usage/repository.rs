@@ -117,7 +117,7 @@ impl SqliteAgentUsageRepository {
         sqlx::query_as::<_, QuotaRow>(
             "SELECT id, account_id, label, remaining_percent, reset_at, timezone,
                     tracking_source, usage_updated_at, usage_is_stale, reset_reached_at,
-                    remind_one_day, remind_reset_day, remind_reset_reached, created_at, updated_at
+                    before_reset_hours, remind_reset_day, remind_reset_reached, created_at, updated_at
              FROM agent_quota_windows WHERE account_id = ?
              ORDER BY reset_at, lower(label), id",
         )
@@ -133,7 +133,7 @@ impl SqliteAgentUsageRepository {
         sqlx::query_as::<_, QuotaRow>(
             "SELECT id, account_id, label, remaining_percent, reset_at, timezone,
                     tracking_source, usage_updated_at, usage_is_stale, reset_reached_at,
-                    remind_one_day, remind_reset_day, remind_reset_reached, created_at, updated_at
+                    before_reset_hours, remind_reset_day, remind_reset_reached, created_at, updated_at
              FROM agent_quota_windows
              ORDER BY account_id, reset_at, lower(label), id",
         )
@@ -148,6 +148,16 @@ impl SqliteAgentUsageRepository {
         &self,
         input: SaveQuotaWindow,
     ) -> Result<StoredQuotaWindow, AgentUsageError> {
+        if let Some(hours) = input.reminders.before_reset_hours {
+            if hours < 1 || hours > 720 {
+                return Err(AgentUsageError::InvalidInput);
+            }
+            let scheduled_for = input.reset_at - Duration::hours(hours as i64);
+            if scheduled_for <= Utc::now() {
+                return Err(AgentUsageError::InvalidInput);
+            }
+        }
+
         let id = input.id.unwrap_or_else(Uuid::new_v4);
         let now = Utc::now().to_rfc3339();
         let mut transaction = self.pool.begin().await?;
@@ -156,7 +166,7 @@ impl SqliteAgentUsageRepository {
                 "UPDATE agent_quota_windows
                  SET label = ?, normalized_label = ?, remaining_percent = ?, reset_at = ?,
                      timezone = ?, tracking_source = ?, usage_updated_at = ?, usage_is_stale = 0,
-                     reset_reached_at = NULL, remind_one_day = ?, remind_reset_day = ?,
+                     reset_reached_at = NULL, before_reset_hours = ?, remind_reset_day = ?,
                      remind_reset_reached = ?, updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
                  WHERE id = ? AND account_id = ?",
             )
@@ -167,7 +177,7 @@ impl SqliteAgentUsageRepository {
             .bind(&input.timezone)
             .bind(input.tracking_source.as_str())
             .bind(input.remaining_percent.map(|_| now.clone()))
-            .bind(input.reminders.one_day_before)
+            .bind(input.reminders.before_reset_hours)
             .bind(input.reminders.reset_day)
             .bind(input.reminders.reset_reached)
             .bind(id.to_string())
@@ -178,7 +188,7 @@ impl SqliteAgentUsageRepository {
             sqlx::query(
                 "INSERT INTO agent_quota_windows (
                     id, account_id, label, normalized_label, remaining_percent, reset_at,
-                    timezone, tracking_source, usage_updated_at, remind_one_day,
+                    timezone, tracking_source, usage_updated_at, before_reset_hours,
                     remind_reset_day, remind_reset_reached
                  ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
             )
@@ -191,7 +201,7 @@ impl SqliteAgentUsageRepository {
             .bind(&input.timezone)
             .bind(input.tracking_source.as_str())
             .bind(input.remaining_percent.map(|_| now))
-            .bind(input.reminders.one_day_before)
+            .bind(input.reminders.before_reset_hours)
             .bind(input.reminders.reset_day)
             .bind(input.reminders.reset_reached)
             .execute(&mut *transaction)
@@ -311,7 +321,7 @@ impl SqliteAgentUsageRepository {
         sqlx::query_as::<_, QuotaRow>(
             "SELECT id, account_id, label, remaining_percent, reset_at, timezone,
                     tracking_source, usage_updated_at, usage_is_stale, reset_reached_at,
-                    remind_one_day, remind_reset_day, remind_reset_reached, created_at, updated_at
+                    before_reset_hours, remind_reset_day, remind_reset_reached, created_at, updated_at
              FROM agent_quota_windows WHERE id = ? AND account_id = ?",
         )
         .bind(id.to_string())
@@ -347,19 +357,18 @@ async fn replace_reminders(
             return Err(AgentUsageError::InvalidInput)
         }
     };
-    let reminders = [
-        (
-            input.reminders.one_day_before,
-            ReminderKind::OneDayBefore,
-            input.reset_at - Duration::days(1),
-        ),
-        (input.reminders.reset_day, ReminderKind::ResetDay, reset_day),
-        (
-            input.reminders.reset_reached,
-            ReminderKind::ResetReached,
-            input.reset_at,
-        ),
-    ];
+    let mut reminders = Vec::new();
+    if let Some(hours) = input.reminders.before_reset_hours {
+        let scheduled_for = input.reset_at - Duration::hours(hours as i64);
+        reminders.push((true, ReminderKind::BeforeReset, scheduled_for));
+    }
+    reminders.push((input.reminders.reset_day, ReminderKind::ResetDay, reset_day));
+    reminders.push((
+        input.reminders.reset_reached,
+        ReminderKind::ResetReached,
+        input.reset_at,
+    ));
+
     for (enabled, kind, scheduled_for) in reminders {
         if !enabled {
             continue;
@@ -424,7 +433,7 @@ struct QuotaRow {
     usage_updated_at: Option<String>,
     usage_is_stale: bool,
     reset_reached_at: Option<String>,
-    remind_one_day: bool,
+    before_reset_hours: Option<i64>,
     remind_reset_day: bool,
     remind_reset_reached: bool,
     created_at: String,
@@ -455,7 +464,7 @@ impl TryFrom<QuotaRow> for StoredQuotaWindow {
                 .map(parse_time)
                 .transpose()?,
             reminders: ReminderPreferences {
-                one_day_before: row.remind_one_day,
+                before_reset_hours: row.before_reset_hours.map(|h| h as u32),
                 reset_day: row.remind_reset_day,
                 reset_reached: row.remind_reset_reached,
             },

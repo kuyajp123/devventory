@@ -43,8 +43,8 @@ fn ipc_enums_serialize_using_the_frontend_contract() {
         serde_json::json!("automaticConnector")
     );
     assert_eq!(
-        serde_json::to_value(ReminderKind::OneDayBefore).unwrap(),
-        serde_json::json!("oneDayBefore")
+        serde_json::to_value(ReminderKind::BeforeReset).unwrap(),
+        serde_json::json!("beforeReset")
     );
 }
 
@@ -126,7 +126,6 @@ fn next_reset_uses_the_earliest_future_unreached_window() {
     );
 }
 
-
 fn account(identifier: &str) -> SaveAgentAccount {
     SaveAgentAccount {
         id: None,
@@ -161,9 +160,12 @@ async fn account_and_quota_persistence_is_global_and_cascades_intentionally() {
         Err(AgentUsageError::DuplicateAccount)
     ));
 
+    let future_5h = Utc::now() + chrono::Duration::hours(48);
+    let future_weekly = Utc::now() + chrono::Duration::days(7);
+
     for (label, reset_at) in [
-        ("5-hour", "2026-08-09T03:00:00Z"),
-        ("Weekly", "2026-08-14T07:00:00Z"),
+        ("5-hour", future_5h),
+        ("Weekly", future_weekly),
     ] {
         repository
             .save_quota(SaveQuotaWindow {
@@ -171,7 +173,7 @@ async fn account_and_quota_persistence_is_global_and_cascades_intentionally() {
                 account_id: first.id,
                 label: label.to_owned(),
                 remaining_percent: Some(50.0),
-                reset_at: reset_at.parse().expect("valid timestamp"),
+                reset_at,
                 timezone: "Asia/Manila".to_owned(),
                 tracking_source: TrackingSource::Manual,
                 reminders: ReminderPreferences::all(),
@@ -214,21 +216,27 @@ async fn reminders_are_persisted_and_delivered_only_once_across_restarts() {
         .save_account(account("paul@example.com"))
         .await
         .unwrap();
+
+    let future_reset = Utc::now() + chrono::Duration::hours(2);
     repository
         .save_quota(SaveQuotaWindow {
             id: None,
             account_id: saved_account.id,
             label: "Weekly".to_owned(),
             remaining_percent: Some(0.0),
-            reset_at: "2026-08-08T12:00:00Z".parse().unwrap(),
+            reset_at: future_reset,
             timezone: "Asia/Manila".to_owned(),
             tracking_source: TrackingSource::Manual,
-            reminders: ReminderPreferences::all(),
+            reminders: ReminderPreferences {
+                before_reset_hours: None,
+                reset_day: false,
+                reset_reached: true,
+            },
         })
         .await
         .unwrap();
 
-    let now = Utc.with_ymd_and_hms(2026, 8, 8, 12, 1, 0).unwrap();
+    let now = future_reset + chrono::Duration::minutes(1);
     let first_delivery = repository.take_due_reminders(now).await.unwrap();
     assert_eq!(first_delivery.len(), 1);
     assert_eq!(first_delivery[0].kind.as_str(), "reset_reached");
@@ -245,4 +253,74 @@ async fn reminders_are_persisted_and_delivered_only_once_across_restarts() {
         .unwrap()
         .is_empty());
     reopened.database.close().await;
+}
+
+#[tokio::test]
+async fn past_custom_reminder_time_fails_validation_atomically() {
+    let temp = TempDir::new().expect("temporary directory");
+    let initialized = initialize_database(&DatabasePaths::new(temp.path()))
+        .await
+        .expect("database should initialize");
+    let repository = SqliteAgentUsageRepository::new(initialized.database.pool().clone());
+    let saved_account = repository
+        .save_account(account("paul@example.com"))
+        .await
+        .unwrap();
+
+    let future_reset = Utc::now() + chrono::Duration::hours(2);
+    let result = repository
+        .save_quota(SaveQuotaWindow {
+            id: None,
+            account_id: saved_account.id,
+            label: "Weekly".to_owned(),
+            remaining_percent: Some(50.0),
+            reset_at: future_reset,
+            timezone: "Asia/Manila".to_owned(),
+            tracking_source: TrackingSource::Manual,
+            reminders: ReminderPreferences {
+                before_reset_hours: Some(6),
+                reset_day: true,
+                reset_reached: true,
+            },
+        })
+        .await;
+
+    assert!(matches!(result, Err(AgentUsageError::InvalidInput)));
+    assert!(repository.list_quotas(saved_account.id).await.unwrap().is_empty());
+    initialized.database.close().await;
+}
+
+#[tokio::test]
+async fn migration_converts_legacy_remind_one_day_to_before_reset_hours_24() {
+    let temp = TempDir::new().expect("temporary directory");
+    let initialized = initialize_database(&DatabasePaths::new(temp.path()))
+        .await
+        .expect("database should initialize");
+
+    let pool = initialized.database.pool();
+
+    // Verify 0010 migration ran and schema updated
+    let columns = sqlx::query("PRAGMA table_info(agent_quota_windows)")
+        .fetch_all(pool)
+        .await
+        .unwrap();
+    let col_names: Vec<String> = columns
+        .into_iter()
+        .map(|row| sqlx::Row::get::<String, _>(&row, "name"))
+        .collect();
+
+    assert!(col_names.contains(&"before_reset_hours".to_string()));
+    assert!(!col_names.contains(&"remind_one_day".to_string()));
+
+    // Verify table structure of agent_reminders
+    let reminder_kinds = sqlx::query("SELECT DISTINCT kind FROM agent_reminders")
+        .fetch_all(pool)
+        .await
+        .unwrap();
+    for row in reminder_kinds {
+        let kind: String = sqlx::Row::get(&row, "kind");
+        assert_ne!(kind, "one_day_before");
+    }
+
+    initialized.database.close().await;
 }

@@ -84,7 +84,7 @@ impl TryFrom<AgentQuotaInput> for SaveQuotaWindow {
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 struct ReminderPreferencesInput {
-    one_day_before: bool,
+    before_reset_hours: Option<u32>,
     reset_day: bool,
     reset_reached: bool,
 }
@@ -92,7 +92,7 @@ struct ReminderPreferencesInput {
 impl From<ReminderPreferencesInput> for ReminderPreferences {
     fn from(value: ReminderPreferencesInput) -> Self {
         Self {
-            one_day_before: value.one_day_before,
+            before_reset_hours: value.before_reset_hours,
             reset_day: value.reset_day,
             reset_reached: value.reset_reached,
         }

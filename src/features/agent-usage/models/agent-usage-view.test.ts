@@ -124,7 +124,7 @@ function makeQuota(
     label,
     remainingPercent,
     reminders: {
-      oneDayBefore: true,
+      beforeResetHours: 24,
       resetDay: true,
       resetReached: true,
     },

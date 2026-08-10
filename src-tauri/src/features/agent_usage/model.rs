@@ -68,7 +68,7 @@ string_enum!(TrackingSource, "camelCase" {
 });
 
 string_enum!(ReminderKind, "camelCase" {
-    OneDayBefore => "one_day_before",
+    BeforeReset => "before_reset",
     ResetDay => "reset_day",
     ResetReached => "reset_reached",
 });
@@ -76,7 +76,7 @@ string_enum!(ReminderKind, "camelCase" {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub(crate) struct ReminderPreferences {
-    pub(crate) one_day_before: bool,
+    pub(crate) before_reset_hours: Option<u32>,
     pub(crate) reset_day: bool,
     pub(crate) reset_reached: bool,
 }
@@ -85,7 +85,7 @@ impl ReminderPreferences {
     #[cfg(test)]
     pub(crate) const fn all() -> Self {
         Self {
-            one_day_before: true,
+            before_reset_hours: Some(24),
             reset_day: true,
             reset_reached: true,
         }

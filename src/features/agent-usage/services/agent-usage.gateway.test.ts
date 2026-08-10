@@ -22,7 +22,7 @@ describe('agentUsageGateway', () => {
           label: 'Weekly',
           remainingPercent: null,
           reminders: {
-            oneDayBefore: true,
+            beforeResetHours: 24,
             resetDay: true,
             resetReached: true,
           },
@@ -40,7 +40,7 @@ describe('agentUsageGateway', () => {
         label: 'Weekly',
         remainingPercent: null,
         reminders: {
-          oneDayBefore: true,
+          beforeResetHours: 24,
           resetDay: true,
           resetReached: true,
         },
@@ -60,7 +60,7 @@ function quotaResponse() {
     label: 'Weekly',
     remainingPercent: null,
     reminders: {
-      oneDayBefore: true,
+      beforeResetHours: 24,
       resetDay: true,
       resetReached: true,
     },

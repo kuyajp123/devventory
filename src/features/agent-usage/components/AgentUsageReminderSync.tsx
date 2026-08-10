@@ -32,5 +32,14 @@ function reminderMessage(reminder: AgentReminder): string {
   if (reminder.kind === 'resetDay') {
     return `${prefix} resets today at ${when}.`;
   }
-  return `${prefix} resets in about one day (${when}).`;
+  const diffHours = Math.max(
+    1,
+    Math.round(
+      (new Date(reminder.resetAt).getTime() -
+        new Date(reminder.scheduledFor).getTime()) /
+        3600000,
+    ),
+  );
+  const hourLabel = diffHours === 1 ? 'hour' : 'hours';
+  return `${prefix} resets in about ${diffHours} ${hourLabel} (${when}).`;
 }
