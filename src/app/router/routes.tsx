@@ -1,13 +1,19 @@
 import { Navigate, type RouteObject } from 'react-router';
-import { AppHealthPage } from '@/features/app-health';
 import { AgentUsagePage } from '@/features/agent-usage';
+import { AppHealthPage } from '@/features/app-health';
 import { EnvironmentTrackerPage } from '@/features/environment-tracker';
-import { ValidationCenterPage } from '@/features/validation-center';
 import {
   LegacyProjectRedirect,
   ProjectOnboardingPage,
   ProjectRequiredRoute,
 } from '@/features/projects';
+import {
+  BackgroundStartupSettingsSection,
+  NotificationsSettingsSection,
+  SettingsPage,
+} from '@/features/settings';
+import { ValidationCenterPage } from '@/features/validation-center';
+import { IS_DIAGNOSTICS_ENABLED } from '@/shared/config/development.config';
 import { AppLayout } from '../layouts/AppLayout';
 import { NotFoundPage } from '../pages/NotFoundPage';
 import { LazyAssetDetailsPage } from './LazyAssetRoutes';
@@ -38,7 +44,21 @@ export const appRoutes: RouteObject[] = [
           { path: 'assets/:assetId', Component: LazyAssetDetailsPage },
         ],
       },
-      { path: 'diagnostics', Component: AppHealthPage },
+      {
+        path: 'settings',
+        Component: SettingsPage,
+        children: [
+          { index: true, element: <Navigate replace to="notifications" /> },
+          { path: 'notifications', Component: NotificationsSettingsSection },
+          {
+            path: 'background-startup',
+            Component: BackgroundStartupSettingsSection,
+          },
+        ],
+      },
+      ...(IS_DIAGNOSTICS_ENABLED
+        ? [{ path: 'diagnostics', Component: AppHealthPage }]
+        : []),
       {
         path: 'projects',
         element: <Navigate replace to="/dashboard" />,

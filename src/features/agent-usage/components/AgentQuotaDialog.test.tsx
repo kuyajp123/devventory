@@ -1,9 +1,14 @@
 import { screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { MemoryRouter } from 'react-router';
 import { describe, expect, it, vi } from 'vitest';
 import { renderWithProviders } from '@/test/render';
 import type { AgentAccount, AgentQuota } from '../models/agent-usage';
 import { AgentQuotaDialog } from './AgentQuotaDialog';
+
+function renderQuotaDialog(ui: React.ReactElement) {
+  return renderWithProviders(<MemoryRouter>{ui}</MemoryRouter>);
+}
 
 const sampleAccount: AgentAccount = {
   availability: 'available',
@@ -66,7 +71,7 @@ const existingQuotaResetDay: AgentQuota = {
 
 describe('AgentQuotaDialog Reminder Defaults', () => {
   it('defaults new quota to Custom Reminder unchecked, On reset day unchecked, When reset time is reached checked', () => {
-    renderWithProviders(
+    renderQuotaDialog(
       <AgentQuotaDialog
         account={sampleAccount}
         isOpen
@@ -95,7 +100,7 @@ describe('AgentQuotaDialog Reminder Defaults', () => {
   });
 
   it('hides Custom Reminder hours input initially on new quota dialog', () => {
-    renderWithProviders(
+    renderQuotaDialog(
       <AgentQuotaDialog
         account={sampleAccount}
         isOpen
@@ -113,7 +118,7 @@ describe('AgentQuotaDialog Reminder Defaults', () => {
 
   it('enabling Custom Reminder reveals the hours input with dormant value 24', async () => {
     const user = userEvent.setup();
-    renderWithProviders(
+    renderQuotaDialog(
       <AgentQuotaDialog
         account={sampleAccount}
         isOpen
@@ -140,7 +145,7 @@ describe('AgentQuotaDialog Reminder Defaults', () => {
   it('submits untouched new quota with beforeResetHours: null, resetDay: false, resetReached: true', async () => {
     const user = userEvent.setup();
     const onSubmit = vi.fn().mockResolvedValue(undefined);
-    renderWithProviders(
+    renderQuotaDialog(
       <AgentQuotaDialog
         account={sampleAccount}
         isOpen
@@ -153,7 +158,7 @@ describe('AgentQuotaDialog Reminder Defaults', () => {
       />,
     );
 
-    await user.click(screen.getByRole('button', { name: 'Save quota' }));
+    await user.click(screen.getByRole('button', { name: 'Add quota' }));
 
     expect(onSubmit).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -167,7 +172,7 @@ describe('AgentQuotaDialog Reminder Defaults', () => {
   });
 
   it('opens existing quota with beforeResetHours: 6 with Custom Reminder checked and value 6', () => {
-    renderWithProviders(
+    renderQuotaDialog(
       <AgentQuotaDialog
         account={sampleAccount}
         isOpen
@@ -190,7 +195,7 @@ describe('AgentQuotaDialog Reminder Defaults', () => {
   it('preserves saved reminder preferences when editing existing quota with resetDay enabled', async () => {
     const user = userEvent.setup();
     const onSubmit = vi.fn().mockResolvedValue(undefined);
-    renderWithProviders(
+    renderQuotaDialog(
       <AgentQuotaDialog
         account={sampleAccount}
         isOpen
@@ -217,7 +222,7 @@ describe('AgentQuotaDialog Reminder Defaults', () => {
     expect(resetDayCheckbox).toBeChecked();
     expect(resetReachedCheckbox).not.toBeChecked();
 
-    await user.click(screen.getByRole('button', { name: 'Save quota' }));
+    await user.click(screen.getByRole('button', { name: 'Save changes' }));
 
     expect(onSubmit).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -228,5 +233,57 @@ describe('AgentQuotaDialog Reminder Defaults', () => {
         },
       }),
     );
+  });
+
+  it('renders section legend as Reminders and provides Notification settings link', () => {
+    renderQuotaDialog(
+      <AgentQuotaDialog
+        account={sampleAccount}
+        isOpen
+        isSaving={false}
+        onOpenChange={vi.fn()}
+        onSaveErrorClear={vi.fn()}
+        onSubmit={vi.fn()}
+        quota={null}
+        saveError={null}
+      />,
+    );
+
+    expect(screen.getByText('Reminders')).toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: 'Notification settings' }),
+    ).toBeInTheDocument();
+  });
+
+  it('prompts confirmation when clicking Notification settings with unsaved changes', async () => {
+    const user = userEvent.setup();
+    renderQuotaDialog(
+      <AgentQuotaDialog
+        account={sampleAccount}
+        isOpen
+        isSaving={false}
+        onOpenChange={vi.fn()}
+        onSaveErrorClear={vi.fn()}
+        onSubmit={vi.fn()}
+        quota={null}
+        saveError={null}
+      />,
+    );
+
+    // Make form dirty by changing label
+    const labelInput = screen.getByLabelText('Quota window label');
+    await user.clear(labelInput);
+    await user.type(labelInput, 'Monthly');
+
+    // Click Notification settings link
+    await user.click(
+      screen.getByRole('button', { name: 'Notification settings' }),
+    );
+
+    expect(
+      await screen.findByText(
+        'You have unsaved quota changes. Leave without saving?',
+      ),
+    ).toBeInTheDocument();
   });
 });

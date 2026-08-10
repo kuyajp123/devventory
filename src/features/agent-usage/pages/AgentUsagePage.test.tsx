@@ -1,10 +1,19 @@
 import { fireEvent, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { MemoryRouter } from 'react-router';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { TauriCommandError } from '@/shared/infrastructure/tauri/tauri-error';
 import { renderWithProviders } from '@/test/render';
 import { agentUsageGateway } from '../services/agent-usage.gateway';
 import { AgentUsagePage } from './AgentUsagePage';
+
+function renderAgentUsagePage() {
+  return renderWithProviders(
+    <MemoryRouter>
+      <AgentUsagePage />
+    </MemoryRouter>,
+  );
+}
 
 vi.mock('../services/agent-usage.gateway', () => ({
   agentUsageGateway: {
@@ -29,7 +38,7 @@ describe('AgentUsagePage', () => {
   });
 
   it('renders the full account identifier and availability without project context', async () => {
-    renderWithProviders(<AgentUsagePage />);
+    renderAgentUsagePage();
 
     expect(
       await screen.findByRole('heading', { name: 'Agent Usage' }),
@@ -85,7 +94,7 @@ describe('AgentUsagePage', () => {
         quotas: [],
       }),
     ]);
-    renderWithProviders(<AgentUsagePage />);
+    renderAgentUsagePage();
 
     const codexGroup = await screen.findByRole('region', {
       name: 'Codex platform accounts',
@@ -122,7 +131,7 @@ describe('AgentUsagePage', () => {
       }),
     ]);
     const user = userEvent.setup();
-    renderWithProviders(<AgentUsagePage />);
+    renderAgentUsagePage();
 
     const expandAccount = await screen.findByRole('button', {
       name: 'Expand account paul+codex@example.com',
@@ -138,7 +147,7 @@ describe('AgentUsagePage', () => {
 
   it('collapses platform groups without losing their accounts', async () => {
     const user = userEvent.setup();
-    renderWithProviders(<AgentUsagePage />);
+    renderAgentUsagePage();
 
     await screen.findByText('paul+codex@example.com');
     await user.click(
@@ -177,7 +186,7 @@ describe('AgentUsagePage', () => {
         quotas: [],
       }),
     ]);
-    renderWithProviders(<AgentUsagePage />);
+    renderAgentUsagePage();
 
     const search = await screen.findByLabelText('Search account identifier');
     await user.type(search, 'cursor@example.com');
@@ -204,7 +213,7 @@ describe('AgentUsagePage', () => {
 
   it('starts account creation with the selected platform group', async () => {
     const user = userEvent.setup();
-    renderWithProviders(<AgentUsagePage />);
+    renderAgentUsagePage();
 
     await user.click(
       await screen.findByRole('button', { name: 'Add account to Codex' }),
@@ -220,7 +229,7 @@ describe('AgentUsagePage', () => {
     vi.mocked(agentUsageGateway.saveAccount).mockResolvedValue(
       accountResponse({ identifier: 'work@example.com', quotas: [] }),
     );
-    renderWithProviders(<AgentUsagePage />);
+    renderAgentUsagePage();
 
     await user.click(
       await screen.findByRole('button', { name: 'Add account' }),
@@ -259,7 +268,7 @@ describe('AgentUsagePage', () => {
         quotas: [],
       }),
     );
-    renderWithProviders(<AgentUsagePage />);
+    renderAgentUsagePage();
 
     await user.click(
       await screen.findByRole('button', { name: 'Add account' }),
@@ -293,7 +302,7 @@ describe('AgentUsagePage', () => {
     vi.mocked(agentUsageGateway.saveAccount).mockResolvedValue(
       accountResponse({ identifier: 'updated@example.com' }),
     );
-    renderWithProviders(<AgentUsagePage />);
+    renderAgentUsagePage();
 
     await openAccountAction(user, 'Edit account');
     const identifier = screen.getByLabelText('Full account identifier');
@@ -320,7 +329,7 @@ describe('AgentUsagePage', () => {
 
   it('saves a quota window with an exact date and time without a preview step', async () => {
     const user = userEvent.setup();
-    renderWithProviders(<AgentUsagePage />);
+    renderAgentUsagePage();
 
     await expandAccount(user);
     await user.click(
@@ -330,8 +339,8 @@ describe('AgentUsagePage', () => {
     );
 
     // The dialog opens with Exact date & time selected by default.
-    // The Save quota button is available immediately (no preview/confirm step).
-    const saveButton = screen.getByRole('button', { name: 'Save quota' });
+    // The Add quota button is available immediately (no preview/confirm step).
+    const saveButton = screen.getByRole('button', { name: 'Add quota' });
     expect(saveButton).not.toBeDisabled();
 
     await user.click(saveButton);
@@ -354,7 +363,7 @@ describe('AgentUsagePage', () => {
 
   it('shows an inline error and blocks save when relative reset delta is zero', async () => {
     const user = userEvent.setup();
-    renderWithProviders(<AgentUsagePage />);
+    renderAgentUsagePage();
 
     await expandAccount(user);
     await user.click(
@@ -373,7 +382,7 @@ describe('AgentUsagePage', () => {
       target: { value: '0' },
     });
 
-    await user.click(screen.getByRole('button', { name: 'Save quota' }));
+    await user.click(screen.getByRole('button', { name: 'Add quota' }));
 
     expect(
       await screen.findByText('Enter a positive duration (at least 1 minute).'),
@@ -383,7 +392,7 @@ describe('AgentUsagePage', () => {
 
   it('saves a valid relative reset quota', async () => {
     const user = userEvent.setup();
-    renderWithProviders(<AgentUsagePage />);
+    renderAgentUsagePage();
 
     await expandAccount(user);
     await user.click(
@@ -396,7 +405,7 @@ describe('AgentUsagePage', () => {
     await user.clear(screen.getByLabelText('Days'));
     await user.type(screen.getByLabelText('Days'), '7');
 
-    await user.click(screen.getByRole('button', { name: 'Save quota' }));
+    await user.click(screen.getByRole('button', { name: 'Add quota' }));
 
     await waitFor(() =>
       expect(agentUsageGateway.saveQuota).toHaveBeenCalledWith(
@@ -418,7 +427,7 @@ describe('AgentUsagePage', () => {
         message: 'That quota window label is already used for this account.',
       }),
     );
-    renderWithProviders(<AgentUsagePage />);
+    renderAgentUsagePage();
 
     await expandAccount(user);
     await user.click(
@@ -426,8 +435,8 @@ describe('AgentUsagePage', () => {
         name: 'Add quota for paul+codex@example.com',
       }),
     );
-    // Use the Exact date & time mode (default) – Save quota is available immediately.
-    await user.click(screen.getByRole('button', { name: 'Save quota' }));
+    // Use the Exact date & time mode (default) – Add quota is available immediately.
+    await user.click(screen.getByRole('button', { name: 'Add quota' }));
 
     const label = screen.getByLabelText('Quota window label');
     const message = 'That quota window label is already used for this account.';
@@ -443,7 +452,7 @@ describe('AgentUsagePage', () => {
 
   it('Paste message button is not present in the dialog', async () => {
     const user = userEvent.setup();
-    renderWithProviders(<AgentUsagePage />);
+    renderAgentUsagePage();
 
     await expandAccount(user);
     await user.click(
@@ -462,7 +471,7 @@ describe('AgentUsagePage', () => {
 
   it('edits and removes quota windows without requiring usage percentage', async () => {
     const user = userEvent.setup();
-    renderWithProviders(<AgentUsagePage />);
+    renderAgentUsagePage();
 
     await expandAccount(user);
     await user.click(
@@ -471,7 +480,7 @@ describe('AgentUsagePage', () => {
       }),
     );
     await user.clear(screen.getByLabelText('Usage remaining (optional %)'));
-    await user.click(screen.getByRole('button', { name: 'Save quota' }));
+    await user.click(screen.getByRole('button', { name: 'Save changes' }));
     await waitFor(() =>
       expect(agentUsageGateway.saveQuota).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -510,7 +519,7 @@ describe('AgentUsagePage', () => {
         ],
       }),
     ]);
-    renderWithProviders(<AgentUsagePage />);
+    renderAgentUsagePage();
 
     await expandAccount(userEvent.setup());
     expect(await screen.findByText(/Resets today at/)).toBeVisible();

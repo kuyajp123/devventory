@@ -18,11 +18,13 @@ import {
 } from '@heroui/react';
 import { parseDate, today } from '@internationalized/date';
 import type { CalendarDate, DateValue } from '@internationalized/date';
-import { IconClock } from '@tabler/icons-react';
-import { useState } from 'react';
+import { IconArrowRight, IconClock } from '@tabler/icons-react';
+import { useEffect, useState } from 'react';
 import { Controller, useForm, useWatch } from 'react-hook-form';
+import { useNavigate } from 'react-router';
 import { ICON_SIZE, ICON_STROKE } from '@/shared/constants/icon.constants';
 import {
+  ConfirmDialog,
   DevventoryDialog,
   DialogBody,
   DialogFooter,
@@ -78,14 +80,16 @@ export function AgentQuotaDialog({
   quota,
   saveError,
 }: AgentQuotaDialogProps) {
+  const navigate = useNavigate();
   const initialTimezone =
     quota?.timezone ?? account?.defaultTimezone ?? DEFAULT_TIMEZONE;
   const initialExact = initExactFields(quota, initialTimezone);
 
   const {
     control,
-    formState: { errors },
+    formState: { errors, isDirty },
     handleSubmit,
+    reset,
   } = useForm<AgentQuotaFormValues>({
     defaultValues: defaults(account, quota),
     resolver: zodResolver(agentQuotaFormSchema),
@@ -100,6 +104,25 @@ export function AgentQuotaDialog({
   const [hours, setHours] = useState('1');
   const [minutes, setMinutes] = useState('0');
   const [resetError, setResetError] = useState<string | null>(null);
+  const [isConfirmingLeave, setIsConfirmingLeave] = useState(false);
+
+  useEffect(() => {
+    if (isOpen) {
+      reset(defaults(account, quota));
+      const exact = initExactFields(
+        quota,
+        quota?.timezone ?? account?.defaultTimezone ?? DEFAULT_TIMEZONE,
+      );
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setCalDate(exact.calDate);
+      setTime(exact.time);
+      setMode('exact');
+      setDays('0');
+      setHours('1');
+      setMinutes('0');
+      setResetError(null);
+    }
+  }, [isOpen, account, quota, reset]);
 
   function computeResetAt(timezone: string): string | null {
     if (mode === 'exact') {
@@ -455,11 +478,9 @@ export function AgentQuotaDialog({
             )}
           </fieldset>
 
-          {/* In-app reminders */}
+          {/* Reminders */}
           <fieldset className="space-y-2 rounded border border-divider bg-workspace p-2.5">
-            <legend className="px-1 text-sm font-medium">
-              In-app reminders
-            </legend>
+            <legend className="px-1 text-sm font-medium">Reminders</legend>
 
             <Controller
               control={control}
@@ -541,6 +562,27 @@ export function AgentQuotaDialog({
                 </div>
               )}
             </div>
+
+            <div className="mt-3 flex flex-col gap-1 border-t border-divider pt-2">
+              <p className="text-xs text-muted">
+                Notification delivery is configured globally.
+              </p>
+              <button
+                className="inline-flex w-fit cursor-pointer items-center gap-1 text-left text-xs font-medium text-accent hover:underline"
+                onClick={() => {
+                  if (isDirty) {
+                    setIsConfirmingLeave(true);
+                  } else {
+                    onOpenChange(false);
+                    void navigate('/settings/notifications');
+                  }
+                }}
+                type="button"
+              >
+                <span>Notification settings</span>
+                <IconArrowRight size={12} stroke={ICON_STROKE} />
+              </button>
+            </div>
           </fieldset>
         </Form>
       </DialogBody>
@@ -560,9 +602,22 @@ export function AgentQuotaDialog({
           variant="primary"
         >
           {isSaving && <Spinner aria-label="Saving quota" size="sm" />}
-          Save quota
+          {quota ? 'Save changes' : 'Add quota'}
         </Button>
       </DialogFooter>
+
+      <ConfirmDialog
+        body="You have unsaved quota changes. Leave without saving?"
+        isOpen={isConfirmingLeave}
+        onConfirm={() => {
+          setIsConfirmingLeave(false);
+          onOpenChange(false);
+          void navigate('/settings/notifications');
+        }}
+        onOpenChange={setIsConfirmingLeave}
+        title="Unsaved quota changes"
+        variant="danger"
+      />
     </DevventoryDialog>
   );
 }

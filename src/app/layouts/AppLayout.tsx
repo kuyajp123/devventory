@@ -11,11 +11,13 @@ import {
   IconMoon,
   IconRobot,
   IconSearch,
+  IconSettings,
   IconShieldCheck,
   IconSun,
 } from '@tabler/icons-react';
 import { useRef } from 'react';
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router';
+import { IS_DIAGNOSTICS_ENABLED } from '@/shared/config/development.config';
 import { ProjectSelector, useActiveProject } from '@/features/projects';
 import { GlobalCommandPalette } from '@/features/global-search';
 import { ICON_SIZE, ICON_STROKE } from '@/shared/constants/icon.constants';
@@ -24,7 +26,18 @@ import { WorkbenchContextSidebar } from './WorkbenchContextSidebar';
 import { WorkbenchStatusBar } from './WorkbenchStatusBar';
 import { WorkbenchUtilityPanel } from './WorkbenchUtilityPanel';
 
-const navigationItems = [
+interface NavigationItem {
+  icon: React.ComponentType<{
+    size?: number;
+    stroke?: number;
+    className?: string;
+  }>;
+  label: string;
+  requiresProject: boolean;
+  to: string;
+}
+
+const primaryNavigationItems: NavigationItem[] = [
   {
     icon: IconLayoutDashboard,
     label: 'Dashboard',
@@ -61,20 +74,39 @@ const navigationItems = [
     requiresProject: false,
     to: '/agent-usage',
   },
+];
+
+const utilityNavigationItems: NavigationItem[] = [
+  ...(IS_DIAGNOSTICS_ENABLED
+    ? [
+        {
+          icon: IconActivityHeartbeat,
+          label: 'Diagnostics',
+          requiresProject: false,
+          to: '/diagnostics',
+        },
+      ]
+    : []),
   {
-    icon: IconActivityHeartbeat,
-    label: 'Diagnostics',
+    icon: IconSettings,
+    label: 'Settings',
     requiresProject: false,
-    to: '/diagnostics',
+    to: '/settings',
   },
 ];
 
+const allNavigationItems = [
+  ...primaryNavigationItems,
+  ...utilityNavigationItems,
+];
+
 function isNavigationDisabled(
-  item: (typeof navigationItems)[number],
+  item: NavigationItem,
   isHydrating: boolean,
   hasProjects: boolean,
 ): boolean {
-  if (item.to === '/diagnostics') return false;
+  if (item.to === '/diagnostics' || item.to.startsWith('/settings'))
+    return false;
   if (isHydrating) return true;
   return item.requiresProject && !hasProjects;
 }
@@ -96,7 +128,7 @@ export function AppLayout() {
   const sidebarToggleRef = useRef<HTMLButtonElement | null>(null);
 
   const currentModuleName =
-    navigationItems.find(
+    allNavigationItems.find(
       (item) =>
         location.pathname === item.to ||
         (item.to !== '/dashboard' && location.pathname.startsWith(item.to)),
@@ -216,65 +248,13 @@ export function AppLayout() {
           aria-label="Primary navigation"
           className="flex w-12 shrink-0 flex-col items-center border-r border-divider bg-activity-bar py-2 space-y-1 z-20"
         >
-          {navigationItems.map((item) => {
-            const disabled = isNavigationDisabled(
-              item,
-              isHydrating,
-              hasProjects,
-            );
-            if (disabled) {
-              return (
-                <button
-                  aria-label={`${item.label} (requires active project)`}
-                  className="flex h-9 w-9 items-center justify-center rounded text-muted opacity-40 transition-opacity hover:opacity-75 focus:outline-none focus:ring-1 focus:ring-accent"
-                  key={item.to}
-                  onClick={() => {
-                    toast.warning(
-                      `An active project is required to access ${item.label}.`,
-                    );
-                    void navigate('/projects/new');
-                  }}
-                  type="button"
-                >
-                  <item.icon
-                    aria-hidden="true"
-                    size={18}
-                    stroke={ICON_STROKE}
-                  />
-                </button>
-              );
-            }
-
-            return (
-              <NavLink
-                aria-label={item.label}
-                className={({ isActive }) =>
-                  `group relative flex h-9 w-9 items-center justify-center rounded transition-colors ${
-                    isActive
-                      ? 'bg-elevated text-accent font-semibold'
-                      : 'text-muted hover:bg-surface-secondary hover:text-foreground'
-                  }`
-                }
-                end={item.to === '/dashboard' || item.to === '/diagnostics'}
-                key={item.to}
-                title={item.label}
-                to={item.to}
-              >
-                {({ isActive }) => (
-                  <>
-                    {isActive && (
-                      <span className="absolute left-0 top-1.5 bottom-1.5 w-0.5 rounded-r bg-accent" />
-                    )}
-                    <item.icon
-                      aria-hidden="true"
-                      size={18}
-                      stroke={ICON_STROKE}
-                    />
-                  </>
-                )}
-              </NavLink>
-            );
-          })}
+          {primaryNavigationItems.map((item) =>
+            renderNavigationItem(item, isHydrating, hasProjects, navigate),
+          )}
+          <div className="my-1 h-px w-6 bg-divider" />
+          {utilityNavigationItems.map((item) =>
+            renderNavigationItem(item, isHydrating, hasProjects, navigate),
+          )}
         </nav>
 
         {/* 3. Context Sidebar */}
@@ -317,5 +297,58 @@ export function AppLayout() {
       {/* Command Palette Overlay */}
       <GlobalCommandPalette />
     </div>
+  );
+}
+
+function renderNavigationItem(
+  item: NavigationItem,
+  isHydrating: boolean,
+  hasProjects: boolean,
+  navigate: (to: string) => void,
+) {
+  const disabled = isNavigationDisabled(item, isHydrating, hasProjects);
+  if (disabled) {
+    return (
+      <button
+        aria-label={`${item.label} (requires active project)`}
+        className="flex h-9 w-9 items-center justify-center rounded text-muted opacity-40 transition-opacity hover:opacity-75 focus:outline-none focus:ring-1 focus:ring-accent"
+        key={item.to}
+        onClick={() => {
+          toast.warning(
+            `An active project is required to access ${item.label}.`,
+          );
+          void navigate('/projects/new');
+        }}
+        type="button"
+      >
+        <item.icon aria-hidden="true" size={18} stroke={ICON_STROKE} />
+      </button>
+    );
+  }
+
+  return (
+    <NavLink
+      aria-label={item.label}
+      className={({ isActive }) =>
+        `group relative flex h-9 w-9 items-center justify-center rounded transition-colors ${
+          isActive
+            ? 'bg-elevated text-accent font-semibold'
+            : 'text-muted hover:bg-surface-secondary hover:text-foreground'
+        }`
+      }
+      end={item.to === '/dashboard' || item.to === '/diagnostics'}
+      key={item.to}
+      title={item.label}
+      to={item.to}
+    >
+      {({ isActive }) => (
+        <>
+          {isActive && (
+            <span className="absolute left-0 top-1.5 bottom-1.5 w-0.5 rounded-r bg-accent" />
+          )}
+          <item.icon aria-hidden="true" size={18} stroke={ICON_STROKE} />
+        </>
+      )}
+    </NavLink>
   );
 }

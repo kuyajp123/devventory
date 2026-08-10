@@ -33,7 +33,11 @@ use features::search::commands::{
     clear_search_history, delete_search_history, list_search_history, record_search_history,
     search_metadata,
 };
-use features::settings::commands::{get_last_opened_project_id, save_last_opened_project_id};
+use features::settings::commands::{
+    get_background_startup_preferences, get_last_opened_project_id, get_notification_preferences,
+    save_background_startup_preferences, save_last_opened_project_id,
+    save_notification_preferences,
+};
 use features::validation_center::commands::{
     delete_validation_rule, export_environment_manifest, get_validation_summary,
     list_validation_issues, list_validation_rules, preview_environment_manifest,
@@ -83,6 +87,10 @@ pub fn run() {
             get_project_dashboard,
             get_last_opened_project_id,
             save_last_opened_project_id,
+            get_notification_preferences,
+            save_notification_preferences,
+            get_background_startup_preferences,
+            save_background_startup_preferences,
             list_project_directory,
             list_project_files,
             rescan_project,

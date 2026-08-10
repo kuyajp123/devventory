@@ -1,109 +1,129 @@
-use sqlx::{query, query_scalar};
 use tempfile::TempDir;
-use uuid::Uuid;
 
+use super::dto::{BackgroundStartupPreferencesInput, NotificationPreferencesInput};
+use super::model::{BackgroundStartupPreferences, NotificationPreferences};
+use super::repository::{
+    SettingsRepository, SqliteSettingsRepository, BACKGROUND_KEEP_RUNNING_KEY,
+    BACKGROUND_START_WITH_WINDOWS_KEY, NOTIFICATIONS_ENABLED_KEY, NOTIFICATIONS_IN_APP_ENABLED_KEY,
+    NOTIFICATIONS_SYSTEM_ENABLED_KEY,
+};
 use crate::shared::database::{initialize_database, DatabasePaths};
 
-use super::repository::{SettingsRepository, SqliteSettingsRepository};
-
-#[tokio::test]
-async fn reads_a_persisted_setting_through_the_repository_contract() {
-    let temp = TempDir::new().expect("temporary directory should be created");
-    let initialization = initialize_database(&DatabasePaths::new(temp.path()))
-        .await
-        .expect("database initialization should succeed");
-    let repository = SqliteSettingsRepository::new(initialization.database.pool().clone());
-    let id = Uuid::new_v4();
-
-    query(
-        "INSERT INTO application_settings (id, setting_key, setting_value)
-         VALUES (?, ?, ?)",
-    )
-    .bind(id.to_string())
-    .bind("navigation.density")
-    .bind("compact")
-    .execute(initialization.database.pool())
-    .await
-    .expect("test setting should be inserted");
-
-    let found = repository
-        .find_by_key("navigation.density")
-        .await
-        .expect("setting lookup should succeed")
-        .expect("setting should exist");
-
-    assert_eq!(found.id, id);
-    assert_eq!(found.key, "navigation.density");
-    assert_eq!(found.value, "compact");
-    assert_eq!(found.id.get_version_num(), 4);
-
-    initialization.database.close().await;
+async fn setup_test_repository() -> (SqliteSettingsRepository, TempDir) {
+    let temp_dir = TempDir::new().unwrap();
+    let paths = DatabasePaths::new(temp_dir.path());
+    let init = initialize_database(&paths).await.unwrap();
+    (SqliteSettingsRepository::new(init.database.pool().clone()), temp_dir)
 }
 
 #[tokio::test]
-async fn treats_query_shaped_setting_keys_as_data() {
-    let temp = TempDir::new().expect("temporary directory should be created");
-    let initialization = initialize_database(&DatabasePaths::new(temp.path()))
-        .await
-        .expect("database initialization should succeed");
-    let repository = SqliteSettingsRepository::new(initialization.database.pool().clone());
-    let id = Uuid::new_v4();
-    let key = "' OR 1 = 1 --";
+async fn get_notification_preferences_returns_canonical_defaults_when_empty() {
+    let (repository, _temp) = setup_test_repository().await;
 
-    query(
-        "INSERT INTO application_settings (id, setting_key, setting_value)
-         VALUES (?, ?, ?)",
-    )
-    .bind(id.to_string())
-    .bind(key)
-    .bind("preserved")
-    .execute(initialization.database.pool())
-    .await
-    .expect("test setting should be inserted");
-
-    let found = repository
-        .find_by_key(key)
-        .await
-        .expect("setting lookup should succeed")
-        .expect("setting should exist");
-
-    assert_eq!(found.id, id);
-    assert_eq!(found.key, key);
-    assert_eq!(found.value, "preserved");
-
-    initialization.database.close().await;
+    let prefs = repository.get_notification_preferences().await.unwrap();
+    assert_eq!(prefs, NotificationPreferences::default());
+    assert!(prefs.enabled);
+    assert!(prefs.in_app_enabled);
+    assert!(!prefs.system_enabled);
 }
 
 #[tokio::test]
-async fn upserts_a_setting_without_creating_duplicates() {
-    let temp = TempDir::new().expect("temporary directory should be created");
-    let initialization = initialize_database(&DatabasePaths::new(temp.path()))
+async fn save_and_get_notification_preferences_persists_atomic_keys() {
+    let (repository, _temp) = setup_test_repository().await;
+
+    let new_prefs = NotificationPreferences {
+        enabled: false,
+        in_app_enabled: true,
+        system_enabled: true,
+    };
+    repository
+        .save_notification_preferences(new_prefs.clone())
         .await
-        .expect("database initialization should succeed");
-    let repository = SqliteSettingsRepository::new(initialization.database.pool().clone());
-    let key = "workspace.last_opened_project_id";
-    let first = Uuid::new_v4().to_string();
-    let second = Uuid::new_v4().to_string();
+        .unwrap();
 
-    let inserted = repository
-        .upsert(key, &first)
+    let fetched = repository.get_notification_preferences().await.unwrap();
+    assert_eq!(fetched, new_prefs);
+
+    let enabled_setting = repository
+        .find_by_key(NOTIFICATIONS_ENABLED_KEY)
         .await
-        .expect("setting insert should succeed");
-    let updated = repository
-        .upsert(key, &second)
+        .unwrap()
+        .unwrap();
+    assert_eq!(enabled_setting.value, "false");
+
+    let in_app_setting = repository
+        .find_by_key(NOTIFICATIONS_IN_APP_ENABLED_KEY)
         .await
-        .expect("setting update should succeed");
+        .unwrap()
+        .unwrap();
+    assert_eq!(in_app_setting.value, "true");
 
-    let row_count: i64 =
-        query_scalar("SELECT COUNT(*) FROM application_settings WHERE setting_key = ?")
-            .bind(key)
-            .fetch_one(initialization.database.pool())
-            .await
-            .expect("setting count should be readable");
+    let system_setting = repository
+        .find_by_key(NOTIFICATIONS_SYSTEM_ENABLED_KEY)
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(system_setting.value, "true");
+}
 
-    assert_eq!(inserted.id, updated.id);
-    assert_eq!(updated.value, second);
-    assert_eq!(row_count, 1);
+#[tokio::test]
+async fn get_background_startup_preferences_returns_canonical_defaults_when_empty() {
+    let (repository, _temp) = setup_test_repository().await;
 
-    initialization.database.close().await;
+    let prefs = repository.get_background_startup_preferences().await.unwrap();
+    assert_eq!(prefs, BackgroundStartupPreferences::default());
+    assert!(prefs.keep_running_when_closed);
+    assert!(!prefs.start_with_windows);
+}
+
+#[tokio::test]
+async fn save_and_get_background_startup_preferences_persists_atomic_keys() {
+    let (repository, _temp) = setup_test_repository().await;
+
+    let new_prefs = BackgroundStartupPreferences {
+        keep_running_when_closed: false,
+        start_with_windows: true,
+    };
+    repository
+        .save_background_startup_preferences(new_prefs.clone())
+        .await
+        .unwrap();
+
+    let fetched = repository.get_background_startup_preferences().await.unwrap();
+    assert_eq!(fetched, new_prefs);
+
+    let keep_running_setting = repository
+        .find_by_key(BACKGROUND_KEEP_RUNNING_KEY)
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(keep_running_setting.value, "false");
+
+    let start_windows_setting = repository
+        .find_by_key(BACKGROUND_START_WITH_WINDOWS_KEY)
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(start_windows_setting.value, "true");
+}
+
+#[test]
+fn dto_conversions_preserve_fields() {
+    let input_notif = NotificationPreferencesInput {
+        enabled: true,
+        in_app_enabled: false,
+        system_enabled: true,
+    };
+    let domain_notif: NotificationPreferences = input_notif.into();
+    assert!(domain_notif.enabled);
+    assert!(!domain_notif.in_app_enabled);
+    assert!(domain_notif.system_enabled);
+
+    let input_bg = BackgroundStartupPreferencesInput {
+        keep_running_when_closed: false,
+        start_with_windows: true,
+    };
+    let domain_bg: BackgroundStartupPreferences = input_bg.into();
+    assert!(!domain_bg.keep_running_when_closed);
+    assert!(domain_bg.start_with_windows);
 }

@@ -149,7 +149,7 @@ impl SqliteAgentUsageRepository {
         input: SaveQuotaWindow,
     ) -> Result<StoredQuotaWindow, AgentUsageError> {
         if let Some(hours) = input.reminders.before_reset_hours {
-            if hours < 1 || hours > 720 {
+            if !(1..=720).contains(&hours) {
                 return Err(AgentUsageError::InvalidInput);
             }
             let scheduled_for = input.reset_at - Duration::hours(hours as i64);
