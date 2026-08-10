@@ -7,7 +7,7 @@ use tauri::Manager;
 use app::state::AppState;
 use features::agent_usage::commands::{
     acknowledge_agent_reminders, delete_agent_account, delete_agent_quota, list_agent_accounts,
-    save_agent_account, save_agent_quota,
+    save_agent_account, save_agent_quota, test_normal_notification, test_system_channel_directly,
 };
 use features::app_health::commands::health_check;
 use features::asset_library::commands::{
@@ -52,6 +52,7 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_notification::init())
         .setup(|app| {
             let data_directory = app.path().app_local_data_dir()?;
             let state = tauri::async_runtime::block_on(AppState::initialize(data_directory))?;
@@ -73,6 +74,8 @@ pub fn run() {
             save_agent_quota,
             delete_agent_quota,
             acknowledge_agent_reminders,
+            test_normal_notification,
+            test_system_channel_directly,
             validate_project_root,
             validate_project_subdirectory,
             scan_project_root,

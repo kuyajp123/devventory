@@ -376,3 +376,47 @@ async fn migration_0011_preserves_legacy_delivered_reminders() {
 
     initialized.database.close().await;
 }
+
+#[test]
+fn format_notification_content_individual_and_burst() {
+    use super::notification_dispatcher::format_notification_content;
+    use super::model::AgentReminder;
+
+    let now = Utc::now();
+    let r1 = AgentReminder {
+        id: Uuid::new_v4(),
+        account_id: Uuid::new_v4(),
+        quota_window_id: Uuid::new_v4(),
+        kind: ReminderKind::ResetReached,
+        platform: AgentPlatform::Antigravity,
+        custom_platform: None,
+        identifier: "paul@example.com".to_owned(),
+        quota_label: "Weekly".to_owned(),
+        reset_at: now,
+        scheduled_for: now,
+    };
+
+    let (title1, body1) = format_notification_content(std::slice::from_ref(&r1));
+    assert_eq!(title1, "Devventory");
+    assert!(body1.contains("antigravity · paul@example.com · Weekly — Reset time has been reached."));
+
+    let r2 = AgentReminder {
+        id: Uuid::new_v4(),
+        account_id: Uuid::new_v4(),
+        quota_window_id: Uuid::new_v4(),
+        kind: ReminderKind::ResetDay,
+        platform: AgentPlatform::Codex,
+        custom_platform: None,
+        identifier: "work@example.com".to_owned(),
+        quota_label: "Daily".to_owned(),
+        reset_at: now,
+        scheduled_for: now,
+    };
+
+    let (title2, body2) = format_notification_content(&[r1, r2]);
+    assert_eq!(title2, "Devventory");
+    assert_eq!(
+        body2,
+        "2 Agent Usage reminders are ready. antigravity and codex have quota updates."
+    );
+}

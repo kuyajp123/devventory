@@ -114,8 +114,11 @@ impl AppState {
     }
 
     pub(crate) fn start_agent_reminder_runtime(&self, app: AppHandle) {
-        self.agent_reminder_runtime
-            .start(app, self.agent_usage_service());
+        self.agent_reminder_runtime.start(
+            app,
+            self.agent_usage_service(),
+            self.settings_repository(),
+        );
     }
 
     pub(crate) async fn verify_storage(&self) -> Result<(), AppError> {

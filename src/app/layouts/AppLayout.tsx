@@ -18,6 +18,7 @@ import {
 import { useRef } from 'react';
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router';
 import { IS_DIAGNOSTICS_ENABLED } from '@/shared/config/development.config';
+import { AgentUsageReminderSync } from '@/features/agent-usage';
 import { ProjectSelector, useActiveProject } from '@/features/projects';
 import { GlobalCommandPalette } from '@/features/global-search';
 import { ICON_SIZE, ICON_STROKE } from '@/shared/constants/icon.constants';
@@ -296,6 +297,9 @@ export function AppLayout() {
 
       {/* Command Palette Overlay */}
       <GlobalCommandPalette />
+
+      {/* Global In-App Agent Usage Reminder Listener */}
+      <AgentUsageReminderSync />
     </div>
   );
 }

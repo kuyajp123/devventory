@@ -1,11 +1,12 @@
 use std::sync::Arc;
 use std::time::Duration;
 use chrono::Duration as ChronoDuration;
-use tauri::{AppHandle, Emitter};
+use tauri::AppHandle;
 use tokio::sync::watch;
 use tracing::{error, info};
 
-use super::service::AgentUsageService;
+use crate::features::settings::repository::SqliteSettingsRepository;
+use super::{notification_dispatcher::NotificationDispatcher, service::AgentUsageService};
 
 #[derive(Debug, Clone)]
 pub(crate) struct AgentReminderRuntime {
@@ -20,7 +21,12 @@ impl AgentReminderRuntime {
         }
     }
 
-    pub(crate) fn start(&self, app: AppHandle, service: AgentUsageService) {
+    pub(crate) fn start(
+        &self,
+        app: AppHandle,
+        service: AgentUsageService,
+        settings_repo: SqliteSettingsRepository,
+    ) {
         let mut shutdown_rx = self.shutdown_tx.subscribe();
 
         tauri::async_runtime::spawn(async move {
@@ -31,7 +37,7 @@ impl AgentReminderRuntime {
             loop {
                 tokio::select! {
                     _ = interval.tick() => {
-                        Self::poll_once(&app, &service).await;
+                        Self::poll_once(&app, &service, &settings_repo).await;
                     }
                     _ = shutdown_rx.changed() => {
                         if *shutdown_rx.borrow() {
@@ -44,7 +50,11 @@ impl AgentReminderRuntime {
         });
     }
 
-    pub(crate) async fn poll_once(app: &AppHandle, service: &AgentUsageService) {
+    pub(crate) async fn poll_once(
+        app: &AppHandle,
+        service: &AgentUsageService,
+        settings_repo: &SqliteSettingsRepository,
+    ) {
         match service.claim_due_reminders(ChronoDuration::minutes(2)).await {
             Ok(batch) => {
                 if !batch.reminders.is_empty() {
@@ -53,9 +63,13 @@ impl AgentReminderRuntime {
                         count = batch.reminders.len(),
                         "claimed due agent reminders batch"
                     );
-                    if let Err(err) = app.emit("agent-reminders:due", &batch) {
-                        error!(error = %err, "failed to emit agent-reminders:due event");
-                    }
+                    NotificationDispatcher::process_claimed_batch(
+                        app,
+                        service,
+                        settings_repo,
+                        batch,
+                    )
+                    .await;
                 }
             }
             Err(err) => {

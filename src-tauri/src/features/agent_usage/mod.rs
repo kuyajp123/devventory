@@ -3,6 +3,7 @@ mod domain;
 mod dto;
 mod error;
 mod model;
+pub(crate) mod notification_dispatcher;
 mod repository;
 pub(crate) mod runtime;
 mod service;

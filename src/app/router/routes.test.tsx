@@ -32,9 +32,16 @@ vi.mock('@/features/projects/hooks/use-active-project', () => ({
   useActiveProject: createActiveProjectContext,
 }));
 
-vi.mock('@/features/agent-usage', () => ({
-  AgentUsagePage: () => <h1>Agent Usage</h1>,
-}));
+vi.mock('@/features/agent-usage', async (importOriginal) => {
+  const actual =
+    await importOriginal<typeof import('@/features/agent-usage')>();
+
+  return {
+    ...actual,
+    AgentUsagePage: () => <h1>Agent Usage</h1>,
+    AgentUsageReminderSync: () => null,
+  };
+});
 
 vi.mock('./LazyDashboardRoute', () => ({
   LazyDashboardRoute: () => <h1>Add your first project</h1>,

@@ -7,13 +7,14 @@ import {
   toast,
 } from '@heroui/react';
 import { IconPlus, IconRobot } from '@tabler/icons-react';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { ICON_SIZE, ICON_STROKE } from '@/shared/constants/icon.constants';
 import { TauriCommandError } from '@/shared/infrastructure/tauri/tauri-error';
 import { ConfirmDialog } from '@/shared/ui';
 import { AgentAccountDialog } from '../components/AgentAccountDialog';
 import { AgentPlatformGroup } from '../components/AgentPlatformGroup';
 import { AgentQuotaDialog } from '../components/AgentQuotaDialog';
+import { navigationIntentStore } from '../services/navigation-intent.store';
 import {
   type AgentPlatformFilter,
   type AgentSortOption,
@@ -77,7 +78,51 @@ export function AgentUsagePage() {
     useState<AgentQuotaSaveError | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<DeleteTarget | null>(null);
 
+  const [highlightedQuotaId, setHighlightedQuotaId] = useState<string | null>(
+    null,
+  );
   const accountItems = useMemo(() => accounts.data ?? [], [accounts.data]);
+
+  // Process incoming notification navigation intent
+  useEffect(() => {
+    const intent = navigationIntentStore.getAndClearIntent();
+    if (!intent || !accounts.data) return;
+
+    if (intent.type === 'individual') {
+      const targetAccount = accounts.data.find(
+        (a) => a.id === intent.accountId,
+      );
+      if (!targetAccount) {
+        toast.warning('This notification target is no longer available.');
+        return;
+      }
+      // Expand target group
+      const targetGroup = groupAgentAccounts([targetAccount])[0];
+      if (targetGroup) {
+        setTimeout(() => {
+          setPlatformExpansion((current) => ({
+            ...current,
+            [targetGroup.id]: true,
+          }));
+        }, 0);
+      }
+      const targetQuota = targetAccount.quotas.find(
+        (q) => q.id === intent.quotaWindowId,
+      );
+      if (!targetQuota) {
+        toast.warning('This quota window is no longer available.');
+        return;
+      }
+
+      setTimeout(() => {
+        setHighlightedQuotaId(targetQuota.id);
+      }, 0);
+      const timer = setTimeout(() => {
+        setHighlightedQuotaId(null);
+      }, 2000);
+      return () => clearTimeout(timer);
+    }
+  }, [accounts.data]);
   const visibleAccounts = useMemo(() => {
     const normalizedSearch = search.trim().toLocaleLowerCase();
     const filtered = accountItems
@@ -247,7 +292,10 @@ export function AgentUsagePage() {
           onClear={clearFilters}
         />
       ) : (
-        <div className="space-y-3">
+        <div
+          className="space-y-3"
+          data-highlighted-quota={highlightedQuotaId ?? undefined}
+        >
           {platformGroups.map((group, index) => (
             <AgentPlatformGroup
               group={group}

@@ -1,7 +1,7 @@
 import { toast } from '@heroui/react';
 import { listen } from '@tauri-apps/api/event';
 import { useEffect } from 'react';
-import { useNotificationPreferencesQuery } from '@/features/settings';
+import { useNavigate } from 'react-router';
 import { useAcknowledgeRemindersMutation } from '../hooks/use-agent-usage';
 import {
   PLATFORM_LABELS,
@@ -9,65 +9,63 @@ import {
   type ReminderBatch,
   type ReminderOutcome,
 } from '../models/agent-usage';
+import { navigationIntentStore } from '../services/navigation-intent.store';
+
+interface InAppDeliveryPayload {
+  dispatchId: string;
+  batch: ReminderBatch;
+}
 
 export function AgentUsageReminderSync() {
-  const { data: preferences, isLoading } = useNotificationPreferencesQuery();
+  const navigate = useNavigate();
   const acknowledgeMutation = useAcknowledgeRemindersMutation();
 
   useEffect(() => {
-    const unlistenPromise = listen<ReminderBatch>(
-      'agent-reminders:due',
+    const unlistenPromise = listen<InAppDeliveryPayload>(
+      'agent-reminders:in-app',
       async (event) => {
-        const batch = event.payload;
+        const payload = event.payload;
+        const batch = payload?.batch;
         if (!batch?.reminders || batch.reminders.length === 0) return;
-
-        // Revision #6: If preferences are still loading/unavailable, mark failed (retryable)
-        if (isLoading || !preferences) {
-          const outcomes: ReminderOutcome[] = batch.reminders.map((r) => ({
-            id: r.id,
-            status: 'failed',
-            error: 'Notification preferences loading',
-          }));
-          await acknowledgeMutation.mutateAsync({
-            batchToken: batch.batchToken,
-            outcomes,
-          });
-          return;
-        }
 
         const outcomes: ReminderOutcome[] = [];
 
-        // Master disabled or no channel enabled
-        if (
-          !preferences.enabled ||
-          (!preferences.inAppEnabled && !preferences.systemEnabled)
-        ) {
-          for (const reminder of batch.reminders) {
-            outcomes.push({
-              id: reminder.id,
-              reason: 'policy_disabled',
-              status: 'suppressed',
+        if (batch.reminders.length === 1) {
+          const r = batch.reminders[0];
+          try {
+            navigationIntentStore.setIntent({
+              accountId: r.accountId,
+              quotaWindowId: r.quotaWindowId,
+              type: 'individual',
             });
-          }
-        } else if (!preferences.inAppEnabled && preferences.systemEnabled) {
-          // Revision #5: In-app OFF, System ON in Phase 2 -> transitional suppression
-          for (const reminder of batch.reminders) {
+            toast.warning(reminderMessage(r), {
+              timeout: 8000,
+            });
+            outcomes.push({ id: r.id, status: 'delivered' });
+          } catch (err) {
             outcomes.push({
-              id: reminder.id,
-              reason: 'system_notifications_unimplemented_in_phase2',
-              status: 'suppressed',
+              error: String(err),
+              id: r.id,
+              status: 'failed',
             });
           }
         } else {
-          // In-app ON: deliver via toast
-          for (const reminder of batch.reminders) {
-            try {
-              toast.warning(reminderMessage(reminder));
-              outcomes.push({ id: reminder.id, status: 'delivered' });
-            } catch (err) {
+          // Burst summary notification
+          const count = batch.reminders.length;
+          const summaryText = `${count} Agent Usage reminders are ready.`;
+          try {
+            navigationIntentStore.setIntent({ type: 'burst' });
+            toast.warning(summaryText, {
+              timeout: 8000,
+            });
+            for (const r of batch.reminders) {
+              outcomes.push({ id: r.id, status: 'delivered' });
+            }
+          } catch (err) {
+            for (const r of batch.reminders) {
               outcomes.push({
                 error: String(err),
-                id: reminder.id,
+                id: r.id,
                 status: 'failed',
               });
             }
@@ -86,7 +84,7 @@ export function AgentUsageReminderSync() {
     return () => {
       void unlistenPromise.then((unlisten) => unlisten());
     };
-  }, [preferences, isLoading, acknowledgeMutation]);
+  }, [acknowledgeMutation, navigate]);
 
   return null;
 }
