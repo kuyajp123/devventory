@@ -127,12 +127,12 @@ describe('AgentUsagePage', () => {
     const expandAccount = await screen.findByRole('button', {
       name: 'Expand account paul+codex@example.com',
     });
-    expect(screen.queryByText('Daily')).not.toBeInTheDocument();
+    expect(screen.queryByText('Quota windows')).not.toBeInTheDocument();
 
     await user.click(expandAccount);
 
-    expect(screen.getByText('Weekly')).toBeVisible();
-    expect(screen.getByText('Daily')).toBeVisible();
+    expect(screen.getByRole('heading', { name: 'Weekly' })).toBeVisible();
+    expect(screen.getByRole('heading', { name: 'Daily' })).toBeVisible();
     expect(expandAccount).toHaveAttribute('aria-expanded', 'true');
   });
 

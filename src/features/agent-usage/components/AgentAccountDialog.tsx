@@ -56,18 +56,19 @@ export function AgentAccountDialog({
     control,
     formState: { errors },
     handleSubmit,
-    register,
     reset,
   } = useForm<AgentAccountFormValues>({
     defaultValues: defaults(account, initialPlatform),
+    values: defaults(account, initialPlatform),
     resolver: zodResolver(agentAccountFormSchema),
   });
   const platform = useWatch({ control, name: 'platform' });
 
-  useEffect(
-    () => reset(defaults(account, initialPlatform)),
-    [account, initialPlatform, isOpen, reset],
-  );
+  useEffect(() => {
+    if (isOpen) {
+      reset(defaults(account, initialPlatform));
+    }
+  }, [account, initialPlatform, isOpen, reset]);
 
   const submit = handleSubmit(async (values) => {
     await onSubmit({
@@ -165,39 +166,58 @@ export function AgentAccountDialog({
           </div>
 
           {platform === 'custom' && (
-            <TextField
-              fullWidth
-              isInvalid={Boolean(errors.customPlatform)}
-              variant="secondary"
-            >
-              <Label>Custom platform name</Label>
-              <Input
-                disabled={isSaving}
-                placeholder="OpenCode"
-                {...register('customPlatform')}
-              />
-              <FieldError>{errors.customPlatform?.message}</FieldError>
-            </TextField>
+            <Controller
+              control={control}
+              name="customPlatform"
+              render={({ field }) => (
+                <TextField
+                  fullWidth
+                  isInvalid={Boolean(errors.customPlatform)}
+                  variant="secondary"
+                >
+                  <Label>Custom platform name</Label>
+                  <Input
+                    disabled={isSaving}
+                    name={field.name}
+                    onBlur={field.onBlur}
+                    onChange={field.onChange}
+                    placeholder="OpenCode"
+                    value={field.value}
+                  />
+                  <FieldError>{errors.customPlatform?.message}</FieldError>
+                </TextField>
+              )}
+            />
           )}
 
-          <TextField
-            fullWidth
-            isInvalid={Boolean(errors.identifier)}
-            variant="secondary"
-          >
-            <Label>Full account identifier</Label>
-            <Input
-              autoFocus
-              disabled={isSaving}
-              placeholder="developer@example.com"
-              {...register('identifier')}
-            />
-            <p className="text-xs text-muted">
-              Use the email, username, phone number, or organization identifier
-              shown by the provider. Devventory displays it in full.
-            </p>
-            <FieldError>{errors.identifier?.message}</FieldError>
-          </TextField>
+          <Controller
+            control={control}
+            name="identifier"
+            render={({ field }) => (
+              <TextField
+                fullWidth
+                isInvalid={Boolean(errors.identifier)}
+                variant="secondary"
+              >
+                <Label>Full account identifier</Label>
+                <Input
+                  autoFocus
+                  disabled={isSaving}
+                  name={field.name}
+                  onBlur={field.onBlur}
+                  onChange={field.onChange}
+                  placeholder="developer@example.com"
+                  value={field.value}
+                />
+                <p className="text-xs text-muted">
+                  Use the email, username, phone number, or organization
+                  identifier shown by the provider. Devventory displays it in
+                  full.
+                </p>
+                <FieldError>{errors.identifier?.message}</FieldError>
+              </TextField>
+            )}
+          />
 
           <Controller
             control={control}

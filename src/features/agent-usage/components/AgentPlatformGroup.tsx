@@ -9,6 +9,7 @@ import {
 import {
   IconChevronDown,
   IconChevronRight,
+  IconChevronUp,
   IconDotsVertical,
   IconEdit,
   IconPlus,
@@ -81,6 +82,8 @@ export function AgentPlatformGroup({
     });
   }
 
+  const hasExpandedAccounts = expandedAccounts.size > 0;
+
   return (
     <Card
       aria-label={`${group.label} platform accounts`}
@@ -112,76 +115,100 @@ export function AgentPlatformGroup({
               <PlatformStatusSummary accounts={group.accounts} />
             </Disclosure.Trigger>
           </Disclosure.Heading>
-          <Button
-            aria-label={`Add account to ${group.label}`}
-            onPress={onAddAccount}
-            size="sm"
-            variant="ghost"
-          >
-            <IconPlus
-              aria-hidden="true"
-              size={ICON_SIZE.small}
-              stroke={ICON_STROKE}
-            />
-            Add account
-          </Button>
+          <div className="flex shrink-0 items-center gap-1.5">
+            {hasExpandedAccounts && (
+              <Button
+                aria-label={`Collapse expanded accounts in ${group.label}`}
+                onPress={() => setExpandedAccounts(new Set())}
+                size="sm"
+                variant="ghost"
+              >
+                <IconChevronUp
+                  aria-hidden="true"
+                  size={ICON_SIZE.small}
+                  stroke={ICON_STROKE}
+                />
+                Collapse expanded
+              </Button>
+            )}
+            <Button
+              aria-label={`Add account to ${group.label}`}
+              onPress={onAddAccount}
+              size="sm"
+              variant="secondary"
+            >
+              <IconPlus
+                aria-hidden="true"
+                size={ICON_SIZE.small}
+                stroke={ICON_STROKE}
+              />
+              Add account
+            </Button>
+          </div>
         </div>
 
         <Disclosure.Content>
           <Disclosure.Body className="p-0">
-            <Table variant="secondary">
-              <Table.ScrollContainer>
-                <Table.Content aria-label={`${group.label} agent accounts`}>
-                  <Table.Header>
-                    <Table.Column id="account" isRowHeader>
-                      Account
-                    </Table.Column>
-                    <Table.Column id="quota">Quota</Table.Column>
-                    <Table.Column className="hidden lg:table-cell" id="reset">
-                      Next reset
-                    </Table.Column>
-                    <Table.Column id="status">Status</Table.Column>
-                    <Table.Column className="hidden xl:table-cell" id="updated">
-                      Updated
-                    </Table.Column>
-                    <Table.Column id="actions">Actions</Table.Column>
-                  </Table.Header>
-                  <Table.Body items={rows}>
-                    {(row) =>
-                      row.kind === 'details' ? (
-                        <Table.Row
-                          className="bg-workspace"
-                          id={row.id}
-                          textValue={`${row.account.identifier} quota details`}
-                        >
-                          <Table.Cell className="p-0" colSpan={6}>
-                            <AgentQuotaWindowList
-                              account={row.account}
-                              onAdd={() => onAddQuota(row.account)}
-                              onDelete={(quota) =>
-                                onDeleteQuota(row.account, quota)
-                              }
-                              onEdit={(quota) =>
-                                onEditQuota(row.account, quota)
-                              }
-                            />
-                          </Table.Cell>
-                        </Table.Row>
-                      ) : (
-                        <AccountRow
-                          account={row.account}
-                          isExpanded={expandedAccounts.has(row.account.id)}
-                          onAddQuota={() => onAddQuota(row.account)}
-                          onDelete={() => onDeleteAccount(row.account)}
-                          onEdit={() => onEditAccount(row.account)}
-                          onToggle={() => toggleAccount(row.account.id)}
-                        />
-                      )
-                    }
-                  </Table.Body>
-                </Table.Content>
-              </Table.ScrollContainer>
-            </Table>
+            <div className="relative border-l border-divider/60 ml-3 pl-1">
+              <Table variant="secondary">
+                <Table.ScrollContainer>
+                  <Table.Content aria-label={`${group.label} agent accounts`}>
+                    <Table.Header>
+                      <Table.Column id="account" isRowHeader>
+                        Account
+                      </Table.Column>
+                      <Table.Column id="quota">Availability</Table.Column>
+                      <Table.Column className="hidden lg:table-cell" id="reset">
+                        Next reset
+                      </Table.Column>
+                      <Table.Column id="status">Status</Table.Column>
+                      <Table.Column
+                        className="hidden xl:table-cell"
+                        id="updated"
+                      >
+                        Updated
+                      </Table.Column>
+                      <Table.Column id="actions">Actions</Table.Column>
+                    </Table.Header>
+                    <Table.Body items={rows}>
+                      {(row) =>
+                        row.kind === 'details' ? (
+                          <Table.Row
+                            className="bg-workspace/60"
+                            id={row.id}
+                            textValue={`${row.account.identifier} quota details`}
+                          >
+                            <Table.Cell className="p-0" colSpan={6}>
+                              <div className="relative ml-6 border-l-2 border-divider/60 py-3 pl-4">
+                                <AgentQuotaWindowList
+                                  account={row.account}
+                                  onAdd={() => onAddQuota(row.account)}
+                                  onDelete={(quota) =>
+                                    onDeleteQuota(row.account, quota)
+                                  }
+                                  onEdit={(quota) =>
+                                    onEditQuota(row.account, quota)
+                                  }
+                                />
+                              </div>
+                            </Table.Cell>
+                          </Table.Row>
+                        ) : (
+                          <AccountRow
+                            account={row.account}
+                            isExpanded={expandedAccounts.has(row.account.id)}
+                            onAddQuota={() => onAddQuota(row.account)}
+                            onDelete={() => onDeleteAccount(row.account)}
+                            onEdit={() => onEditAccount(row.account)}
+                            onToggle={() => toggleAccount(row.account.id)}
+                          />
+                        )
+                      }
+                    </Table.Body>
+                  </Table.Content>
+                </Table.ScrollContainer>
+              </Table>
+            </div>
           </Disclosure.Body>
         </Disclosure.Content>
       </Disclosure>
@@ -207,34 +234,59 @@ function AccountRow({
   const quota = accountQuotaSummary(account);
   return (
     <Table.Row id={account.id} textValue={account.identifier}>
-      <Table.Cell>
-        <Button
-          aria-expanded={isExpanded}
-          aria-label={`${isExpanded ? 'Collapse' : 'Expand'} account ${account.identifier}`}
-          className="min-w-0 max-w-full justify-start px-0 font-normal"
-          onPress={onToggle}
-          size="sm"
-          variant="ghost"
-        >
-          <IconChevronRight
-            aria-hidden="true"
-            className={`shrink-0 transition-transform motion-reduce:transition-none ${isExpanded ? 'rotate-90' : ''}`}
-            size={ICON_SIZE.small}
-            stroke={ICON_STROKE}
-          />
+      <Table.Cell className="relative">
+        <div className="flex items-center gap-1.5 pl-3">
           <span
-            className="truncate font-mono text-xs"
-            title={account.identifier}
+            aria-hidden="true"
+            className="absolute left-0 top-1/2 h-px w-2.5 -translate-y-1/2 bg-divider/80"
+          />
+          <Button
+            aria-expanded={isExpanded}
+            aria-label={`${isExpanded ? 'Collapse' : 'Expand'} account ${account.identifier}`}
+            className="min-w-0 max-w-full justify-start px-0 font-normal"
+            onPress={onToggle}
+            size="sm"
+            variant="ghost"
           >
-            {account.identifier}
-          </span>
-        </Button>
+            <IconChevronRight
+              aria-hidden="true"
+              className={`shrink-0 transition-transform motion-reduce:transition-none ${isExpanded ? 'rotate-90' : ''}`}
+              size={ICON_SIZE.small}
+              stroke={ICON_STROKE}
+            />
+            <span
+              className="truncate font-mono text-xs font-medium text-foreground"
+              title={account.identifier}
+            >
+              {account.identifier}
+            </span>
+          </Button>
+        </div>
       </Table.Cell>
       <Table.Cell>
-        <p className="whitespace-nowrap text-xs font-medium">{quota.label}</p>
-        <p className="mt-0.5 whitespace-nowrap text-[11px] text-muted">
-          {quota.detail}
-        </p>
+        {quota.hasActionableWindows ? (
+          <div className="flex flex-col gap-1 py-0.5">
+            {quota.items.map((item) => (
+              <div className="flex items-center gap-1.5 text-xs" key={item.id}>
+                <span
+                  aria-hidden="true"
+                  className={`size-1.5 shrink-0 rounded-full ${
+                    item.status === 'available' ? 'bg-success' : 'bg-accent'
+                  }`}
+                />
+                <span className="font-medium text-foreground">
+                  {item.label}
+                </span>
+                <span className="text-muted">·</span>
+                <span className="text-muted">{item.remainingText}</span>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <span className="font-mono text-xs text-muted">
+            No available windows
+          </span>
+        )}
       </Table.Cell>
       <Table.Cell className="hidden whitespace-nowrap text-xs lg:table-cell">
         {account.nextResetAt

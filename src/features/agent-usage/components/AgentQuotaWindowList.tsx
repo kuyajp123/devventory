@@ -37,7 +37,7 @@ export function AgentQuotaWindowList({
           aria-label={`Add quota for ${account.identifier}`}
           onPress={onAdd}
           size="sm"
-          variant="secondary"
+          variant="ghost"
         >
           <IconPlus
             aria-hidden="true"
@@ -56,13 +56,17 @@ export function AgentQuotaWindowList({
       ) : (
         <div className="divide-y divide-divider overflow-hidden rounded border border-divider bg-surface">
           {account.quotas.map((quota) => (
-            <QuotaWindow
-              account={account}
+            <div
+              className="relative pl-1 border-l-2 border-accent/30"
               key={quota.id}
-              onDelete={() => onDelete(quota)}
-              onEdit={() => onEdit(quota)}
-              quota={quota}
-            />
+            >
+              <QuotaWindow
+                account={account}
+                onDelete={() => onDelete(quota)}
+                onEdit={() => onEdit(quota)}
+                quota={quota}
+              />
+            </div>
           ))}
         </div>
       )}

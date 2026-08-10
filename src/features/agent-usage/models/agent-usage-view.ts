@@ -89,27 +89,60 @@ export function sortAgentAccounts(
   });
 }
 
-export function accountQuotaSummary(account: AgentAccount): {
-  detail: string;
+export interface ActionableQuotaItem {
+  id: string;
   label: string;
-} {
+  remainingText: string;
+  status: 'available' | 'resetSoon';
+}
+
+export interface AccountQuotaSummaryResult {
+  hasActionableWindows: boolean;
+  items: ActionableQuotaItem[];
+  label: string;
+}
+
+export function accountQuotaSummary(
+  account: AgentAccount,
+): AccountQuotaSummaryResult {
   if (account.quotas.length === 0) {
-    return { detail: 'No windows', label: 'Not tracked' };
+    return {
+      hasActionableWindows: false,
+      items: [],
+      label: 'No available windows',
+    };
   }
 
-  const known = account.quotas
-    .filter((quota) => quota.remainingPercent != null && !quota.usageIsStale)
-    .sort(
-      (left, right) =>
-        (left.remainingPercent ?? 101) - (right.remainingPercent ?? 101),
-    );
-  const label = known[0]
-    ? `${known[0].remainingPercent}% remaining`
-    : 'Usage unknown';
-  const count = account.quotas.length;
+  const availableQuotas = account.quotas.filter(
+    (quota) => quota.status === 'available',
+  );
+  const resetSoonQuotas = account.quotas.filter(
+    (quota) => quota.status === 'resetSoon',
+  );
+
+  const orderedQuotas = [...availableQuotas, ...resetSoonQuotas];
+
+  if (orderedQuotas.length === 0) {
+    return {
+      hasActionableWindows: false,
+      items: [],
+      label: 'No available windows',
+    };
+  }
+
+  const items: ActionableQuotaItem[] = orderedQuotas.map((quota) => ({
+    id: quota.id,
+    label: quota.label,
+    remainingText: quotaUsageLabel(quota),
+    status: quota.status as 'available' | 'resetSoon',
+  }));
+
   return {
-    detail: `${count} ${count === 1 ? 'window' : 'windows'}`,
-    label,
+    hasActionableWindows: true,
+    items,
+    label: items[0]
+      ? `${items[0].label} · ${items[0].remainingText}`
+      : 'No available windows',
   };
 }
 
