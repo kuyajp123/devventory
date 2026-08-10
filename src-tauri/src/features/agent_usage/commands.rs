@@ -3,8 +3,11 @@ use tauri::State;
 use crate::{app::state::AppState, shared::errors::command::CommandError};
 
 use super::{
-    dto::{AgentAccountInput, AgentQuotaIdInput, AgentQuotaInput, AgentRecordIdInput},
-    model::{AgentAccount, AgentQuotaWindow, AgentReminder},
+    dto::{
+        AcknowledgeRemindersInput, AgentAccountInput, AgentQuotaIdInput, AgentQuotaInput,
+        AgentRecordIdInput,
+    },
+    model::{AgentAccount, AgentQuotaWindow},
 };
 
 #[tauri::command]
@@ -67,14 +70,15 @@ pub(crate) async fn delete_agent_quota(
         .map_err(Into::into)
 }
 
-
 #[tauri::command]
-pub(crate) async fn take_due_agent_reminders(
+pub(crate) async fn acknowledge_agent_reminders(
     state: State<'_, AppState>,
-) -> Result<Vec<AgentReminder>, CommandError> {
+    input: AcknowledgeRemindersInput,
+) -> Result<(), CommandError> {
+    let (batch_token, outcomes) = input.parse().map_err(CommandError::from)?;
     state
         .agent_usage_service()
-        .take_due_reminders()
+        .acknowledge_reminders(batch_token, outcomes)
         .await
         .map_err(Into::into)
 }

@@ -104,6 +104,19 @@ export const agentReminderSchema = z
   .strict();
 export type AgentReminder = z.infer<typeof agentReminderSchema>;
 
+export const reminderBatchSchema = z
+  .object({
+    batchToken: z.string().uuid(),
+    reminders: agentReminderSchema.array(),
+  })
+  .strict();
+export type ReminderBatch = z.infer<typeof reminderBatchSchema>;
+
+export type ReminderOutcome =
+  | { id: string; status: 'delivered' }
+  | { id: string; status: 'suppressed'; reason?: string }
+  | { id: string; status: 'failed'; error?: string };
+
 export const agentAccountFormSchema = z
   .object({
     customPlatform: z.string().trim().max(80),

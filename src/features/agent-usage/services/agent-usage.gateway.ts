@@ -2,7 +2,7 @@ import { invokeCommand } from '@/shared/infrastructure/tauri/invoke-client';
 import {
   agentAccountSchema,
   agentQuotaSchema,
-  agentReminderSchema,
+  type ReminderOutcome,
   type SaveAgentAccountInput,
   type SaveAgentQuotaInput,
 } from '../models/agent-usage';
@@ -41,8 +41,9 @@ export const agentUsageGateway = {
     });
   },
 
-  async takeDueReminders() {
-    const response = await invokeCommand<unknown>('take_due_agent_reminders');
-    return agentReminderSchema.array().parse(response);
+  acknowledgeReminders(batchToken: string, outcomes: ReminderOutcome[]) {
+    return invokeCommand<void>('acknowledge_agent_reminders', {
+      input: { batchToken, outcomes },
+    });
   },
 };

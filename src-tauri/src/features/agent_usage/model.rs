@@ -9,11 +9,13 @@ use super::{
 
 macro_rules! string_enum {
     ($name:ident, $serialization_case:literal { $($variant:ident => $value:literal),+ $(,)? }) => {
+        #[allow(dead_code)]
         #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
         #[serde(rename_all = $serialization_case)]
         pub(crate) enum $name { $($variant),+ }
 
         impl $name {
+            #[allow(dead_code)]
             pub(crate) const fn as_str(self) -> &'static str {
                 match self { $(Self::$variant => $value),+ }
             }
@@ -72,6 +74,32 @@ string_enum!(ReminderKind, "camelCase" {
     ResetDay => "reset_day",
     ResetReached => "reset_reached",
 });
+
+string_enum!(ReminderStatus, "camelCase" {
+    Pending => "pending",
+    Claimed => "claimed",
+    Delivered => "delivered",
+    Skipped => "skipped",
+});
+
+string_enum!(SkipReason, "camelCase" {
+    Stale => "stale",
+    IntentionallySuppressed => "intentionally_suppressed",
+});
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) enum ReminderOutcome {
+    Delivered { id: Uuid },
+    Suppressed { id: Uuid },
+    Failed { id: Uuid },
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct ReminderBatch {
+    pub(crate) batch_token: Uuid,
+    pub(crate) reminders: Vec<AgentReminder>,
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]

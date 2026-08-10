@@ -1,5 +1,3 @@
-use std::collections::HashSet;
-
 use chrono::{DateTime, Duration, LocalResult, TimeZone, Utc};
 use chrono_tz::Tz;
 use sqlx::{FromRow, Sqlite, SqlitePool, Transaction};
@@ -8,9 +6,9 @@ use uuid::Uuid;
 use super::{
     error::AgentUsageError,
     model::{
-        AgentPlatform, AgentReminder, ReminderKind, ReminderPreferences, SaveAgentAccount,
-        SaveQuotaWindow, SignInMethod, StoredAgentAccount, StoredQuotaWindow, TrackingMode,
-        TrackingSource,
+        AgentPlatform, AgentReminder, ReminderBatch, ReminderKind, ReminderPreferences,
+        SaveAgentAccount, SaveQuotaWindow, SignInMethod, StoredAgentAccount, StoredQuotaWindow,
+        TrackingMode, TrackingSource,
     },
 };
 
@@ -254,20 +252,29 @@ impl SqliteAgentUsageRepository {
         .rows_affected())
     }
 
-    pub(crate) async fn take_due_reminders(
+    pub(crate) async fn claim_due_reminders(
         &self,
         now: DateTime<Utc>,
-    ) -> Result<Vec<AgentReminder>, AgentUsageError> {
+        lease_duration: Duration,
+    ) -> Result<ReminderBatch, AgentUsageError> {
         let mut transaction = self.pool.begin().await?;
-        let oldest = now - Duration::hours(48);
+        let now_str = now.to_rfc3339();
+        let grace_cutoff_str = (now - Duration::minutes(5)).to_rfc3339();
+        let expires_at_str = (now + lease_duration).to_rfc3339();
+        let batch_token = Uuid::new_v4();
+
+        // 1. Mark stale pending or claimed reminders (scheduled_for < grace_cutoff) as skipped
         sqlx::query(
-            "UPDATE agent_reminders SET delivered_at = ?
-             WHERE delivered_at IS NULL AND scheduled_for < ?",
+            "UPDATE agent_reminders
+             SET status = 'skipped', skipped_at = ?, skip_reason = 'stale'
+             WHERE status IN ('pending', 'claimed') AND scheduled_for < ?",
         )
-        .bind(now.to_rfc3339())
-        .bind(oldest.to_rfc3339())
+        .bind(&now_str)
+        .bind(&grace_cutoff_str)
         .execute(&mut *transaction)
         .await?;
+
+        // 2. Select eligible reminders (pending OR expired claim) within grace window
         let rows = sqlx::query_as::<_, ReminderRow>(
             "SELECT r.id, r.account_id, r.quota_window_id, r.kind, r.scheduled_for,
                     r.reset_occurrence AS reset_at, a.platform, a.custom_platform,
@@ -275,29 +282,97 @@ impl SqliteAgentUsageRepository {
              FROM agent_reminders r
              JOIN agent_accounts a ON a.id = r.account_id
              JOIN agent_quota_windows q ON q.id = r.quota_window_id
-             WHERE r.delivered_at IS NULL AND r.scheduled_for <= ? AND r.scheduled_for >= ?
+             WHERE (r.status = 'pending' OR (r.status = 'claimed' AND r.claim_expires_at < ?))
+               AND r.scheduled_for <= ? AND r.scheduled_for >= ?
              ORDER BY r.scheduled_for DESC, r.id
              LIMIT 100",
         )
-        .bind(now.to_rfc3339())
-        .bind(oldest.to_rfc3339())
+        .bind(&now_str)
+        .bind(&now_str)
+        .bind(&grace_cutoff_str)
         .fetch_all(&mut *transaction)
         .await?;
+
+        // 3. Atomically update selected reminders to claimed with current batch_token
         for row in &rows {
-            sqlx::query("UPDATE agent_reminders SET delivered_at = ? WHERE id = ?")
-                .bind(now.to_rfc3339())
-                .bind(&row.id)
-                .execute(&mut *transaction)
-                .await?;
+            sqlx::query(
+                "UPDATE agent_reminders
+                 SET status = 'claimed', claimed_at = ?, claim_expires_at = ?, claim_token = ?
+                 WHERE id = ? AND (status = 'pending' OR (status = 'claimed' AND claim_expires_at < ?))",
+            )
+            .bind(&now_str)
+            .bind(&expires_at_str)
+            .bind(batch_token.to_string())
+            .bind(&row.id)
+            .bind(&now_str)
+            .execute(&mut *transaction)
+            .await?;
         }
+
         transaction.commit().await?;
 
-        let mut windows = HashSet::new();
-        rows.into_iter()
-            .filter(|row| windows.insert(row.quota_window_id.clone()))
-            .take(10)
+        let reminders = rows
+            .into_iter()
             .map(TryInto::try_into)
-            .collect()
+            .collect::<Result<Vec<_>, _>>()?;
+
+        Ok(ReminderBatch {
+            batch_token,
+            reminders,
+        })
+    }
+
+    pub(crate) async fn acknowledge_reminders(
+        &self,
+        batch_token: Uuid,
+        outcomes: Vec<super::model::ReminderOutcome>,
+        now: DateTime<Utc>,
+    ) -> Result<(), AgentUsageError> {
+        let mut transaction = self.pool.begin().await?;
+        let now_str = now.to_rfc3339();
+        let token_str = batch_token.to_string();
+
+        for outcome in outcomes {
+            match outcome {
+                super::model::ReminderOutcome::Delivered { id } => {
+                    sqlx::query(
+                        "UPDATE agent_reminders
+                         SET status = 'delivered', delivered_at = ?
+                         WHERE id = ? AND status = 'claimed' AND claim_token = ?",
+                    )
+                    .bind(&now_str)
+                    .bind(id.to_string())
+                    .bind(&token_str)
+                    .execute(&mut *transaction)
+                    .await?;
+                }
+                super::model::ReminderOutcome::Suppressed { id } => {
+                    sqlx::query(
+                        "UPDATE agent_reminders
+                         SET status = 'skipped', skipped_at = ?, skip_reason = 'intentionally_suppressed'
+                         WHERE id = ? AND status = 'claimed' AND claim_token = ?",
+                    )
+                    .bind(&now_str)
+                    .bind(id.to_string())
+                    .bind(&token_str)
+                    .execute(&mut *transaction)
+                    .await?;
+                }
+                super::model::ReminderOutcome::Failed { id } => {
+                    sqlx::query(
+                        "UPDATE agent_reminders
+                         SET status = 'pending', claimed_at = NULL, claim_expires_at = NULL, claim_token = NULL
+                         WHERE id = ? AND status = 'claimed' AND claim_token = ?",
+                    )
+                    .bind(id.to_string())
+                    .bind(&token_str)
+                    .execute(&mut *transaction)
+                    .await?;
+                }
+            }
+        }
+        transaction.commit().await?;
+        Ok(())
     }
 
     async fn account(&self, id: Uuid) -> Result<StoredAgentAccount, AgentUsageError> {
@@ -338,7 +413,7 @@ async fn replace_reminders(
     quota_id: Uuid,
     input: &SaveQuotaWindow,
 ) -> Result<(), AgentUsageError> {
-    sqlx::query("DELETE FROM agent_reminders WHERE quota_window_id = ?")
+    sqlx::query("DELETE FROM agent_reminders WHERE quota_window_id = ? AND status IN ('pending', 'claimed')")
         .bind(quota_id.to_string())
         .execute(&mut **transaction)
         .await?;
@@ -374,9 +449,9 @@ async fn replace_reminders(
             continue;
         }
         sqlx::query(
-            "INSERT INTO agent_reminders (
-                id, account_id, quota_window_id, kind, reset_occurrence, scheduled_for
-             ) VALUES (?, ?, ?, ?, ?, ?)",
+            "INSERT OR IGNORE INTO agent_reminders (
+                id, account_id, quota_window_id, kind, reset_occurrence, scheduled_for, status
+             ) VALUES (?, ?, ?, ?, ?, ?, 'pending')",
         )
         .bind(Uuid::new_v4().to_string())
         .bind(input.account_id.to_string())

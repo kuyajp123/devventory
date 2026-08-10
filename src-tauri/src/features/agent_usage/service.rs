@@ -11,8 +11,8 @@ use super::{
     },
     error::AgentUsageError,
     model::{
-        AgentAccount, AgentQuotaWindow, AgentReminder, SaveAgentAccount, SaveQuotaWindow,
-        TrackingMode, TrackingSource,
+        AgentAccount, AgentQuotaWindow, SaveAgentAccount, SaveQuotaWindow, TrackingMode,
+        TrackingSource,
     },
     repository::SqliteAgentUsageRepository,
 };
@@ -109,8 +109,23 @@ impl AgentUsageService {
         self.repository.delete_quota(account_id, id).await
     }
 
-    pub(crate) async fn take_due_reminders(&self) -> Result<Vec<AgentReminder>, AgentUsageError> {
-        self.repository.take_due_reminders(Utc::now()).await
+    pub(crate) async fn claim_due_reminders(
+        &self,
+        lease_duration: chrono::Duration,
+    ) -> Result<super::model::ReminderBatch, AgentUsageError> {
+        self.repository
+            .claim_due_reminders(Utc::now(), lease_duration)
+            .await
+    }
+
+    pub(crate) async fn acknowledge_reminders(
+        &self,
+        batch_token: Uuid,
+        outcomes: Vec<super::model::ReminderOutcome>,
+    ) -> Result<(), AgentUsageError> {
+        self.repository
+            .acknowledge_reminders(batch_token, outcomes, Utc::now())
+            .await
     }
 }
 

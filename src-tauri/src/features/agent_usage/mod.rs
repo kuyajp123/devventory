@@ -4,9 +4,11 @@ mod dto;
 mod error;
 mod model;
 mod repository;
+pub(crate) mod runtime;
 mod service;
 
 pub(crate) use repository::SqliteAgentUsageRepository;
+pub(crate) use runtime::AgentReminderRuntime;
 pub(crate) use service::AgentUsageService;
 
 #[cfg(test)]

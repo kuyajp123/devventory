@@ -1,19 +1,92 @@
 import { toast } from '@heroui/react';
-import { useEffect, useRef } from 'react';
-import { useDueAgentRemindersQuery } from '../hooks/use-agent-usage';
-import { PLATFORM_LABELS, type AgentReminder } from '../models/agent-usage';
+import { listen } from '@tauri-apps/api/event';
+import { useEffect } from 'react';
+import { useNotificationPreferencesQuery } from '@/features/settings';
+import { useAcknowledgeRemindersMutation } from '../hooks/use-agent-usage';
+import {
+  PLATFORM_LABELS,
+  type AgentReminder,
+  type ReminderBatch,
+  type ReminderOutcome,
+} from '../models/agent-usage';
 
 export function AgentUsageReminderSync() {
-  const reminders = useDueAgentRemindersQuery();
-  const shown = useRef(new Set<string>());
+  const { data: preferences, isLoading } = useNotificationPreferencesQuery();
+  const acknowledgeMutation = useAcknowledgeRemindersMutation();
 
   useEffect(() => {
-    for (const reminder of reminders.data ?? []) {
-      if (shown.current.has(reminder.id)) continue;
-      shown.current.add(reminder.id);
-      toast.warning(reminderMessage(reminder));
-    }
-  }, [reminders.data]);
+    const unlistenPromise = listen<ReminderBatch>(
+      'agent-reminders:due',
+      async (event) => {
+        const batch = event.payload;
+        if (!batch?.reminders || batch.reminders.length === 0) return;
+
+        // Revision #6: If preferences are still loading/unavailable, mark failed (retryable)
+        if (isLoading || !preferences) {
+          const outcomes: ReminderOutcome[] = batch.reminders.map((r) => ({
+            id: r.id,
+            status: 'failed',
+            error: 'Notification preferences loading',
+          }));
+          await acknowledgeMutation.mutateAsync({
+            batchToken: batch.batchToken,
+            outcomes,
+          });
+          return;
+        }
+
+        const outcomes: ReminderOutcome[] = [];
+
+        // Master disabled or no channel enabled
+        if (
+          !preferences.enabled ||
+          (!preferences.inAppEnabled && !preferences.systemEnabled)
+        ) {
+          for (const reminder of batch.reminders) {
+            outcomes.push({
+              id: reminder.id,
+              reason: 'policy_disabled',
+              status: 'suppressed',
+            });
+          }
+        } else if (!preferences.inAppEnabled && preferences.systemEnabled) {
+          // Revision #5: In-app OFF, System ON in Phase 2 -> transitional suppression
+          for (const reminder of batch.reminders) {
+            outcomes.push({
+              id: reminder.id,
+              reason: 'system_notifications_unimplemented_in_phase2',
+              status: 'suppressed',
+            });
+          }
+        } else {
+          // In-app ON: deliver via toast
+          for (const reminder of batch.reminders) {
+            try {
+              toast.warning(reminderMessage(reminder));
+              outcomes.push({ id: reminder.id, status: 'delivered' });
+            } catch (err) {
+              outcomes.push({
+                error: String(err),
+                id: reminder.id,
+                status: 'failed',
+              });
+            }
+          }
+        }
+
+        if (outcomes.length > 0) {
+          await acknowledgeMutation.mutateAsync({
+            batchToken: batch.batchToken,
+            outcomes,
+          });
+        }
+      },
+    );
+
+    return () => {
+      void unlistenPromise.then((unlisten) => unlisten());
+    };
+  }, [preferences, isLoading, acknowledgeMutation]);
 
   return null;
 }

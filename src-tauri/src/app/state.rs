@@ -2,7 +2,9 @@ use std::path::Path;
 
 use tauri::AppHandle;
 
-use crate::features::agent_usage::{AgentUsageService, SqliteAgentUsageRepository};
+use crate::features::agent_usage::{
+    AgentReminderRuntime, AgentUsageService, SqliteAgentUsageRepository,
+};
 use crate::features::asset_library::{AssetService, LocalAssetFilesystem, SqliteAssetRepository};
 use crate::features::backups::repository::{
     BackupRecordDraft, BackupRepository, SqliteBackupRepository,
@@ -30,6 +32,7 @@ pub(crate) struct AppState {
     environment_service: EnvironmentService,
     validation_service: ValidationService,
     inventory_runtime: InventoryRuntime,
+    agent_reminder_runtime: AgentReminderRuntime,
 }
 
 impl AppState {
@@ -106,7 +109,13 @@ impl AppState {
             validation_service,
             file_inventory_service,
             inventory_runtime: InventoryRuntime::new(),
+            agent_reminder_runtime: AgentReminderRuntime::new(),
         })
+    }
+
+    pub(crate) fn start_agent_reminder_runtime(&self, app: AppHandle) {
+        self.agent_reminder_runtime
+            .start(app, self.agent_usage_service());
     }
 
     pub(crate) async fn verify_storage(&self) -> Result<(), AppError> {

@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type {
+  ReminderOutcome,
   SaveAgentAccountInput,
   SaveAgentQuotaInput,
 } from '../models/agent-usage';
@@ -8,7 +9,6 @@ import { agentUsageGateway } from '../services/agent-usage.gateway';
 export const agentUsageKeys = {
   all: ['agent-usage'] as const,
   accounts: () => ['agent-usage', 'accounts'] as const,
-  reminders: () => ['agent-usage', 'reminders'] as const,
 };
 
 function useInvalidateAccounts() {
@@ -59,11 +59,9 @@ export function useDeleteAgentQuotaMutation() {
   });
 }
 
-export function useDueAgentRemindersQuery() {
-  return useQuery({
-    queryFn: agentUsageGateway.takeDueReminders,
-    queryKey: agentUsageKeys.reminders(),
-    refetchInterval: 60_000,
-    staleTime: 0,
+export function useAcknowledgeRemindersMutation() {
+  return useMutation({
+    mutationFn: (input: { batchToken: string; outcomes: ReminderOutcome[] }) =>
+      agentUsageGateway.acknowledgeReminders(input.batchToken, input.outcomes),
   });
 }

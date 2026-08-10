@@ -113,6 +113,50 @@ impl AgentQuotaIdInput {
 }
 
 
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub(crate) struct ReminderOutcomeInput {
+    id: String,
+    status: String,
+    #[allow(dead_code)]
+    reason: Option<String>,
+}
+
+impl TryFrom<ReminderOutcomeInput> for super::model::ReminderOutcome {
+    type Error = AgentUsageError;
+
+    fn try_from(value: ReminderOutcomeInput) -> Result<Self, Self::Error> {
+        let id = parse_uuid(&value.id)?;
+        match value.status.as_str() {
+            "delivered" => Ok(Self::Delivered { id }),
+            "suppressed" => Ok(Self::Suppressed { id }),
+            "failed" => Ok(Self::Failed { id }),
+            _ => Err(AgentUsageError::InvalidInput),
+        }
+    }
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub(crate) struct AcknowledgeRemindersInput {
+    batch_token: String,
+    outcomes: Vec<ReminderOutcomeInput>,
+}
+
+impl AcknowledgeRemindersInput {
+    pub(crate) fn parse(
+        self,
+    ) -> Result<(Uuid, Vec<super::model::ReminderOutcome>), AgentUsageError> {
+        let batch_token = parse_uuid(&self.batch_token)?;
+        let outcomes = self
+            .outcomes
+            .into_iter()
+            .map(TryInto::try_into)
+            .collect::<Result<Vec<_>, _>>()?;
+        Ok((batch_token, outcomes))
+    }
+}
+
 fn parse_uuid(value: &str) -> Result<Uuid, AgentUsageError> {
     Uuid::parse_str(value).map_err(|_| AgentUsageError::InvalidInput)
 }

@@ -1,66 +1,122 @@
-import { render } from '@testing-library/react';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { renderWithProviders } from '@/test/render';
+import { waitFor } from '@testing-library/react';
+import { describe, expect, it, vi } from 'vitest';
+import { settingsGateway } from '@/features/settings/services/settings.gateway';
+import { agentUsageGateway } from '../services/agent-usage.gateway';
 import { AgentUsageReminderSync } from './AgentUsageReminderSync';
-import { useDueAgentRemindersQuery } from '../hooks/use-agent-usage';
 
-const { warning } = vi.hoisted(() => ({ warning: vi.fn() }));
-
-vi.mock('@heroui/react', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@heroui/react')>()),
-  toast: { warning },
+vi.mock('@/features/settings/services/settings.gateway', () => ({
+  settingsGateway: {
+    getNotificationPreferences: vi.fn(),
+  },
 }));
 
-vi.mock('../hooks/use-agent-usage', () => ({
-  useDueAgentRemindersQuery: vi.fn(),
+vi.mock('../services/agent-usage.gateway', () => ({
+  agentUsageGateway: {
+    acknowledgeReminders: vi.fn(),
+  },
+}));
+
+let eventCallback: ((event: { payload: unknown }) => Promise<void>) | null =
+  null;
+
+vi.mock('@tauri-apps/api/event', () => ({
+  listen: vi.fn((_eventName, cb) => {
+    eventCallback = cb;
+    return Promise.resolve(() => {
+      eventCallback = null;
+    });
+  }),
 }));
 
 describe('AgentUsageReminderSync', () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
+  it('submits delivered outcomes when in-app notifications are enabled', async () => {
+    vi.mocked(settingsGateway.getNotificationPreferences).mockResolvedValue({
+      enabled: true,
+      inAppEnabled: true,
+      systemEnabled: false,
+    });
+    vi.mocked(agentUsageGateway.acknowledgeReminders).mockResolvedValue(
+      undefined,
+    );
+
+    renderWithProviders(<AgentUsageReminderSync />);
+
+    await waitFor(() => expect(eventCallback).not.toBeNull());
+
+    const batch = {
+      batchToken: 'f47ac10b-58cc-4372-a567-0e02b2c3d479',
+      reminders: [
+        {
+          accountId: 'acc-1',
+          customPlatform: null,
+          id: 'rem-1',
+          identifier: 'paul@example.com',
+          kind: 'resetReached',
+          platform: 'codex',
+          quotaLabel: 'Weekly',
+          quotaWindowId: 'qw-1',
+          resetAt: '2026-08-10T12:00:00Z',
+          scheduledFor: '2026-08-10T12:00:00Z',
+        },
+      ],
+    };
+
+    await eventCallback!({ payload: batch });
+
+    await waitFor(() =>
+      expect(agentUsageGateway.acknowledgeReminders).toHaveBeenCalledWith(
+        'f47ac10b-58cc-4372-a567-0e02b2c3d479',
+        [{ id: 'rem-1', status: 'delivered' }],
+      ),
+    );
   });
 
-  it('shows reset-day and reached reminders once per persisted occurrence', () => {
-    vi.mocked(useDueAgentRemindersQuery).mockReturnValue({
-      data: [
-        reminder('resetDay'),
-        reminder('resetReached'),
-        reminder('beforeReset'),
+  it('submits suppressed outcomes when global notifications are disabled', async () => {
+    vi.mocked(settingsGateway.getNotificationPreferences).mockResolvedValue({
+      enabled: false,
+      inAppEnabled: true,
+      systemEnabled: false,
+    });
+    vi.mocked(agentUsageGateway.acknowledgeReminders).mockResolvedValue(
+      undefined,
+    );
+
+    renderWithProviders(<AgentUsageReminderSync />);
+
+    await waitFor(() => expect(eventCallback).not.toBeNull());
+
+    const batch = {
+      batchToken: 'f47ac10b-58cc-4372-a567-0e02b2c3d479',
+      reminders: [
+        {
+          accountId: 'acc-1',
+          customPlatform: null,
+          id: 'rem-1',
+          identifier: 'paul@example.com',
+          kind: 'resetReached',
+          platform: 'codex',
+          quotaLabel: 'Weekly',
+          quotaWindowId: 'qw-1',
+          resetAt: '2026-08-10T12:00:00Z',
+          scheduledFor: '2026-08-10T12:00:00Z',
+        },
       ],
-    } as ReturnType<typeof useDueAgentRemindersQuery>);
+    };
 
-    const view = render(<AgentUsageReminderSync />);
-    expect(warning).toHaveBeenCalledTimes(3);
-    expect(warning).toHaveBeenCalledWith(
-      expect.stringContaining('resets today'),
-    );
-    expect(warning).toHaveBeenCalledWith(
-      expect.stringContaining('reset time has been reached'),
-    );
-    expect(warning).toHaveBeenCalledWith(
-      expect.stringContaining('resets in about 6 hours'),
-    );
+    await eventCallback!({ payload: batch });
 
-    view.rerender(<AgentUsageReminderSync />);
-    expect(warning).toHaveBeenCalledTimes(3);
+    await waitFor(() =>
+      expect(agentUsageGateway.acknowledgeReminders).toHaveBeenCalledWith(
+        'f47ac10b-58cc-4372-a567-0e02b2c3d479',
+        [
+          {
+            id: 'rem-1',
+            reason: 'policy_disabled',
+            status: 'suppressed',
+          },
+        ],
+      ),
+    );
   });
 });
-
-function reminder(kind: 'beforeReset' | 'resetDay' | 'resetReached') {
-  return {
-    accountId: '30af17bd-2dd6-4b89-a5e7-8517191815a7',
-    customPlatform: null,
-    id:
-      kind === 'resetDay'
-        ? '95c75ec7-7a82-4a8c-b3e4-47f70bfd54c9'
-        : kind === 'resetReached'
-          ? '3ac09973-9565-4944-b93a-16db8e845a33'
-          : '11111111-2222-3333-4444-555555555555',
-    identifier: 'paul@example.com',
-    kind,
-    platform: 'codex' as const,
-    quotaLabel: 'Weekly',
-    quotaWindowId: 'e49c4e06-a95f-481d-a456-9dd066591067',
-    resetAt: '2026-08-14T12:00:00Z',
-    scheduledFor: '2026-08-14T06:00:00Z',
-  };
-}

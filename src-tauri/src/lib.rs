@@ -6,8 +6,8 @@ use tauri::Manager;
 
 use app::state::AppState;
 use features::agent_usage::commands::{
-    delete_agent_account, delete_agent_quota, list_agent_accounts, save_agent_account,
-    save_agent_quota, take_due_agent_reminders,
+    acknowledge_agent_reminders, delete_agent_account, delete_agent_quota, list_agent_accounts,
+    save_agent_account, save_agent_quota,
 };
 use features::app_health::commands::health_check;
 use features::asset_library::commands::{
@@ -58,8 +58,9 @@ pub fn run() {
             app.manage(state);
             let app_handle = app.handle().clone();
             tauri::async_runtime::block_on(
-                app.state::<AppState>().start_inventory_runtime(app_handle),
+                app.state::<AppState>().start_inventory_runtime(app_handle.clone()),
             )?;
+            app.state::<AppState>().start_agent_reminder_runtime(app_handle);
 
             tracing::info!("Devventory application state initialized");
             Ok(())
@@ -71,7 +72,7 @@ pub fn run() {
             delete_agent_account,
             save_agent_quota,
             delete_agent_quota,
-            take_due_agent_reminders,
+            acknowledge_agent_reminders,
             validate_project_root,
             validate_project_subdirectory,
             scan_project_root,

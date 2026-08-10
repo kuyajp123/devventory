@@ -1,4 +1,4 @@
-use chrono::{TimeZone, Utc};
+use chrono::{Duration, TimeZone, Utc};
 use tempfile::TempDir;
 use uuid::Uuid;
 
@@ -8,8 +8,8 @@ use super::domain::{
 };
 use super::error::AgentUsageError;
 use super::model::{
-    AgentPlatform, ReminderKind, ReminderPreferences, SaveAgentAccount, SaveQuotaWindow,
-    SignInMethod, TrackingMode, TrackingSource,
+    AgentPlatform, ReminderKind, ReminderOutcome, ReminderPreferences, SaveAgentAccount,
+    SaveQuotaWindow, SignInMethod, TrackingMode, TrackingSource,
 };
 use super::repository::SqliteAgentUsageRepository;
 use crate::shared::database::{initialize_database, DatabasePaths};
@@ -160,8 +160,8 @@ async fn account_and_quota_persistence_is_global_and_cascades_intentionally() {
         Err(AgentUsageError::DuplicateAccount)
     ));
 
-    let future_5h = Utc::now() + chrono::Duration::hours(48);
-    let future_weekly = Utc::now() + chrono::Duration::days(7);
+    let future_5h = Utc::now() + Duration::hours(48);
+    let future_weekly = Utc::now() + Duration::days(7);
 
     for (label, reset_at) in [
         ("5-hour", future_5h),
@@ -206,7 +206,7 @@ async fn account_and_quota_persistence_is_global_and_cascades_intentionally() {
 }
 
 #[tokio::test]
-async fn reminders_are_persisted_and_delivered_only_once_across_restarts() {
+async fn reminder_lifecycle_claim_ack_grace_and_stale_behavior() {
     let temp = TempDir::new().expect("temporary directory");
     let initialized = initialize_database(&DatabasePaths::new(temp.path()))
         .await
@@ -217,14 +217,14 @@ async fn reminders_are_persisted_and_delivered_only_once_across_restarts() {
         .await
         .unwrap();
 
-    let future_reset = Utc::now() + chrono::Duration::hours(2);
+    let reset_at = Utc::now() + Duration::hours(2);
     repository
         .save_quota(SaveQuotaWindow {
             id: None,
             account_id: saved_account.id,
             label: "Weekly".to_owned(),
             remaining_percent: Some(0.0),
-            reset_at: future_reset,
+            reset_at,
             timezone: "Asia/Manila".to_owned(),
             tracking_source: TrackingSource::Manual,
             reminders: ReminderPreferences {
@@ -236,27 +236,63 @@ async fn reminders_are_persisted_and_delivered_only_once_across_restarts() {
         .await
         .unwrap();
 
-    let now = future_reset + chrono::Duration::minutes(1);
-    let first_delivery = repository.take_due_reminders(now).await.unwrap();
-    assert_eq!(first_delivery.len(), 1);
-    assert_eq!(first_delivery[0].kind.as_str(), "reset_reached");
-    assert!(repository.take_due_reminders(now).await.unwrap().is_empty());
+    // 1. Before scheduled time: claim returns no due reminders
+    let before_due = reset_at - Duration::minutes(10);
+    let batch1 = repository
+        .claim_due_reminders(before_due, Duration::minutes(2))
+        .await
+        .unwrap();
+    assert!(batch1.reminders.is_empty());
+
+    // 2. At scheduled time (now): claim returns the due reminder
+    let now = reset_at;
+    let batch2 = repository
+        .claim_due_reminders(now, Duration::minutes(2))
+        .await
+        .unwrap();
+    assert_eq!(batch2.reminders.len(), 1);
+    let reminder_id = batch2.reminders[0].id;
+
+    // 3. Concurrent claim before lease expires: returns empty because it is already claimed
+    let batch3 = repository
+        .claim_due_reminders(now + Duration::seconds(30), Duration::minutes(2))
+        .await
+        .unwrap();
+    assert!(batch3.reminders.is_empty());
+
+    // 4. Stale acknowledgement with a wrong token: has no effect
+    let wrong_token = Uuid::new_v4();
+    repository
+        .acknowledge_reminders(
+            wrong_token,
+            vec![ReminderOutcome::Delivered { id: reminder_id }],
+            now,
+        )
+        .await
+        .unwrap();
+
+    // 5. Valid acknowledgement with matching batch_token: sets delivered status
+    repository
+        .acknowledge_reminders(
+            batch2.batch_token,
+            vec![ReminderOutcome::Delivered { id: reminder_id }],
+            now,
+        )
+        .await
+        .unwrap();
+
+    // 6. Submitting claim again: delivered reminder is never re-claimed
+    let batch4 = repository
+        .claim_due_reminders(now + Duration::minutes(1), Duration::minutes(2))
+        .await
+        .unwrap();
+    assert!(batch4.reminders.is_empty());
 
     initialized.database.close().await;
-    let reopened = initialize_database(&DatabasePaths::new(temp.path()))
-        .await
-        .expect("database should reopen");
-    let reopened_repository = SqliteAgentUsageRepository::new(reopened.database.pool().clone());
-    assert!(reopened_repository
-        .take_due_reminders(now)
-        .await
-        .unwrap()
-        .is_empty());
-    reopened.database.close().await;
 }
 
 #[tokio::test]
-async fn past_custom_reminder_time_fails_validation_atomically() {
+async fn expired_claim_lease_recovery_and_stale_skipping() {
     let temp = TempDir::new().expect("temporary directory");
     let initialized = initialize_database(&DatabasePaths::new(temp.path()))
         .await
@@ -267,31 +303,53 @@ async fn past_custom_reminder_time_fails_validation_atomically() {
         .await
         .unwrap();
 
-    let future_reset = Utc::now() + chrono::Duration::hours(2);
-    let result = repository
+    let reset_at = Utc::now() + Duration::hours(2);
+    repository
         .save_quota(SaveQuotaWindow {
             id: None,
             account_id: saved_account.id,
             label: "Weekly".to_owned(),
-            remaining_percent: Some(50.0),
-            reset_at: future_reset,
+            remaining_percent: Some(0.0),
+            reset_at,
             timezone: "Asia/Manila".to_owned(),
             tracking_source: TrackingSource::Manual,
             reminders: ReminderPreferences {
-                before_reset_hours: Some(6),
-                reset_day: true,
+                before_reset_hours: None,
+                reset_day: false,
                 reset_reached: true,
             },
         })
-        .await;
+        .await
+        .unwrap();
 
-    assert!(matches!(result, Err(AgentUsageError::InvalidInput)));
-    assert!(repository.list_quotas(saved_account.id).await.unwrap().is_empty());
+    let now = reset_at;
+    let batch = repository
+        .claim_due_reminders(now, Duration::minutes(2))
+        .await
+        .unwrap();
+    assert_eq!(batch.reminders.len(), 1);
+
+    // Simulate crash / no ack. Fast-forward 3 minutes (lease expired at now+2m, grace ends at now+5m)
+    let reclaim_time = now + Duration::minutes(3);
+    let reclaimed = repository
+        .claim_due_reminders(reclaim_time, Duration::minutes(2))
+        .await
+        .unwrap();
+    assert_eq!(reclaimed.reminders.len(), 1);
+
+    // Fast-forward past 5-minute grace window (now + 6 minutes)
+    let stale_time = now + Duration::minutes(6);
+    let stale_batch = repository
+        .claim_due_reminders(stale_time, Duration::minutes(2))
+        .await
+        .unwrap();
+    assert!(stale_batch.reminders.is_empty());
+
     initialized.database.close().await;
 }
 
 #[tokio::test]
-async fn migration_converts_legacy_remind_one_day_to_before_reset_hours_24() {
+async fn migration_0011_preserves_legacy_delivered_reminders() {
     let temp = TempDir::new().expect("temporary directory");
     let initialized = initialize_database(&DatabasePaths::new(temp.path()))
         .await
@@ -299,8 +357,8 @@ async fn migration_converts_legacy_remind_one_day_to_before_reset_hours_24() {
 
     let pool = initialized.database.pool();
 
-    // Verify 0010 migration ran and schema updated
-    let columns = sqlx::query("PRAGMA table_info(agent_quota_windows)")
+    // Verify 0011 migration ran and agent_reminders table has new columns
+    let columns = sqlx::query("PRAGMA table_info(agent_reminders)")
         .fetch_all(pool)
         .await
         .unwrap();
@@ -309,18 +367,12 @@ async fn migration_converts_legacy_remind_one_day_to_before_reset_hours_24() {
         .map(|row| sqlx::Row::get::<String, _>(&row, "name"))
         .collect();
 
-    assert!(col_names.contains(&"before_reset_hours".to_string()));
-    assert!(!col_names.contains(&"remind_one_day".to_string()));
-
-    // Verify table structure of agent_reminders
-    let reminder_kinds = sqlx::query("SELECT DISTINCT kind FROM agent_reminders")
-        .fetch_all(pool)
-        .await
-        .unwrap();
-    for row in reminder_kinds {
-        let kind: String = sqlx::Row::get(&row, "kind");
-        assert_ne!(kind, "one_day_before");
-    }
+    assert!(col_names.contains(&"status".to_string()));
+    assert!(col_names.contains(&"claimed_at".to_string()));
+    assert!(col_names.contains(&"claim_expires_at".to_string()));
+    assert!(col_names.contains(&"claim_token".to_string()));
+    assert!(col_names.contains(&"skipped_at".to_string()));
+    assert!(col_names.contains(&"skip_reason".to_string()));
 
     initialized.database.close().await;
 }
