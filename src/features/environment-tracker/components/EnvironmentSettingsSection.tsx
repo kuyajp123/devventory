@@ -10,8 +10,10 @@ import {
 } from '@heroui/react';
 import {
   IconAlertTriangle,
-  IconDeviceFloppy,
+  IconCheck,
+  IconEdit,
   IconTrash,
+  IconX,
 } from '@tabler/icons-react';
 import { useEffect, useState } from 'react';
 import { Controller, useForm } from 'react-hook-form';
@@ -25,23 +27,22 @@ import {
 const environmentNameSchema = environmentFormSchema.pick({ name: true });
 type EnvironmentNameValues = Pick<EnvironmentFormValues, 'name'>;
 
-interface EnvironmentSettingsSectionProps {
+interface EnvironmentGeneralSectionProps {
   environment: Environment;
-  isDeleting: boolean;
   isSaving: boolean;
-  onDelete: () => Promise<void>;
   onRename: (name: string) => Promise<void>;
 }
 
-export function EnvironmentSettingsSection({
+export function EnvironmentGeneralSection({
   environment,
-  isDeleting,
   isSaving,
-  onDelete,
   onRename,
-}: EnvironmentSettingsSectionProps) {
-  const [isConfirmingDelete, setIsConfirmingDelete] = useState(false);
-  const [deleteError, setDeleteError] = useState<string | null>(null);
+}: EnvironmentGeneralSectionProps) {
+  const [editingEnvironmentId, setEditingEnvironmentId] = useState<
+    string | null
+  >(null);
+  const isEditing = editingEnvironmentId === environment.id;
+
   const {
     control,
     formState: { errors, isDirty },
@@ -59,9 +60,13 @@ export function EnvironmentSettingsSection({
 
   const submit = handleSubmit(async ({ name }) => {
     const normalizedName = name.trim();
+    if (normalizedName === environment.name) {
+      setEditingEnvironmentId(null);
+      return;
+    }
     try {
       await onRename(normalizedName);
-      reset({ name: normalizedName });
+      setEditingEnvironmentId(null);
     } catch (error) {
       setError('name', {
         message:
@@ -72,83 +77,158 @@ export function EnvironmentSettingsSection({
     }
   });
 
-  async function confirmDelete() {
-    setDeleteError(null);
-    try {
-      await onDelete();
-    } catch (error) {
-      setDeleteError(
-        error instanceof Error
-          ? error.message
-          : 'The environment could not be deleted.',
-      );
-    }
-  }
-
   return (
-    <section
-      aria-labelledby="environment-settings-heading"
-      className="space-y-4"
-    >
+    <section aria-labelledby="general-settings-heading" className="space-y-4">
       <div>
-        <h2 className="font-medium" id="environment-settings-heading">
-          Environment settings
+        <h2
+          className="font-medium text-foreground"
+          id="general-settings-heading"
+        >
+          General Settings
         </h2>
-        <p className="text-sm text-muted">
-          Rename this environment or remove it and its configured sources.
+        <p className="text-xs text-muted">
+          Environment configuration metadata and identity.
         </p>
       </div>
 
-      <Form
-        className="flex flex-col gap-3 sm:flex-row sm:items-end"
-        onSubmit={(event) => {
-          event.preventDefault();
-          void submit();
-        }}
-        validationBehavior="aria"
-      >
-        <TextField
-          className="min-w-0 flex-1"
-          isInvalid={Boolean(errors.name)}
-          variant="secondary"
-        >
-          <Label>Environment name</Label>
-          <Controller
-            control={control}
-            name="name"
-            render={({ field }) => (
-              <Input disabled={isSaving || isDeleting} {...field} />
+      <div className="rounded-md border border-divider bg-surface-secondary/50 p-4">
+        {!isEditing ? (
+          <div>
+            <span className="font-mono text-[10px] uppercase tracking-wider text-muted">
+              Environment name
+            </span>
+            <div className="mt-1 flex items-center gap-2">
+              <span className="font-mono text-lg font-semibold text-foreground">
+                {environment.name}
+              </span>
+              <Button
+                aria-label={`Edit name for environment ${environment.name}`}
+                isIconOnly
+                onPress={() => setEditingEnvironmentId(environment.id)}
+                size="sm"
+                variant="ghost"
+              >
+                <IconEdit
+                  aria-hidden="true"
+                  size={ICON_SIZE.small}
+                  stroke={ICON_STROKE}
+                />
+              </Button>
+            </div>
+            {environment.description && (
+              <p className="mt-2 text-xs text-muted leading-relaxed">
+                {environment.description}
+              </p>
             )}
-          />
-          <FieldError>{errors.name?.message}</FieldError>
-        </TextField>
-        <Button
-          isDisabled={!isDirty || isSaving || isDeleting}
-          size="sm"
-          type="submit"
-          variant="primary"
-        >
-          {isSaving ? (
-            <Spinner aria-label="Saving environment name" size="sm" />
-          ) : (
-            <IconDeviceFloppy
-              aria-hidden="true"
-              size={ICON_SIZE.small}
-              stroke={ICON_STROKE}
-            />
-          )}
-          Save name
-        </Button>
-      </Form>
+          </div>
+        ) : (
+          <Form
+            className="space-y-3"
+            onSubmit={(event) => {
+              event.preventDefault();
+              void submit();
+            }}
+            validationBehavior="aria"
+          >
+            <TextField
+              className="min-w-0 flex-1"
+              isInvalid={Boolean(errors.name)}
+              variant="secondary"
+            >
+              <Label>Environment name</Label>
+              <Controller
+                control={control}
+                name="name"
+                render={({ field }) => (
+                  <Input
+                    autoFocus
+                    disabled={isSaving}
+                    onKeyDown={(event) => {
+                      if (event.key === 'Escape') {
+                        reset({ name: environment.name });
+                        setEditingEnvironmentId(null);
+                      }
+                    }}
+                    {...field}
+                  />
+                )}
+              />
+              <FieldError>{errors.name?.message}</FieldError>
+            </TextField>
+            <div className="flex gap-2 justify-end">
+              <Button
+                isDisabled={isSaving}
+                onPress={() => {
+                  reset({ name: environment.name });
+                  setEditingEnvironmentId(null);
+                }}
+                size="sm"
+                variant="secondary"
+              >
+                <IconX
+                  aria-hidden="true"
+                  size={ICON_SIZE.small}
+                  stroke={ICON_STROKE}
+                />
+                Cancel
+              </Button>
+              <Button
+                isDisabled={!isDirty || isSaving}
+                size="sm"
+                type="submit"
+                variant="primary"
+              >
+                {isSaving ? (
+                  <Spinner aria-label="Saving name" size="sm" />
+                ) : (
+                  <IconCheck
+                    aria-hidden="true"
+                    size={ICON_SIZE.small}
+                    stroke={ICON_STROKE}
+                  />
+                )}
+                Save name
+              </Button>
+            </div>
+          </Form>
+        )}
+      </div>
+    </section>
+  );
+}
 
-      <div className="border-t border-divider pt-4">
+interface EnvironmentDangerZoneSectionProps {
+  environment: Environment;
+  isDeleting: boolean;
+  onDelete: () => void;
+}
+
+export function EnvironmentDangerZoneSection({
+  environment,
+  isDeleting,
+  onDelete,
+}: EnvironmentDangerZoneSectionProps) {
+  const [isConfirmingDelete, setIsConfirmingDelete] = useState(false);
+
+  return (
+    <section aria-labelledby="danger-zone-heading" className="space-y-4">
+      <div>
+        <h2 className="font-medium text-danger" id="danger-zone-heading">
+          Danger Zone
+        </h2>
+        <p className="text-xs text-muted">
+          Destructive actions for this environment configuration.
+        </p>
+      </div>
+
+      <div className="rounded-md border border-danger/30 bg-danger/5 p-4 space-y-3">
         {isConfirmingDelete ? (
           <div
             aria-labelledby="delete-environment-heading"
-            className="space-y-3 rounded-md border border-danger/40 bg-danger/10 p-3"
+            className="space-y-3"
             role="alert"
           >
-            <div className="flex items-start gap-2">
+            <div className="flex items-start gap-2.5">
               <IconAlertTriangle
                 aria-hidden="true"
                 className="mt-0.5 shrink-0 text-danger"
@@ -157,23 +237,18 @@ export function EnvironmentSettingsSection({
               />
               <div>
                 <h3
-                  className="font-medium text-danger"
+                  className="font-medium text-danger text-sm"
                   id="delete-environment-heading"
                 >
                   Delete {environment.name}?
                 </h3>
-                <p className="mt-1 text-sm text-muted">
+                <p className="mt-1 text-xs text-muted leading-relaxed">
                   This removes the environment, its configured sources, and its
-                  tracked key metadata. Project files are not deleted.
+                  tracked key metadata. Project files on disk are not deleted.
                 </p>
               </div>
             </div>
-            {deleteError ? (
-              <p className="text-sm text-danger" role="alert">
-                {deleteError}
-              </p>
-            ) : null}
-            <div className="flex flex-wrap justify-end gap-2">
+            <div className="flex flex-wrap justify-end gap-2 pt-1">
               <Button
                 isDisabled={isDeleting}
                 onPress={() => setIsConfirmingDelete(false)}
@@ -184,7 +259,7 @@ export function EnvironmentSettingsSection({
               </Button>
               <Button
                 isDisabled={isDeleting}
-                onPress={() => void confirmDelete()}
+                onPress={onDelete}
                 size="sm"
                 variant="danger"
               >
@@ -202,19 +277,29 @@ export function EnvironmentSettingsSection({
             </div>
           </div>
         ) : (
-          <Button
-            isDisabled={isSaving || isDeleting}
-            onPress={() => setIsConfirmingDelete(true)}
-            size="sm"
-            variant="danger-soft"
-          >
-            <IconTrash
-              aria-hidden="true"
-              size={ICON_SIZE.small}
-              stroke={ICON_STROKE}
-            />
-            Delete environment
-          </Button>
+          <div className="flex items-center justify-between gap-4">
+            <div>
+              <p className="text-xs font-medium text-foreground">
+                Delete environment
+              </p>
+              <p className="text-[11px] text-muted">
+                Removes this environment configuration and tracked keys.
+              </p>
+            </div>
+            <Button
+              isDisabled={isDeleting}
+              onPress={() => setIsConfirmingDelete(true)}
+              size="sm"
+              variant="danger-soft"
+            >
+              <IconTrash
+                aria-hidden="true"
+                size={ICON_SIZE.small}
+                stroke={ICON_STROKE}
+              />
+              Delete environment
+            </Button>
+          </div>
         )}
       </div>
     </section>

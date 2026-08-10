@@ -176,12 +176,11 @@ describe('EnvironmentTrackerPage', () => {
 
     await user.click(screen.getByRole('menuitem', { name: 'Manage sources' }));
     const manager = await screen.findByRole('dialog', {
-      name: 'Configuration sources — Development',
+      name: 'Environment settings — Development',
     });
     expect(manager).toBeVisible();
-    expect(within(manager).getByLabelText('Environment name')).toHaveValue(
-      'Development',
-    );
+    await user.click(within(manager).getByRole('button', { name: 'General' }));
+    expect(within(manager).getByText('Development')).toBeVisible();
   });
 
   it('switches to a source-file breakdown and explains active definitions per file', async () => {

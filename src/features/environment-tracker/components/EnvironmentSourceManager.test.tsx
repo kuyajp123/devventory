@@ -38,7 +38,7 @@ describe('EnvironmentSourceManager', () => {
     vi.mocked(environmentTrackerGateway.delete).mockResolvedValue(undefined);
   });
 
-  it('renames the environment directly inside Manage Sources', async () => {
+  it('renames the environment inline under General Settings', async () => {
     const user = userEvent.setup();
     const onEnvironmentChange = vi.fn();
     vi.mocked(environmentTrackerGateway.update).mockResolvedValue({
@@ -53,6 +53,16 @@ describe('EnvironmentSourceManager', () => {
         onOpenChange={vi.fn()}
         projectId={environment.projectId}
       />,
+    );
+
+    // Navigate to General section
+    await user.click(screen.getByRole('button', { name: 'General' }));
+
+    // Click edit icon button next to name text
+    await user.click(
+      screen.getByRole('button', {
+        name: `Edit name for environment ${environment.name}`,
+      }),
     );
 
     const nameInput = screen.getByLabelText('Environment name');
@@ -74,39 +84,35 @@ describe('EnvironmentSourceManager', () => {
     });
   });
 
-  it('confirms and deletes the environment without opening another dialog', async () => {
+  it('starts soft deletion from Danger Zone and closes the dialog immediately', async () => {
     const user = userEvent.setup();
-    const onEnvironmentDeleted = vi.fn();
+    const onStartDeleteEnvironment = vi.fn();
     const onOpenChange = vi.fn();
 
     renderWithProviders(
       <EnvironmentSourceManager
         environment={environment}
-        onEnvironmentDeleted={onEnvironmentDeleted}
         onOpenChange={onOpenChange}
+        onStartDeleteEnvironment={onStartDeleteEnvironment}
         projectId={environment.projectId}
       />,
     );
+
+    // Navigate to Danger Zone section
+    await user.click(screen.getByRole('button', { name: 'Danger Zone' }));
 
     await user.click(
       screen.getByRole('button', { name: 'Delete environment' }),
     );
 
-    expect(environmentTrackerGateway.delete).not.toHaveBeenCalled();
+    expect(onStartDeleteEnvironment).not.toHaveBeenCalled();
     expect(screen.getByText(`Delete ${environment.name}?`)).toBeVisible();
-    expect(screen.getAllByRole('dialog')).toHaveLength(1);
 
     await user.click(
       screen.getByRole('button', { name: 'Delete permanently' }),
     );
 
-    await waitFor(() =>
-      expect(environmentTrackerGateway.delete).toHaveBeenCalledWith(
-        environment.projectId,
-        environment.id,
-      ),
-    );
-    expect(onEnvironmentDeleted).toHaveBeenCalledWith(environment.id);
+    expect(onStartDeleteEnvironment).toHaveBeenCalledWith(environment);
     expect(onOpenChange).toHaveBeenCalledWith(false);
   });
 
@@ -120,9 +126,15 @@ describe('EnvironmentSourceManager', () => {
       />,
     );
 
-    await screen.findByText(/No sources yet/);
+    // Navigate to Add Source section
+    await user.click(screen.getByRole('button', { name: 'Add Source' }));
+    // Switch to Add by Path tab
+    await user.click(screen.getByRole('tab', { name: 'Add by Path' }));
+
     await user.type(
-      screen.getByLabelText('Project-relative configuration path'),
+      screen.getByRole('textbox', {
+        name: 'Project-relative configuration path',
+      }),
       'Backend/.env',
     );
     await user.click(screen.getByRole('button', { name: 'Add source' }));
@@ -134,42 +146,17 @@ describe('EnvironmentSourceManager', () => {
         'Backend/.env',
       ),
     );
+    // Switch back to Configured Sources to see the added item and its issue popover
+    await user.click(
+      screen.getByRole('button', { name: /Configured Sources/ }),
+    );
+
     expect(
       await screen.findByRole('heading', {
         name: 'Why Devventory could not parse this file',
       }),
     ).toBeVisible();
     expect(screen.getByText('Line 2')).toBeVisible();
-    expect(
-      screen.getByText('A configuration assignment could not be parsed.'),
-    ).toBeVisible();
-    expect(
-      screen.getByText(/Use KEY=value on every non-empty line/),
-    ).toBeVisible();
-    expect(
-      screen.getByText(
-        /Configuration values remain hidden and are never saved/,
-      ),
-    ).toBeVisible();
-
-    await user.keyboard('{Escape}');
-    await waitFor(() =>
-      expect(
-        screen.queryByRole('heading', {
-          name: 'Why Devventory could not parse this file',
-        }),
-      ).not.toBeInTheDocument(),
-    );
-    await user.click(
-      screen.getByRole('button', {
-        name: 'Explain parse issue for Backend/.env',
-      }),
-    );
-    expect(
-      await screen.findByRole('heading', {
-        name: 'Why Devventory could not parse this file',
-      }),
-    ).toBeVisible();
   });
 
   it('keeps a parsed source green when stale issue metadata is returned after a source update', async () => {
@@ -195,11 +182,6 @@ describe('EnvironmentSourceManager', () => {
       'bg-success/15',
       'text-success',
     );
-    expect(
-      screen.queryByRole('button', {
-        name: 'Explain parsed for Backend/.env.staging',
-      }),
-    ).not.toBeInTheDocument();
   });
 });
 

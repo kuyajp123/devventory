@@ -21,12 +21,16 @@ import {
   Input,
   Label,
   Spinner,
+  Tabs,
   TextField,
   toast,
 } from '@heroui/react';
 import {
+  IconAdjustments,
+  IconAlertTriangle,
   IconFileCode,
   IconGripVertical,
+  IconListCheck,
   IconPlus,
   IconSearch,
   IconTrash,
@@ -44,7 +48,6 @@ import {
 } from '@/shared/ui';
 import {
   useAddEnvironmentSourceMutation,
-  useDeleteEnvironmentMutation,
   useDeleteEnvironmentSourceMutation,
   useEnvironmentSourceCandidatesQuery,
   useEnvironmentSourcesQuery,
@@ -57,38 +60,47 @@ import {
   type EnvironmentSource,
 } from '../models/environment';
 import { EnvironmentSourceIssuePopover } from './EnvironmentSourceIssuePopover';
-import { EnvironmentSettingsSection } from './EnvironmentSettingsSection';
+import {
+  EnvironmentDangerZoneSection,
+  EnvironmentGeneralSection,
+} from './EnvironmentSettingsSection';
 
 const SOURCE_PAGE_SIZE = 25;
+
+type ConfigSection = 'general' | 'sources' | 'add-source' | 'danger';
+type AddSourceSubTab = 'indexed' | 'manual';
 
 interface EnvironmentSourceManagerProps {
   environment: Environment | null;
   onEnvironmentChange?: (environment: Environment) => void;
-  onEnvironmentDeleted?: (environmentId: string) => void;
   onOpenChange: (isOpen: boolean) => void;
+  onStartDeleteEnvironment?: (environment: Environment) => void;
   projectId: string;
 }
 
 export function EnvironmentSourceManager({
   environment,
   onEnvironmentChange,
-  onEnvironmentDeleted,
   onOpenChange,
+  onStartDeleteEnvironment,
   projectId,
 }: EnvironmentSourceManagerProps) {
   const environmentId = environment?.id ?? '';
   const sources = useEnvironmentSourcesQuery(projectId, environmentId);
   const addSource = useAddEnvironmentSourceMutation(projectId);
-  const deleteEnvironment = useDeleteEnvironmentMutation(projectId);
   const deleteSource = useDeleteEnvironmentSourceMutation(projectId);
   const reorderSources = useReorderEnvironmentSourcesMutation(projectId);
   const updateEnvironment = useUpdateEnvironmentMutation(projectId);
+
+  const [activeSection, setActiveSection] = useState<ConfigSection>('sources');
+  const [addSourceTab, setAddSourceTab] = useState<AddSourceSubTab>('indexed');
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(1);
   const [relativePath, setRelativePath] = useState('');
   const [openIssueSourceId, setOpenIssueSourceId] = useState<string | null>(
     null,
   );
+
   const candidates = useEnvironmentSourceCandidatesQuery(
     projectId,
     { page, pageSize: SOURCE_PAGE_SIZE, search: search.trim() || undefined },
@@ -107,7 +119,6 @@ export function EnvironmentSourceManager({
   );
   const isBusy =
     addSource.isPending ||
-    deleteEnvironment.isPending ||
     deleteSource.isPending ||
     reorderSources.isPending ||
     updateEnvironment.isPending;
@@ -127,21 +138,6 @@ export function EnvironmentSourceManager({
         new Error(
           errorMessage(error, 'The environment name could not be saved.'),
         ),
-        { cause: error },
-      );
-    }
-  }
-
-  async function removeEnvironment() {
-    if (!environment) return;
-    try {
-      await deleteEnvironment.mutateAsync(environment.id);
-      onEnvironmentDeleted?.(environment.id);
-      onOpenChange(false);
-      toast.success('Environment deleted');
-    } catch (error) {
-      throw Object.assign(
-        new Error(errorMessage(error, 'The environment could not be deleted.')),
         { cause: error },
       );
     }
@@ -202,8 +198,7 @@ export function EnvironmentSourceManager({
     <DevventoryDialog
       isOpen={Boolean(environment)}
       onOpenChange={onOpenChange}
-      size="lg"
-      scroll
+      size="2xl"
     >
       <DialogHeader
         icon={
@@ -213,213 +208,320 @@ export function EnvironmentSourceManager({
             stroke={ICON_STROKE}
           />
         }
-        title={`Configuration sources${environment ? ` — ${environment.name}` : ''}`}
+        title={`Environment settings${environment ? ` — ${environment.name}` : ''}`}
       />
-      <DialogBody className="flex flex-col gap-6">
-        {environment ? (
-          <EnvironmentSettingsSection
-            environment={environment}
-            isDeleting={deleteEnvironment.isPending}
-            isSaving={updateEnvironment.isPending}
-            onDelete={removeEnvironment}
-            onRename={renameEnvironment}
-          />
-        ) : null}
-
-        <section
-          aria-labelledby="configured-sources-heading"
-          className="flex flex-col gap-3"
-        >
-          <div>
-            <h2 className="font-medium" id="configured-sources-heading">
-              Configured sources
-            </h2>
-            <p className="text-sm text-muted">
-              Drag to set display priority. A source is read only for key names
-              and line metadata; configuration values are never shown or saved.
-            </p>
-          </div>
-          {sources.isPending && (
-            <Spinner aria-label="Loading configuration sources" size="sm" />
-          )}
-          {sources.isError && (
-            <Alert role="alert" status="danger">
-              <Alert.Indicator />
-              <Alert.Content>
-                <Alert.Title>Sources unavailable</Alert.Title>
-                <Alert.Description>
-                  Try refreshing this environment.
-                </Alert.Description>
-              </Alert.Content>
-            </Alert>
-          )}
-          {sources.data?.length === 0 && (
-            <p className="rounded-xl border border-dashed border-divider p-4 text-sm text-muted">
-              No sources yet. Search indexed configuration files below or paste
-              a project-relative path.
-            </p>
-          )}
-          {sources.data && sources.data.length > 0 && (
-            <DndContext
-              collisionDetection={closestCenter}
-              onDragEnd={reorder}
-              sensors={sensors}
+      <DialogBody className="p-0">
+        <div className="flex h-[460px] min-h-0 min-w-0">
+          {/* Left Mini Navigation Sidebar */}
+          <nav
+            aria-label="Environment settings sections"
+            className="w-48 shrink-0 border-r border-divider bg-surface-secondary/40 p-2 space-y-1"
+          >
+            <button
+              aria-current={activeSection === 'general' ? 'page' : undefined}
+              className={`flex w-full items-center gap-2 rounded px-2.5 py-2 text-left text-xs font-medium transition ${
+                activeSection === 'general'
+                  ? 'bg-accent-subtle/40 text-accent font-semibold'
+                  : 'text-muted hover:bg-surface-secondary hover:text-foreground'
+              }`}
+              onClick={() => setActiveSection('general')}
+              type="button"
             >
-              <SortableContext
-                items={sourceIds}
-                strategy={verticalListSortingStrategy}
-              >
-                <ul className="space-y-2">
-                  {sources.data.map((source) => (
-                    <SortableSource
-                      isIssueOpen={source.id === openIssueSourceId}
-                      key={source.id}
-                      onIssueOpenChange={(isOpen) => {
-                        setOpenIssueSourceId((currentId) =>
-                          isOpen
-                            ? source.id
-                            : currentId === source.id
-                              ? null
-                              : currentId,
-                        );
-                      }}
-                      onRemove={() => remove(source.id)}
-                      source={source}
-                    />
-                  ))}
-                </ul>
-              </SortableContext>
-            </DndContext>
-          )}
-        </section>
-
-        <section
-          aria-labelledby="find-source-heading"
-          className="flex flex-col gap-3 border-t border-divider pt-5"
-        >
-          <div>
-            <h2 className="font-medium" id="find-source-heading">
-              Find an indexed configuration file
-            </h2>
-            <p className="text-sm text-muted">
-              Search uses the project’s local file inventory and returns a page
-              at a time.
-            </p>
-          </div>
-          <TextField fullWidth variant="secondary">
-            <Label>Search filename or project-relative path</Label>
-            <Input
-              onChange={(event) => {
-                setSearch(event.target.value);
-                setPage(1);
-              }}
-              placeholder="config/local.env"
-              value={search}
-            />
-          </TextField>
-          {candidates.isPending ? (
-            <Spinner aria-label="Searching indexed files" size="sm" />
-          ) : null}
-          {candidates.isError ? (
-            <Alert role="alert" status="danger">
-              <Alert.Indicator />
-              <Alert.Content>
-                <Alert.Title>Indexed files unavailable</Alert.Title>
-                <Alert.Description>
-                  Run File Inventory and try again.
-                </Alert.Description>
-              </Alert.Content>
-            </Alert>
-          ) : null}
-          {candidates.data && (
-            <>
-              <p aria-live="polite" className="text-sm text-muted">
-                {candidates.data.totalItems.toLocaleString()} matching indexed
-                file{candidates.data.totalItems === 1 ? '' : 's'}
-              </p>
-              <ul className="divide-y divide-divider rounded-xl border border-divider">
-                {candidates.data.items.map((candidate) => (
-                  <li
-                    className="flex items-center justify-between gap-3 p-3"
-                    key={candidate.relativePath}
-                  >
-                    <span className="min-w-0 truncate font-mono text-sm">
-                      {candidate.relativePath}
-                    </span>
-                    <Button
-                      isDisabled={isBusy}
-                      onPress={() => add(candidate.relativePath)}
-                      size="sm"
-                      variant="secondary"
-                    >
-                      <IconPlus
-                        aria-hidden="true"
-                        size={ICON_SIZE.small}
-                        stroke={ICON_STROKE}
-                      />
-                      Add
-                    </Button>
-                  </li>
-                ))}
-              </ul>
-              <AppPagination
-                ariaLabel="Configuration source pages"
-                onPageChange={setPage}
-                page={candidates.data.page}
-                totalPages={candidates.data.totalPages}
-              />
-            </>
-          )}
-        </section>
-
-        <section
-          aria-labelledby="manual-source-heading"
-          className="space-y-3 border-t border-divider pt-5"
-        >
-          <div>
-            <h2 className="font-medium" id="manual-source-heading">
-              Add by project-relative path
-            </h2>
-            <p className="text-sm text-muted">
-              For example: <span className="font-mono">config/local.env</span>.
-              The file must be inside the current project root, readable,
-              regular, and not a link or junction.
-            </p>
-          </div>
-          <div className="flex flex-col gap-2 sm:flex-row">
-            <TextField className="min-w-0 flex-1" variant="secondary">
-              <Label className="sr-only">
-                Project-relative configuration path
-              </Label>
-              <Input
-                list="environment-source-suggestions"
-                onChange={(event) => setRelativePath(event.target.value)}
-                placeholder="config/local.env"
-                value={relativePath}
-              />
-            </TextField>
-            <Button
-              isDisabled={isBusy || !relativePath.trim()}
-              onPress={() => add()}
-              variant="primary"
-            >
-              <IconSearch
+              <IconAdjustments
                 aria-hidden="true"
-                size={ICON_SIZE.button}
+                size={ICON_SIZE.small}
                 stroke={ICON_STROKE}
               />
-              Add source
-            </Button>
-          </div>
-          <datalist id="environment-source-suggestions">
-            {candidates.data?.items.map((candidate) => (
-              <option
-                key={candidate.relativePath}
-                value={candidate.relativePath}
+              General
+            </button>
+            <button
+              aria-current={activeSection === 'sources' ? 'page' : undefined}
+              className={`flex w-full items-center justify-between rounded px-2.5 py-2 text-left text-xs font-medium transition ${
+                activeSection === 'sources'
+                  ? 'bg-accent-subtle/40 text-accent font-semibold'
+                  : 'text-muted hover:bg-surface-secondary hover:text-foreground'
+              }`}
+              onClick={() => setActiveSection('sources')}
+              type="button"
+            >
+              <span className="flex items-center gap-2">
+                <IconListCheck
+                  aria-hidden="true"
+                  size={ICON_SIZE.small}
+                  stroke={ICON_STROKE}
+                />
+                Configured Sources
+              </span>
+              {sources.data && (
+                <span className="font-mono text-[10px] text-muted">
+                  {sources.data.length}
+                </span>
+              )}
+            </button>
+            <button
+              aria-current={activeSection === 'add-source' ? 'page' : undefined}
+              className={`flex w-full items-center gap-2 rounded px-2.5 py-2 text-left text-xs font-medium transition ${
+                activeSection === 'add-source'
+                  ? 'bg-accent-subtle/40 text-accent font-semibold'
+                  : 'text-muted hover:bg-surface-secondary hover:text-foreground'
+              }`}
+              onClick={() => setActiveSection('add-source')}
+              type="button"
+            >
+              <IconPlus
+                aria-hidden="true"
+                size={ICON_SIZE.small}
+                stroke={ICON_STROKE}
               />
-            ))}
-          </datalist>
-        </section>
+              Add Source
+            </button>
+            <div className="pt-4 border-t border-divider my-2">
+              <button
+                aria-current={activeSection === 'danger' ? 'page' : undefined}
+                className={`flex w-full items-center gap-2 rounded px-2.5 py-2 text-left text-xs font-medium transition ${
+                  activeSection === 'danger'
+                    ? 'bg-danger/10 text-danger font-semibold'
+                    : 'text-muted hover:bg-danger/5 hover:text-danger'
+                }`}
+                onClick={() => setActiveSection('danger')}
+                type="button"
+              >
+                <IconAlertTriangle
+                  aria-hidden="true"
+                  size={ICON_SIZE.small}
+                  stroke={ICON_STROKE}
+                />
+                Danger Zone
+              </button>
+            </div>
+          </nav>
+
+          {/* Right Active Section Panel */}
+          <main className="flex-1 min-w-0 flex flex-col min-h-0 overflow-y-auto p-4 space-y-4">
+            {environment && activeSection === 'general' && (
+              <EnvironmentGeneralSection
+                environment={environment}
+                isSaving={updateEnvironment.isPending}
+                onRename={renameEnvironment}
+              />
+            )}
+
+            {activeSection === 'sources' && (
+              <section
+                aria-labelledby="configured-sources-heading"
+                className="space-y-4"
+              >
+                <div>
+                  <h2
+                    className="font-medium text-foreground text-sm"
+                    id="configured-sources-heading"
+                  >
+                    Configured sources
+                  </h2>
+                  <p className="text-xs text-muted leading-relaxed">
+                    Drag to set priority order. Configuration values are never
+                    read or stored.
+                  </p>
+                </div>
+                {sources.isPending && (
+                  <Spinner
+                    aria-label="Loading configuration sources"
+                    size="sm"
+                  />
+                )}
+                {sources.isError && (
+                  <Alert role="alert" status="danger">
+                    <Alert.Indicator />
+                    <Alert.Content>
+                      <Alert.Title>Sources unavailable</Alert.Title>
+                      <Alert.Description>
+                        Try refreshing this environment.
+                      </Alert.Description>
+                    </Alert.Content>
+                  </Alert>
+                )}
+                {sources.data?.length === 0 && (
+                  <div className="rounded-md border border-dashed border-divider p-6 text-center text-xs text-muted">
+                    No configuration sources configured yet. Go to{' '}
+                    <strong className="text-foreground">Add Source</strong> to
+                    attach files.
+                  </div>
+                )}
+                {sources.data && sources.data.length > 0 && (
+                  <DndContext
+                    collisionDetection={closestCenter}
+                    onDragEnd={reorder}
+                    sensors={sensors}
+                  >
+                    <SortableContext
+                      items={sourceIds}
+                      strategy={verticalListSortingStrategy}
+                    >
+                      <ul className="space-y-2">
+                        {sources.data.map((source) => (
+                          <SortableSource
+                            isIssueOpen={source.id === openIssueSourceId}
+                            key={source.id}
+                            onIssueOpenChange={(isOpen) => {
+                              setOpenIssueSourceId((currentId) =>
+                                isOpen
+                                  ? source.id
+                                  : currentId === source.id
+                                    ? null
+                                    : currentId,
+                              );
+                            }}
+                            onRemove={() => remove(source.id)}
+                            source={source}
+                          />
+                        ))}
+                      </ul>
+                    </SortableContext>
+                  </DndContext>
+                )}
+              </section>
+            )}
+
+            {activeSection === 'add-source' && (
+              <section
+                aria-labelledby="add-source-heading"
+                className="space-y-4"
+              >
+                <div>
+                  <h2
+                    className="font-medium text-foreground text-sm"
+                    id="add-source-heading"
+                  >
+                    Add Configuration Source
+                  </h2>
+                  <p className="text-xs text-muted">
+                    Attach configuration files from indexed project files or by
+                    relative path.
+                  </p>
+                </div>
+
+                <Tabs
+                  aria-label="Add source methods"
+                  selectedKey={addSourceTab}
+                  onSelectionChange={(key) =>
+                    setAddSourceTab(key as AddSourceSubTab)
+                  }
+                  variant="secondary"
+                >
+                  <Tabs.List>
+                    <Tabs.Tab id="indexed">Indexed Files</Tabs.Tab>
+                    <Tabs.Tab id="manual">Add by Path</Tabs.Tab>
+                  </Tabs.List>
+                  <Tabs.Panel id="indexed" className="pt-3 space-y-3">
+                    <TextField fullWidth variant="secondary">
+                      <Label className="sr-only">Search indexed files</Label>
+                      <Input
+                        onChange={(event) => {
+                          setSearch(event.target.value);
+                          setPage(1);
+                        }}
+                        placeholder="Search filename or path (e.g. config/local.env)"
+                        value={search}
+                      />
+                    </TextField>
+                    {candidates.isPending ? (
+                      <Spinner aria-label="Searching indexed files" size="sm" />
+                    ) : null}
+                    {candidates.data && (
+                      <>
+                        <p
+                          aria-live="polite"
+                          className="text-xs text-muted font-mono"
+                        >
+                          {candidates.data.totalItems.toLocaleString()} matching
+                          file
+                          {candidates.data.totalItems === 1 ? '' : 's'}
+                        </p>
+                        <ul className="divide-y divide-divider rounded-md border border-divider bg-surface max-h-48 overflow-y-auto">
+                          {candidates.data.items.map((candidate) => (
+                            <li
+                              className="flex items-center justify-between gap-3 px-3 py-2 text-xs"
+                              key={candidate.relativePath}
+                            >
+                              <span className="min-w-0 truncate font-mono">
+                                {candidate.relativePath}
+                              </span>
+                              <Button
+                                isDisabled={isBusy}
+                                onPress={() => add(candidate.relativePath)}
+                                size="sm"
+                                variant="secondary"
+                              >
+                                <IconPlus
+                                  aria-hidden="true"
+                                  size={ICON_SIZE.small}
+                                  stroke={ICON_STROKE}
+                                />
+                                Add
+                              </Button>
+                            </li>
+                          ))}
+                        </ul>
+                        {candidates.data.totalPages > 1 && (
+                          <AppPagination
+                            ariaLabel="Indexed file pages"
+                            onPageChange={setPage}
+                            page={candidates.data.page}
+                            totalPages={candidates.data.totalPages}
+                          />
+                        )}
+                      </>
+                    )}
+                  </Tabs.Panel>
+                  <Tabs.Panel id="manual" className="pt-3 space-y-3">
+                    <p className="text-xs text-muted leading-relaxed">
+                      Must be inside the current project root, readable, regular
+                      file (not a symlink/junction).
+                    </p>
+                    <div className="flex flex-col gap-2 sm:flex-row">
+                      <TextField className="min-w-0 flex-1" variant="secondary">
+                        <Label className="sr-only">
+                          Project-relative configuration path
+                        </Label>
+                        <Input
+                          onChange={(event) =>
+                            setRelativePath(event.target.value)
+                          }
+                          placeholder="config/local.env"
+                          value={relativePath}
+                        />
+                      </TextField>
+                      <Button
+                        isDisabled={isBusy || !relativePath.trim()}
+                        onPress={() => add()}
+                        variant="primary"
+                        size="sm"
+                      >
+                        <IconSearch
+                          aria-hidden="true"
+                          size={ICON_SIZE.small}
+                          stroke={ICON_STROKE}
+                        />
+                        Add source
+                      </Button>
+                    </div>
+                  </Tabs.Panel>
+                </Tabs>
+              </section>
+            )}
+
+            {environment && activeSection === 'danger' && (
+              <EnvironmentDangerZoneSection
+                environment={environment}
+                isDeleting={false}
+                onDelete={() => {
+                  onStartDeleteEnvironment?.(environment);
+                  onOpenChange(false);
+                }}
+              />
+            )}
+          </main>
+        </div>
       </DialogBody>
       <DialogFooter>
         <Button
@@ -462,7 +564,7 @@ function SortableSource({
       ref={setNodeRef}
       style={{ transform: CSS.Transform.toString(transform), transition }}
       {...attributes}
-      className="flex items-center gap-2 rounded-xl border border-divider bg-surface-secondary p-3"
+      className="flex items-center gap-2 rounded-md border border-divider bg-surface-secondary/60 p-2.5 text-xs"
     >
       <Button
         aria-label={`Reorder ${source.relativePath}`}
@@ -479,7 +581,7 @@ function SortableSource({
         />
       </Button>
       <div className="min-w-0 flex-1">
-        <p className="truncate font-mono text-sm">{source.relativePath}</p>
+        <p className="truncate font-mono">{source.relativePath}</p>
       </div>
       {shouldExplainIssue ? (
         <EnvironmentSourceIssuePopover
@@ -503,7 +605,7 @@ function SortableSource({
       >
         <IconTrash
           aria-hidden="true"
-          size={ICON_SIZE.button}
+          size={ICON_SIZE.small}
           stroke={ICON_STROKE}
         />
       </Button>

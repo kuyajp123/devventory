@@ -36,7 +36,9 @@ import {
   useEnvironmentMatrixSelectionStore,
 } from '../components/environment-matrix-selection-context';
 import { EnvironmentSourceManager } from '../components/EnvironmentSourceManager';
+import { EnvironmentUndoToast } from '../components/EnvironmentUndoToast';
 import { InspectEnvironmentMatrix } from '../components/InspectEnvironmentMatrix';
+import { usePendingEnvironmentDeletion } from '../hooks/use-pending-environment-deletion';
 import {
   useCreateEnvironmentMutation,
   useEnvironmentInspectMatrixQuery,
@@ -71,8 +73,28 @@ export function EnvironmentTrackerPage() {
   const previousProjectId = useRef(projectId);
   const matrixContainerRef = useRef<HTMLDivElement>(null);
 
+  const pendingDeletion = usePendingEnvironmentDeletion(
+    projectId ?? '',
+    (finalizedId) => {
+      if (selectedEnvironmentId === finalizedId) {
+        setSelectedEnvironmentId(null);
+      }
+      selectionStore.setSelection((currentSelection) =>
+        currentSelection?.environment.id === finalizedId
+          ? null
+          : currentSelection,
+      );
+    },
+  );
+
   const environments = useEnvironmentsQuery(projectId ?? '');
-  const environmentItems = environments.data ?? [];
+  const environmentItems = useMemo(
+    () =>
+      (environments.data ?? []).filter(
+        (env) => env.id !== pendingDeletion.pendingEnvironmentId,
+      ),
+    [environments.data, pendingDeletion.pendingEnvironmentId],
+  );
   const selectedEnvironment =
     environmentItems.find(
       (environment) => environment.id === selectedEnvironmentId,
@@ -584,24 +606,22 @@ export function EnvironmentTrackerPage() {
               : currentSelection,
           );
         }}
-        onEnvironmentDeleted={(environmentId) => {
+        onStartDeleteEnvironment={(environment) => {
           setSourceEnvironment(null);
-          setSelectedEnvironmentId((currentEnvironmentId) =>
-            currentEnvironmentId === environmentId
-              ? null
-              : currentEnvironmentId,
-          );
-          selectionStore.setSelection((currentSelection) =>
-            currentSelection?.environment.id === environmentId
-              ? null
-              : currentSelection,
-          );
+          pendingDeletion.startPendingDeletion(environment);
         }}
         onOpenChange={(isOpen) => {
           if (!isOpen) setSourceEnvironment(null);
         }}
-        projectId={projectId}
+        projectId={projectId ?? ''}
       />
+      {pendingDeletion.pending && (
+        <EnvironmentUndoToast
+          environmentName={pendingDeletion.pending.environment.name}
+          onUndo={pendingDeletion.undoPendingDeletion}
+          secondsRemaining={pendingDeletion.pending.secondsRemaining}
+        />
+      )}
     </div>
   );
 }
