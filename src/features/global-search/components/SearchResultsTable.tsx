@@ -29,7 +29,9 @@ interface SearchResultsTableProps {
   items: SearchResult[];
   onOpenResult: (result: SearchResult) => void;
   onRequestChange: (request: SearchMetadataRequest) => void;
+  onSelectResult?: (result: SearchResult) => void;
   request: SearchMetadataRequest;
+  selectedResultId?: string | null;
   totalItems: number;
   totalPages: number;
 }
@@ -44,7 +46,9 @@ export function SearchResultsTable({
   items,
   onOpenResult,
   onRequestChange,
+  onSelectResult,
   request,
+  selectedResultId,
   totalItems,
   totalPages,
 }: SearchResultsTableProps) {
@@ -55,11 +59,14 @@ export function SearchResultsTable({
       {
         accessorFn: (result) => result.name,
         cell: ({ row }) => (
-          <div className="min-w-52 max-w-md">
-            <p className="truncate font-medium text-foreground">
+          <div className="min-w-44 max-w-xs">
+            <p className="truncate font-medium text-foreground text-xs">
               {row.original.name}
             </p>
-            <p className="truncate font-mono text-xs text-muted">
+            <p
+              className="truncate font-mono text-[11px] text-muted"
+              title={resultContext(row.original)}
+            >
               {resultContext(row.original)}
             </p>
           </div>
@@ -76,7 +83,7 @@ export function SearchResultsTable({
       {
         accessorFn: (result) => result.projectName,
         cell: ({ row }) => (
-          <span className="whitespace-nowrap text-xs">
+          <span className="whitespace-nowrap text-xs font-medium text-secondary">
             {row.original.projectName}
           </span>
         ),
@@ -93,7 +100,7 @@ export function SearchResultsTable({
         accessorFn: (result) =>
           result.resultType === 'file' ? result.modifiedAtMs : null,
         cell: ({ row }) => (
-          <span className="whitespace-nowrap text-xs text-muted">
+          <span className="whitespace-nowrap font-mono text-[11px] text-muted">
             {row.original.resultType === 'file'
               ? formatModified(row.original.modifiedAtMs)
               : '—'}
@@ -107,7 +114,17 @@ export function SearchResultsTable({
           <Button
             aria-label={`Open ${row.original.name}`}
             isIconOnly
-            onPress={() => onOpenResult(row.original)}
+            onPress={(e) => {
+              // Prevent row selection side effect when clicking Open button
+              if (
+                e &&
+                'stopPropagation' in e &&
+                typeof e.stopPropagation === 'function'
+              ) {
+                e.stopPropagation();
+              }
+              onOpenResult(row.original);
+            }}
             size="sm"
             variant="ghost"
           >
@@ -125,6 +142,7 @@ export function SearchResultsTable({
     ],
     [onOpenResult],
   );
+
   const sorting = useMemo<SortingState>(
     () =>
       request.sortBy === 'relevance'
@@ -137,6 +155,7 @@ export function SearchResultsTable({
           ],
     [request.sortBy, request.sortDirection],
   );
+
   const table = useTable({
     features: searchTableFeatures,
     columns,
@@ -181,7 +200,7 @@ export function SearchResultsTable({
       return (
         <div
           aria-label="Searching metadata"
-          className="flex min-h-56 items-center justify-center rounded-md border border-divider bg-surface"
+          className="flex flex-1 min-h-56 items-center justify-center rounded-[4px] border border-divider bg-surface"
           role="status"
         >
           <Spinner size="lg" />
@@ -189,14 +208,14 @@ export function SearchResultsTable({
       );
     }
     return (
-      <EmptyState className="rounded-md border border-dashed border-divider bg-surface p-10 text-center">
+      <EmptyState className="flex-1 rounded-[4px] border border-dashed border-divider bg-surface p-10 text-center">
         <IconSearchOff
           aria-hidden="true"
           className="mx-auto text-muted"
           size={ICON_SIZE.emptyState}
           stroke={ICON_STROKE}
         />
-        <h2 className="mt-3 text-base font-semibold">No metadata matched</h2>
+        <h2 className="mt-3 text-sm font-semibold">No metadata matched</h2>
         <p className="mt-1 text-xs text-muted">
           Try a broader query or remove one of the advanced filters.
         </p>
@@ -205,17 +224,26 @@ export function SearchResultsTable({
   }
 
   return (
-    <section className="overflow-hidden rounded-md border border-divider bg-surface">
-      <div className="flex items-center justify-between border-b border-divider px-4 py-2 font-mono text-xs text-muted">
+    <section className="flex flex-1 flex-col min-h-0 min-w-0 rounded-[4px] border border-divider bg-surface overflow-hidden">
+      {/* Result Count Header Bar */}
+      <div className="flex h-9 shrink-0 items-center justify-between border-b border-divider px-3.5 font-mono text-xs text-muted bg-surface">
         <span>{totalItems.toLocaleString()} matching results</span>
         {isFetching && (
           <Spinner aria-label="Refreshing search results" size="sm" />
         )}
       </div>
-      <Table variant="secondary">
-        <Table.ScrollContainer>
-          <Table.Content aria-label="Global metadata search results">
-            <Table.Header>
+
+      {/* Table Container - Owns vertical and horizontal scrolling */}
+      <Table
+        className="flex flex-1 flex-col min-h-0 min-w-0"
+        variant="secondary"
+      >
+        <Table.ScrollContainer className="flex-1 min-h-0 min-w-0 overflow-auto">
+          <Table.Content
+            aria-label="Global metadata search results"
+            className="min-w-[640px]"
+          >
+            <Table.Header className="sticky top-0 z-10 bg-surface">
               {table.getFlatHeaders().map((header, index) => (
                 <Table.Column
                   id={header.id}
@@ -244,20 +272,45 @@ export function SearchResultsTable({
               ))}
             </Table.Header>
             <Table.Body items={table.getRowModel().rows}>
-              {(row) => (
-                <Table.Row id={row.id}>
-                  {row.getAllCells().map((cell) => (
-                    <Table.Cell key={cell.id}>
-                      <table.FlexRender cell={cell} />
-                    </Table.Cell>
-                  ))}
-                </Table.Row>
-              )}
+              {(row) => {
+                const isSelected = selectedResultId === row.id;
+                return (
+                  <Table.Row
+                    className={`cursor-pointer transition-colors ${
+                      isSelected
+                        ? 'bg-accent-subtle/30 font-medium'
+                        : 'hover:bg-workspace-hover'
+                    }`}
+                    id={row.id}
+                    onClick={() => {
+                      if (onSelectResult) onSelectResult(row.original);
+                    }}
+                    onPress={() => {
+                      if (onSelectResult) onSelectResult(row.original);
+                    }}
+                  >
+                    {row.getAllCells().map((cell) => (
+                      <Table.Cell
+                        key={cell.id}
+                        onClick={() => {
+                          if (cell.column.id !== 'actions' && onSelectResult) {
+                            onSelectResult(row.original);
+                          }
+                        }}
+                      >
+                        <table.FlexRender cell={cell} />
+                      </Table.Cell>
+                    ))}
+                  </Table.Row>
+                );
+              }}
             </Table.Body>
           </Table.Content>
         </Table.ScrollContainer>
       </Table>
-      <div className="border-t border-divider p-3">
+
+      {/* Pagination Footer */}
+      <div className="shrink-0 border-t border-divider p-2.5 bg-surface">
         <AppPagination
           ariaLabel="Global search pages"
           onPageChange={(page) => onRequestChange({ ...request, page })}
@@ -272,13 +325,15 @@ export function SearchResultsTable({
 function ResultTypeChip({ result }: { result: SearchResult }) {
   const label =
     result.resultType === 'environment_key'
-      ? 'Environment key'
+      ? 'Env key'
       : result.resultType === 'file' && result.origin === 'managed'
-        ? 'Managed asset'
+        ? 'Managed'
         : result.resultType;
   return (
     <Chip size="sm" variant="soft">
-      <Chip.Label className="capitalize">{label}</Chip.Label>
+      <Chip.Label className="capitalize font-mono text-[10px]">
+        {label}
+      </Chip.Label>
     </Chip>
   );
 }
@@ -290,25 +345,22 @@ function ResultMetadata({ result }: { result: SearchResult }) {
   return (
     <div className="flex max-w-xs flex-wrap gap-1">
       <Chip size="sm" variant="soft">
-        <Chip.Label className="capitalize">{result.category}</Chip.Label>
+        <Chip.Label className="capitalize text-[10px]">
+          {result.category}
+        </Chip.Label>
       </Chip>
       <SemanticStatusChip
         dataStatus={result.status}
         label={result.status}
-        labelClassName="capitalize"
+        labelClassName="capitalize text-[10px]"
         tone={result.status === 'active' ? 'success' : 'warning'}
       />
-      {result.tags.slice(0, 2).map((tag) => (
-        <Chip key={tag} size="sm" variant="soft">
-          <Chip.Label>{tag}</Chip.Label>
-        </Chip>
-      ))}
     </div>
   );
 }
 
 function formatModified(value: number | null): string {
-  if (value === null) return 'Unavailable';
+  if (value === null) return '—';
   return new Intl.DateTimeFormat(undefined, { dateStyle: 'medium' }).format(
     new Date(value),
   );

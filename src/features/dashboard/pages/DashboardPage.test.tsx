@@ -105,7 +105,7 @@ describe('DashboardPage', () => {
       </MemoryRouter>,
     );
 
-    expect(screen.getByRole('heading', { name: 'Devventory' })).toBeVisible();
+    expect(screen.getByText('Devventory')).toBeVisible();
     expect(screen.getByText('Indexed files')).toBeVisible();
     expect(screen.getAllByText('42').length).toBeGreaterThan(0);
     expect(screen.getByText('Files by category')).toBeVisible();

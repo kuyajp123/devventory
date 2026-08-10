@@ -1,7 +1,7 @@
+import { renderWithProviders } from '@/test/render';
 import { screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
-import { renderWithProviders } from '@/test/render';
 import { DEFAULT_SEARCH_REQUEST, type SearchResult } from '../models/search';
 import { SearchResultsTable } from './SearchResultsTable';
 
@@ -56,6 +56,36 @@ describe('SearchResultsTable', () => {
     expect(onRequestChange).toHaveBeenCalledWith(
       expect.objectContaining({ page: 2 }),
     );
+  });
+
+  it('triggers row selection on row click, but clicking Open stops propagation', async () => {
+    const onSelectResult = vi.fn();
+    const onOpenResult = vi.fn();
+    const user = userEvent.setup();
+
+    renderWithProviders(
+      <SearchResultsTable
+        isFetching={false}
+        items={[result]}
+        onOpenResult={onOpenResult}
+        onRequestChange={vi.fn()}
+        onSelectResult={onSelectResult}
+        request={DEFAULT_SEARCH_REQUEST}
+        selectedResultId={null}
+        totalItems={1}
+        totalPages={1}
+      />,
+    );
+
+    await user.click(screen.getByText('logo-dark.png'));
+    expect(onSelectResult).toHaveBeenCalledWith(result);
+
+    onSelectResult.mockClear();
+    await user.click(
+      screen.getByRole('button', { name: 'Open logo-dark.png' }),
+    );
+    expect(onOpenResult).toHaveBeenCalledWith(result);
+    expect(onSelectResult).not.toHaveBeenCalled();
   });
 
   it('shows explicit loading and empty states without rendering an unbounded table', () => {
