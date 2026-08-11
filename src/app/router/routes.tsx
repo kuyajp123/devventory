@@ -12,7 +12,6 @@ import {
   NotificationsSettingsSection,
   SettingsPage,
 } from '@/features/settings';
-import { ValidationCenterPage } from '@/features/validation-center';
 import { IS_DIAGNOSTICS_ENABLED } from '@/shared/config/development.config';
 import { AppLayout } from '../layouts/AppLayout';
 import { NotFoundPage } from '../pages/NotFoundPage';
@@ -35,8 +34,11 @@ export const appRoutes: RouteObject[] = [
         element: <ProjectRequiredRoute />,
         children: [
           { path: 'files', Component: LazyFileInventoryRoute },
-          { path: 'environments', Component: EnvironmentTrackerPage },
-          { path: 'validation', Component: ValidationCenterPage },
+          { path: 'environments/*', Component: EnvironmentTrackerPage },
+          {
+            path: 'validation',
+            element: <Navigate replace to="/environments/rules" />,
+          },
           {
             path: 'assets',
             element: <Navigate replace to="/files?view=assets" />,

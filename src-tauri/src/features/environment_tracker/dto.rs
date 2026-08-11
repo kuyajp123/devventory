@@ -194,6 +194,7 @@ impl TryFrom<EnvironmentSourceCandidateQueryInput> for EnvironmentSourceCandidat
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub(crate) struct EnvironmentMatrixQueryInput {
     project_id: String,
+    environment_id: Option<String>,
     search: Option<String>,
     page: u32,
     page_size: u32,
@@ -205,6 +206,11 @@ impl TryFrom<EnvironmentMatrixQueryInput> for EnvironmentMatrixQuery {
     fn try_from(input: EnvironmentMatrixQueryInput) -> Result<Self, Self::Error> {
         Ok(Self {
             project_id: parse_uuid(&input.project_id)?,
+            environment_id: input
+                .environment_id
+                .as_deref()
+                .map(parse_uuid)
+                .transpose()?,
             search: normalize_optional(input.search, MAX_SEARCH_LENGTH)?,
             page: valid_page(input.page, input.page_size)?,
             page_size: input.page_size,

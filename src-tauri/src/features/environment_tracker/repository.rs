@@ -5,10 +5,11 @@ use uuid::Uuid;
 
 use super::error::EnvironmentError;
 use super::model::{
-    Environment, EnvironmentMatrixCell, EnvironmentMatrixCellState, EnvironmentMatrixPage,
-    EnvironmentMatrixQuery, EnvironmentMatrixRow, EnvironmentMatrixSourceDetail, EnvironmentSource,
-    EnvironmentSourceCandidate, EnvironmentSourceCandidatePage, EnvironmentSourceCandidateQuery,
-    EnvironmentSourceParseStatus,
+    Environment, EnvironmentMatrixCell, EnvironmentMatrixCellState,
+    EnvironmentMatrixCellValidation, EnvironmentMatrixPage, EnvironmentMatrixQuery,
+    EnvironmentMatrixRow, EnvironmentMatrixRuleKey, EnvironmentMatrixSourceDetail,
+    EnvironmentSource, EnvironmentSourceCandidate, EnvironmentSourceCandidatePage,
+    EnvironmentSourceCandidateQuery, EnvironmentSourceParseStatus,
 };
 use super::parser::{ParsedEnvironmentSource, SafeParseIssue};
 
@@ -416,14 +417,17 @@ impl SqliteEnvironmentRepository {
     pub(crate) async fn matrix(
         &self,
         query: &EnvironmentMatrixQuery,
+        rule_keys: &[EnvironmentMatrixRuleKey],
     ) -> Result<EnvironmentMatrixPage, EnvironmentError> {
         let environments = self.list_environments(query.project_id).await?;
-        let mut count = QueryBuilder::<Sqlite>::new(
-            "SELECT COUNT(*) FROM environment_key_definitions WHERE project_id = ",
-        );
+        let rule_keys_json =
+            serde_json::to_string(rule_keys).map_err(|_| EnvironmentError::InvalidInput)?;
+        let mut count = QueryBuilder::<Sqlite>::new("");
+        push_matrix_keys(&mut count, query, &rule_keys_json);
+        count.push(" SELECT COUNT(*) FROM matrix_keys WHERE 1 = 1");
         push_matrix_filters(&mut count, query);
         let total_items = to_u64(count.build_query_scalar().fetch_one(&self.pool).await?)?;
-        let definitions = self.matrix_definitions(query).await?;
+        let definitions = self.matrix_definitions(query, &rule_keys_json).await?;
         let sources = self.sources_for_project(query.project_id).await?;
         let source_by_id = sources
             .iter()
@@ -462,8 +466,11 @@ impl SqliteEnvironmentRepository {
                         .iter()
                         .map(
                             |environment| -> Result<EnvironmentMatrixCell, EnvironmentError> {
-                                let occurrences = occurrences_by_key_environment
-                                    .get(&(definition_id, environment.id))
+                                let occurrences = definition_id
+                                    .and_then(|definition_id| {
+                                        occurrences_by_key_environment
+                                            .get(&(definition_id, environment.id))
+                                    })
                                     .map(Vec::as_slice)
                                     .unwrap_or_default();
                                 matrix_cell(
@@ -540,10 +547,11 @@ impl SqliteEnvironmentRepository {
     async fn matrix_definitions(
         &self,
         query: &EnvironmentMatrixQuery,
+        rule_keys_json: &str,
     ) -> Result<Vec<KeyDefinitionRow>, EnvironmentError> {
-        let mut builder = QueryBuilder::<Sqlite>::new(
-            "SELECT id, name FROM environment_key_definitions WHERE project_id = ",
-        );
+        let mut builder = QueryBuilder::<Sqlite>::new("");
+        push_matrix_keys(&mut builder, query, rule_keys_json);
+        builder.push(" SELECT id, name FROM matrix_keys WHERE 1 = 1");
         push_matrix_filters(&mut builder, query);
         builder.push(" ORDER BY normalized_name ASC, id ASC LIMIT ");
         builder.push_bind(i64::from(query.page_size));
@@ -565,6 +573,13 @@ impl SqliteEnvironmentRepository {
         if definitions.is_empty() {
             return Ok(Vec::new());
         }
+        let definition_ids = definitions
+            .iter()
+            .filter_map(|definition| definition.id.as_deref())
+            .collect::<Vec<_>>();
+        if definition_ids.is_empty() {
+            return Ok(Vec::new());
+        }
         let mut builder = QueryBuilder::<Sqlite>::new(
             "SELECT key_definition_id, environment_id, source_id, line_number, is_commented, is_duplicate
              FROM environment_key_occurrences WHERE project_id = ",
@@ -572,8 +587,8 @@ impl SqliteEnvironmentRepository {
         builder.push_bind(project_id.to_string());
         builder.push(" AND key_definition_id IN (");
         let mut separated = builder.separated(", ");
-        for definition in definitions {
-            separated.push_bind(&definition.id);
+        for definition_id in definition_ids {
+            separated.push_bind(definition_id);
         }
         separated.push_unseparated(")");
         Ok(builder
@@ -643,7 +658,60 @@ fn matrix_cell(
             .into_iter()
             .map(|(_, detail)| detail)
             .collect(),
+        validation: EnvironmentMatrixCellValidation::default(),
     })
+}
+
+fn push_matrix_keys(
+    builder: &mut QueryBuilder<Sqlite>,
+    query: &EnvironmentMatrixQuery,
+    rule_keys_json: &str,
+) {
+    builder.push(
+        "WITH matrix_keys AS (
+           SELECT d.id, d.name, d.normalized_name
+           FROM environment_key_definitions d
+           WHERE d.project_id = ",
+    );
+    builder.push_bind(query.project_id.to_string());
+    if let Some(environment_id) = query.environment_id {
+        builder.push(
+            " AND EXISTS (
+                SELECT 1 FROM environment_key_occurrences o
+                WHERE o.project_id = d.project_id
+                  AND o.key_definition_id = d.id
+                  AND o.environment_id = ",
+        );
+        builder.push_bind(environment_id.to_string());
+        builder.push(")");
+    }
+    builder.push(
+        " UNION ALL
+          SELECT NULL AS id,
+                 json_extract(rule.value, '$.name') AS name,
+                 json_extract(rule.value, '$.normalizedName') AS normalized_name
+          FROM json_each(",
+    );
+    builder.push_bind(rule_keys_json.to_owned());
+    builder.push(
+        ") AS rule WHERE NOT EXISTS (
+        SELECT 1 FROM environment_key_definitions d
+        WHERE d.project_id = ",
+    );
+    builder.push_bind(query.project_id.to_string());
+    builder.push(" AND d.normalized_name = json_extract(rule.value, '$.normalizedName')");
+    if let Some(environment_id) = query.environment_id {
+        builder.push(
+            " AND EXISTS (
+                SELECT 1 FROM environment_key_occurrences o
+                WHERE o.project_id = d.project_id
+                  AND o.key_definition_id = d.id
+                  AND o.environment_id = ",
+        );
+        builder.push_bind(environment_id.to_string());
+        builder.push(")");
+    }
+    builder.push("))");
 }
 
 async fn find_or_create_key_definition(
@@ -727,7 +795,6 @@ fn push_candidate_filters(
 }
 
 fn push_matrix_filters(builder: &mut QueryBuilder<Sqlite>, query: &EnvironmentMatrixQuery) {
-    builder.push_bind(query.project_id.to_string());
     if let Some(search) = &query.search {
         builder.push(" AND lower(name) LIKE lower(");
         builder.push_bind(format!("%{}%", escape_like(search)));
@@ -867,13 +934,13 @@ struct SourceCandidateRow {
 
 #[derive(Debug, FromRow)]
 struct KeyDefinitionRow {
-    id: String,
+    id: Option<String>,
     name: String,
 }
 
 impl KeyDefinitionRow {
-    fn id(&self) -> Result<Uuid, EnvironmentError> {
-        parse_uuid(&self.id)
+    fn id(&self) -> Result<Option<Uuid>, EnvironmentError> {
+        self.id.as_deref().map(parse_uuid).transpose()
     }
 }
 

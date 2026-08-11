@@ -152,11 +152,20 @@ impl EnvironmentService {
         self.repository.source_candidates(&query).await
     }
 
+    #[cfg(test)]
     pub(crate) async fn matrix(
         &self,
         query: EnvironmentMatrixQuery,
     ) -> Result<EnvironmentMatrixPage, EnvironmentError> {
-        self.repository.matrix(&query).await
+        self.repository.matrix(&query, &[]).await
+    }
+
+    pub(crate) async fn matrix_with_rule_keys(
+        &self,
+        query: EnvironmentMatrixQuery,
+        rule_keys: &[super::model::EnvironmentMatrixRuleKey],
+    ) -> Result<EnvironmentMatrixPage, EnvironmentError> {
+        self.repository.matrix(&query, rule_keys).await
     }
 
     pub(crate) async fn refresh_environment(

@@ -71,6 +71,32 @@ const selection: EnvironmentKeySelection = {
   environment,
   keyName: 'NARRATIVE_LIVE_REPORT_ID',
   sourceDetails,
+  validation: { openIssues: [], rules: [] },
+};
+
+const warningValidation = {
+  openIssues: [
+    {
+      environmentId: environment.id,
+      environmentName: environment.name,
+      firstSeenAt: '2026-08-08T00:00:00.000Z',
+      id: 'f5443f4c-f04c-4ccf-850b-fbe53d24fcba',
+      issueType: 'duplicate' as const,
+      keyName: selection.keyName,
+      lastSeenAt: '2026-08-08T00:00:00.000Z',
+      lineNumber: null,
+      message: 'This key has multiple active definitions.',
+      observedName: null,
+      projectId: environment.projectId,
+      resolvedAt: null,
+      ruleId: null,
+      severity: 'warning' as const,
+      sourcePath: null,
+      status: 'open' as const,
+      updatedAt: '2026-08-08T00:00:00.000Z',
+    },
+  ],
+  rules: [],
 };
 
 const inspectMatrix = {
@@ -83,6 +109,7 @@ const inspectMatrix = {
         {
           sourceDetails,
           state: 'present' as const,
+          validation: warningValidation,
         },
       ],
       keyName: selection.keyName,
@@ -92,6 +119,7 @@ const inspectMatrix = {
         {
           sourceDetails: [sourceDetails[0]],
           state: 'present' as const,
+          validation: { openIssues: [], rules: [] },
         },
       ],
       keyName: 'SECURITY_EVENT_SECRET',
@@ -111,10 +139,12 @@ const compareMatrix = {
         {
           sourceDetails: [sourceDetails[0]],
           state: 'present' as const,
+          validation: warningValidation,
         },
         {
           sourceDetails: [],
           state: 'absent' as const,
+          validation: { openIssues: [], rules: [] },
         },
       ],
       keyName: selection.keyName,
@@ -124,10 +154,12 @@ const compareMatrix = {
         {
           sourceDetails: [],
           state: 'absent' as const,
+          validation: { openIssues: [], rules: [] },
         },
         {
           sourceDetails: [sourceDetails[0]],
           state: 'present' as const,
+          validation: { openIssues: [], rules: [] },
         },
       ],
       keyName: 'SUPABASE_PROJECT_REF',
@@ -197,6 +229,11 @@ describe('environment selection indicators', () => {
 
     expect(firstDefinition).toHaveAttribute('aria-pressed', 'true');
     expect(firstDefinition).toHaveAttribute('data-selected', 'true');
+    expect(firstDefinition).toHaveClass(
+      'bg-surface-secondary',
+      'ring-foreground/25',
+    );
+    expect(firstDefinition).not.toHaveClass('focus-visible:ring-accent');
     expect(
       document.querySelectorAll('[data-definition-path][data-selected="true"]'),
     ).toHaveLength(1);
@@ -279,21 +316,38 @@ describe('environment selection indicators', () => {
     );
   });
 
+  it('preserves warning borders while selection uses a neutral inset ring', async () => {
+    const user = userEvent.setup();
+
+    renderWithProviders(<CompareSelectionHarness />);
+    const warningCell = screen.getByRole('button', {
+      name: /NARRATIVE_LIVE_REPORT_ID in Staging: Present.*warning validation issue/,
+    });
+
+    expect(warningCell).toHaveClass('border-warning');
+    await user.click(warningCell);
+    expect(warningCell).toHaveClass('border-warning', 'ring-inset');
+    expect(warningCell).toHaveClass('ring-foreground/25');
+    expect(warningCell).not.toHaveClass('border-accent');
+    expect(warningCell).not.toHaveClass('focus-visible:ring-accent');
+    expect(warningCell).toHaveAttribute('data-validation-severity', 'warning');
+  });
+
   it('moves the inspect-view indicator between source cells and keeps headers sticky', async () => {
     const user = userEvent.setup();
 
     renderWithProviders(<InspectSelectionHarness />);
 
     expect(screen.getByTestId('inspect-environment-matrix-scroll')).toHaveClass(
-      'max-h-[70vh]',
+      'h-full',
       'overflow-auto',
     );
 
     const firstCell = screen.getByRole('button', {
-      name: 'NARRATIVE_LIVE_REPORT_ID in .env.playwright.local: Active',
+      name: /NARRATIVE_LIVE_REPORT_ID in \.env\.playwright\.local: Active.*warning validation issue/,
     });
     const secondCell = screen.getByRole('button', {
-      name: 'NARRATIVE_LIVE_REPORT_ID in .env.security-test.local: Commented',
+      name: /NARRATIVE_LIVE_REPORT_ID in \.env\.security-test\.local: Commented.*warning validation issue/,
     });
 
     await user.click(firstCell);

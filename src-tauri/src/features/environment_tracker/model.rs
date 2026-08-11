@@ -1,6 +1,8 @@
 use serde::Serialize;
 use uuid::Uuid;
 
+use crate::features::validation_center::{ValidationIssue, ValidationRule};
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub(crate) struct Environment {
@@ -115,6 +117,14 @@ pub(crate) struct EnvironmentMatrixSourceDetail {
 pub(crate) struct EnvironmentMatrixCell {
     pub(crate) state: EnvironmentMatrixCellState,
     pub(crate) source_details: Vec<EnvironmentMatrixSourceDetail>,
+    pub(crate) validation: EnvironmentMatrixCellValidation,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct EnvironmentMatrixCellValidation {
+    pub(crate) rules: Vec<ValidationRule>,
+    pub(crate) open_issues: Vec<ValidationIssue>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -161,7 +171,15 @@ pub(crate) struct EnvironmentSourceCandidateQuery {
 #[derive(Debug, Clone)]
 pub(crate) struct EnvironmentMatrixQuery {
     pub(super) project_id: Uuid,
+    pub(super) environment_id: Option<Uuid>,
     pub(super) search: Option<String>,
     pub(super) page: u32,
     pub(super) page_size: u32,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct EnvironmentMatrixRuleKey {
+    pub(crate) name: String,
+    pub(crate) normalized_name: String,
 }

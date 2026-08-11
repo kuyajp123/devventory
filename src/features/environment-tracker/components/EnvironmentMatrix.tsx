@@ -51,6 +51,11 @@ import {
   type EnvironmentMatrixSelectionStore,
   useEnvironmentMatrixCellSelection,
 } from './environment-matrix-selection-context';
+import {
+  getEnvironmentCellPresentation,
+  highestOpenValidationSeverity,
+  validationSeverityLabel,
+} from './environment-validation-presentation';
 
 interface EnvironmentMatrixProps {
   isRefreshingId: string | null;
@@ -73,6 +78,7 @@ interface EnvironmentMatrixBodyProps {
 const ABSENT_CELL: EnvironmentMatrixCell = {
   sourceDetails: [],
   state: 'absent',
+  validation: { openIssues: [], rules: [] },
 };
 
 const noopSortingStrategy = () => null;
@@ -232,7 +238,10 @@ export function EnvironmentMatrix({
   }
 
   return (
-    <section aria-label="Environment comparison matrix" className="space-y-2">
+    <section
+      aria-label="Environment comparison matrix"
+      className="flex h-full min-h-0 flex-col"
+    >
       <DndContext
         collisionDetection={closestCenter}
         modifiers={dragModifiers}
@@ -246,10 +255,10 @@ export function EnvironmentMatrix({
           strategy={noopSortingStrategy}
         >
           <EnvironmentMatrixSelectionProvider store={selectionStore}>
-            <Table variant="secondary">
+            <Table className="min-h-0 flex-1" variant="secondary">
               <Table.ScrollContainer
                 ref={scrollContainerRef}
-                className="max-h-[74vh] overflow-auto overscroll-contain"
+                className="h-full min-h-0 overflow-auto overscroll-contain"
                 data-testid="environment-matrix-scroll"
               >
                 <Table.Content
@@ -505,16 +514,22 @@ const MatrixCell = memo(function MatrixCell({
   const commentedCount = cell.sourceDetails.length - activeCount;
   const status = cellLabel(cell, activeCount);
   const summary = cellSummary(cell, activeCount, commentedCount);
+  const validationSeverity = highestOpenValidationSeverity(
+    cell.validation.openIssues,
+  );
+  const validationLabel = validationSeverityLabel(cell.validation.openIssues);
 
   return (
     <button
-      aria-label={`${keyName} in ${environment.name}: ${status}${
-        summary ? `. ${summary}` : ''
+      aria-label={`${keyName} in ${environment.name}: ${status}${summary ? `. ${summary}` : ''}${
+        validationLabel ? `. ${validationLabel}` : ''
       }`}
       aria-pressed={isSelected}
-      className={`flex h-full min-h-16 w-full items-center justify-between gap-3 rounded-lg border border-transparent p-3 text-left transition-colors hover:bg-surface-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent ${
-        isSelected ? 'relative z-10 border-accent bg-accent/15 shadow-sm' : ''
-      }`}
+      className={`flex h-full min-h-16 w-full items-center justify-between gap-3 rounded-[4px] border p-3 text-left transition-colors hover:bg-surface-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground/40 ${getEnvironmentCellPresentation(
+        validationSeverity,
+        isSelected,
+      )}`}
+      data-validation-severity={validationSeverity ?? undefined}
       data-cell-id={`${keyName}:${environment.id}`}
       data-selected={isSelected ? 'true' : undefined}
       onClick={() =>
@@ -522,6 +537,7 @@ const MatrixCell = memo(function MatrixCell({
           environment,
           keyName,
           sourceDetails: cell.sourceDetails,
+          validation: cell.validation,
         })
       }
       type="button"

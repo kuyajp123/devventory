@@ -15,11 +15,6 @@ test('keeps environment status colors stable while selecting and reordering colu
     localStorage.setItem('devventory.e2e.database', JSON.stringify(database));
   }, createMockDatabase());
 
-  await page.goto('/dashboard');
-  await expect(
-    page.getByRole('heading', { name: 'Environment DnD project' }),
-  ).toBeVisible();
-
   await page.goto('/environments');
   await expect(
     page.getByRole('heading', { name: 'Environment tracker' }),
@@ -31,6 +26,8 @@ test('keeps environment status colors stable while selecting and reordering colu
   await selectedAbsentCell.click();
 
   await expect(selectedAbsentCell).toHaveAttribute('data-selected', 'true');
+  await expect(selectedAbsentCell).toHaveClass(/bg-surface-secondary/);
+  await expect(selectedAbsentCell).not.toHaveClass(/focus-visible:ring-accent/);
   await expectStatusColor(page, 'Development', 'Present', 'chip--success');
   await expectStatusColor(page, 'Staging', 'Absent', 'chip--default');
   await expectStatusColor(page, 'Local', 'Present', 'chip--success');
@@ -187,6 +184,36 @@ test('shows copy guidance and confirms copied keys without a toast', async ({
       page.evaluate(() => sessionStorage.getItem('devventory.e2e.clipboard')),
     )
     .toBe('APP_MODE');
+});
+
+test('keeps validation in route-backed Environment Tracker tabs', async ({
+  page,
+}) => {
+  await page.addInitScript((database) => {
+    localStorage.setItem('devventory.e2e.database', JSON.stringify(database));
+  }, createMockDatabase());
+
+  await page.goto('/environments');
+  await page.getByRole('tab', { name: 'Rules & Health' }).click();
+  await expect(page).toHaveURL(/\/environments\/rules$/);
+  await expect(
+    page.getByRole('heading', { name: 'Validation rules', exact: true }),
+  ).toBeVisible();
+
+  await page.getByRole('tab', { name: /^Issues/ }).click();
+  await expect(page).toHaveURL(/\/environments\/issues$/);
+  await expect(page.getByLabel('Search issues')).toBeVisible();
+  const advancedFilters = page.getByRole('button', {
+    name: 'Toggle advanced issue filters',
+  });
+  await expect(advancedFilters).toHaveAttribute('aria-expanded', 'false');
+  await expect(page.getByText('Severity', { exact: true })).toHaveCount(0);
+  await advancedFilters.click();
+  await expect(advancedFilters).toHaveAttribute('aria-expanded', 'true');
+  await expect(page.getByText('Severity', { exact: true })).toBeVisible();
+
+  await page.goto('/validation');
+  await expect(page).toHaveURL(/\/environments\/rules$/);
 });
 
 async function dragColumn(page: Page, from: string, to: string) {

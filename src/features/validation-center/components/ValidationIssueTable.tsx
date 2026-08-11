@@ -61,17 +61,18 @@ export function ValidationIssueTable({
   }
 
   return (
-    <div>
-      <div className="flex items-center justify-between border-b border-divider px-4 py-2 text-xs text-muted">
+    <div className="flex h-full min-h-0 flex-col">
+      <div className="flex shrink-0 items-center justify-between border-b border-divider px-4 py-2 text-xs text-muted">
         <span>{totalItems.toLocaleString()} matching issues</span>
         {isLoading && (
           <Spinner aria-label="Refreshing validation issues" size="sm" />
         )}
       </div>
-      <Table variant="secondary">
-        <Table.ScrollContainer>
+      <Table className="min-h-0 flex-1" variant="secondary">
+        <Table.ScrollContainer className="h-full min-h-0 overflow-auto">
           <Table.Content
             aria-label="Validation issues"
+            className="min-w-[1050px]"
             onSortChange={(descriptor) => {
               const sort = descriptor.column as ValidationIssueFilters['sort'];
               if (
@@ -96,7 +97,7 @@ export function ValidationIssueTable({
               direction: filters.descending ? 'descending' : 'ascending',
             }}
           >
-            <Table.Header>
+            <Table.Header className="sticky top-0 z-20 bg-surface">
               <SortableColumn id="key" isRowHeader label="Key / issue" />
               <SortableColumn id="environment" label="Environment" />
               <SortableColumn id="severity" label="Severity" />
@@ -171,7 +172,7 @@ export function ValidationIssueTable({
           </Table.Content>
         </Table.ScrollContainer>
       </Table>
-      <div className="border-t border-divider p-3">
+      <div className="shrink-0 border-t border-divider p-3">
         <AppPagination
           ariaLabel="Validation issue pages"
           onPageChange={(page) => onFilterChange({ ...filters, page })}

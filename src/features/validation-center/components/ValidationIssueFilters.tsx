@@ -1,12 +1,18 @@
 import {
   Button,
+  Chip,
   Form,
   Label,
   ListBox,
   SearchField,
   Select,
 } from '@heroui/react';
-import { IconFilter, IconRefresh } from '@tabler/icons-react';
+import {
+  IconChevronDown,
+  IconChevronUp,
+  IconFilter,
+  IconRefresh,
+} from '@tabler/icons-react';
 import { type FormEvent, useState } from 'react';
 import type { Environment } from '@/features/environment-tracker';
 import { ICON_SIZE, ICON_STROKE } from '@/shared/constants/icon.constants';
@@ -43,6 +49,7 @@ export function ValidationIssueFiltersPanel({
   onReset: () => void;
   values: ValidationIssueFilters;
 }) {
+  const [isAdvancedOpen, setIsAdvancedOpen] = useState(false);
   const [search, setSearch] = useState(values.search ?? '');
   const [environmentId, setEnvironmentId] = useState(
     values.environmentId ?? ALL,
@@ -59,6 +66,12 @@ export function ValidationIssueFiltersPanel({
   const [status, setStatus] = useState<ValidationIssueStatus | typeof ALL>(
     values.status ?? 'open',
   );
+  const activeFilterCount =
+    (environmentId !== ALL ? 1 : 0) +
+    (issueType !== ALL ? 1 : 0) +
+    (ruleType !== ALL ? 1 : 0) +
+    (severity !== ALL ? 1 : 0) +
+    (status !== 'open' ? 1 : 0);
 
   function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -80,110 +93,153 @@ export function ValidationIssueFiltersPanel({
       onSubmit={submit}
       validationBehavior="aria"
     >
-      <div className="grid gap-2.5 sm:grid-cols-2 xl:grid-cols-5">
-        <SearchField
-          className="xl:col-span-2"
-          fullWidth
-          onChange={setSearch}
-          value={search}
-          variant="secondary"
-        >
-          <Label>Search issues</Label>
-          <SearchField.Group>
-            <SearchField.SearchIcon />
-            <SearchField.Input
-              maxLength={128}
-              placeholder="Key, path, or issue"
-            />
-            <SearchField.ClearButton aria-label="Clear issue search" />
-          </SearchField.Group>
-        </SearchField>
-        <FilterSelect
-          label="Status"
-          onChange={(value) =>
-            setStatus(value as ValidationIssueStatus | typeof ALL)
-          }
-          options={[
-            { label: 'All statuses', value: ALL },
-            { label: 'Open', value: 'open' },
-            { label: 'Ignored', value: 'ignored' },
-            { label: 'Resolved', value: 'resolved' },
-          ]}
-          value={status}
-        />
-        <FilterSelect
-          label="Severity"
-          onChange={(value) =>
-            setSeverity(value as ValidationSeverity | typeof ALL)
-          }
-          options={[
-            { label: 'All severities', value: ALL },
-            { label: 'Error', value: 'error' },
-            { label: 'Warning', value: 'warning' },
-            { label: 'Info', value: 'info' },
-          ]}
-          value={severity}
-        />
-        <FilterSelect
-          label="Environment"
-          onChange={setEnvironmentId}
-          options={[
-            { label: 'All environments', value: ALL },
-            ...environments.map((environment) => ({
-              label: environment.name,
-              value: environment.id,
-            })),
-          ]}
-          value={environmentId}
-        />
-        <FilterSelect
-          label="Rule type"
-          onChange={(value) =>
-            setRuleType(value as ValidationRuleType | typeof ALL)
-          }
-          options={[
-            { label: 'All rule types', value: ALL },
-            { label: 'Required', value: 'required' },
-            { label: 'Optional', value: 'optional' },
-            { label: 'Forbidden', value: 'forbidden' },
-          ]}
-          value={ruleType}
-        />
-        <div className="sm:col-span-2 xl:col-span-2">
-          <FilterSelect
-            label="Issue type"
-            onChange={(value) =>
-              setIssueType(value as ValidationIssueType | typeof ALL)
-            }
-            options={[
-              { label: 'All issue types', value: ALL },
-              ...issueTypes.map((value) => ({
-                label: validationIssueTypeLabel(value),
-                value,
-              })),
-            ]}
-            value={issueType}
+      <SearchField
+        fullWidth
+        onChange={setSearch}
+        value={search}
+        variant="secondary"
+      >
+        <Label>Search issues</Label>
+        <SearchField.Group>
+          <SearchField.SearchIcon />
+          <SearchField.Input
+            maxLength={128}
+            placeholder="Key, path, or issue"
           />
-        </div>
-      </div>
-      <div className="mt-3 flex flex-wrap gap-2">
-        <Button size="sm" type="submit" variant="primary">
+          <SearchField.ClearButton aria-label="Clear issue search" />
+        </SearchField.Group>
+      </SearchField>
+
+      <div className="mt-2.5 flex items-center justify-between gap-3">
+        <Button
+          aria-controls="validation-issue-advanced-filters"
+          aria-expanded={isAdvancedOpen}
+          aria-label="Toggle advanced issue filters"
+          className="h-7 gap-1.5 px-2 font-mono text-xs text-muted hover:text-foreground"
+          onPress={() => setIsAdvancedOpen((open) => !open)}
+          size="sm"
+          type="button"
+          variant="ghost"
+        >
           <IconFilter
             aria-hidden="true"
             size={ICON_SIZE.small}
             stroke={ICON_STROKE}
           />
-          Apply filters
+          Advanced filters
+          {isAdvancedOpen ? (
+            <IconChevronUp aria-hidden="true" size={ICON_SIZE.small} />
+          ) : (
+            <IconChevronDown aria-hidden="true" size={ICON_SIZE.small} />
+          )}
         </Button>
-        <Button onPress={onReset} size="sm" type="button" variant="secondary">
-          <IconRefresh
-            aria-hidden="true"
-            size={ICON_SIZE.small}
-            stroke={ICON_STROKE}
-          />
-          Reset
-        </Button>
+
+        {activeFilterCount > 0 ? (
+          <Chip size="sm" variant="soft">
+            <Chip.Label className="font-mono text-[10px]">
+              Filters · {activeFilterCount}
+            </Chip.Label>
+          </Chip>
+        ) : null}
       </div>
+
+      {isAdvancedOpen ? (
+        <div
+          className="mt-3 space-y-3 border-t border-divider pt-3"
+          id="validation-issue-advanced-filters"
+        >
+          <div className="grid gap-2.5 sm:grid-cols-2 md:grid-cols-5">
+            <FilterSelect
+              label="Status"
+              onChange={(value) =>
+                setStatus(value as ValidationIssueStatus | typeof ALL)
+              }
+              options={[
+                { label: 'All statuses', value: ALL },
+                { label: 'Open', value: 'open' },
+                { label: 'Ignored', value: 'ignored' },
+                { label: 'Resolved', value: 'resolved' },
+              ]}
+              value={status}
+            />
+            <FilterSelect
+              label="Severity"
+              onChange={(value) =>
+                setSeverity(value as ValidationSeverity | typeof ALL)
+              }
+              options={[
+                { label: 'All severities', value: ALL },
+                { label: 'Error', value: 'error' },
+                { label: 'Warning', value: 'warning' },
+                { label: 'Info', value: 'info' },
+              ]}
+              value={severity}
+            />
+            <FilterSelect
+              label="Environment"
+              onChange={setEnvironmentId}
+              options={[
+                { label: 'All environments', value: ALL },
+                ...environments.map((environment) => ({
+                  label: environment.name,
+                  value: environment.id,
+                })),
+              ]}
+              value={environmentId}
+            />
+            <FilterSelect
+              label="Rule type"
+              onChange={(value) =>
+                setRuleType(value as ValidationRuleType | typeof ALL)
+              }
+              options={[
+                { label: 'All rule types', value: ALL },
+                { label: 'Required', value: 'required' },
+                { label: 'Optional', value: 'optional' },
+                { label: 'Forbidden', value: 'forbidden' },
+              ]}
+              value={ruleType}
+            />
+            <FilterSelect
+              label="Issue type"
+              onChange={(value) =>
+                setIssueType(value as ValidationIssueType | typeof ALL)
+              }
+              options={[
+                { label: 'All issue types', value: ALL },
+                ...issueTypes.map((value) => ({
+                  label: validationIssueTypeLabel(value),
+                  value,
+                })),
+              ]}
+              value={issueType}
+            />
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <Button size="sm" type="submit" variant="primary">
+              <IconFilter
+                aria-hidden="true"
+                size={ICON_SIZE.small}
+                stroke={ICON_STROKE}
+              />
+              Apply filters
+            </Button>
+            <Button
+              onPress={onReset}
+              size="sm"
+              type="button"
+              variant="secondary"
+            >
+              <IconRefresh
+                aria-hidden="true"
+                size={ICON_SIZE.small}
+                stroke={ICON_STROKE}
+              />
+              Reset
+            </Button>
+          </div>
+        </div>
+      ) : null}
     </Form>
   );
 }

@@ -50,6 +50,67 @@ describe('environmentTrackerGateway', () => {
     ).resolves.toBeNull();
   });
 
+  it('requests one paginated environment projection and validates its cell metadata', async () => {
+    mockIPC((command, args) => {
+      expect(command).toBe('get_environment_matrix');
+      expect(args).toEqual({
+        input: {
+          environmentId,
+          page: 2,
+          pageSize: 25,
+          projectId,
+          search: 'DATABASE',
+        },
+      });
+      return {
+        environments: [environmentResponse()],
+        page: 2,
+        pageSize: 25,
+        rows: [
+          {
+            cells: [
+              {
+                sourceDetails: [],
+                state: 'absent',
+                validation: {
+                  openIssues: [validationIssueResponse()],
+                  rules: [validationRuleResponse()],
+                },
+              },
+            ],
+            keyName: 'DATABASE_URL',
+          },
+        ],
+        totalItems: 26,
+        totalPages: 2,
+      };
+    });
+
+    await expect(
+      environmentTrackerGateway.matrix(projectId, {
+        environmentId,
+        page: 2,
+        pageSize: 25,
+        search: 'DATABASE',
+      }),
+    ).resolves.toMatchObject({
+      rows: [
+        {
+          cells: [
+            {
+              state: 'absent',
+              validation: {
+                openIssues: [{ severity: 'error', status: 'open' }],
+                rules: [{ keyName: 'DATABASE_URL', ruleType: 'required' }],
+              },
+            },
+          ],
+        },
+      ],
+      totalItems: 26,
+    });
+  });
+
   it('rejects an IPC source payload that tries to expose a configuration value', async () => {
     mockIPC(() => [sourceResponse({ value: 'not-allowed' })]);
 
@@ -77,5 +138,55 @@ function sourceResponse(extra: Record<string, unknown> = {}) {
     sortOrder: 0,
     updatedAt: '2026-08-05T00:00:00.000Z',
     ...extra,
+  };
+}
+
+function environmentResponse() {
+  return {
+    createdAt: '2026-08-05T00:00:00.000Z',
+    description: null,
+    id: environmentId,
+    name: 'Production',
+    projectId,
+    sortOrder: 0,
+    updatedAt: '2026-08-05T00:00:00.000Z',
+  };
+}
+
+function validationRuleResponse() {
+  return {
+    createdAt: '2026-08-05T00:00:00.000Z',
+    description: 'Production database connection',
+    enabled: true,
+    environmentIds: [environmentId],
+    id: '6ce45b9b-83fe-48f1-a744-17739bfbd7fd',
+    keyName: 'DATABASE_URL',
+    projectId,
+    ruleType: 'required',
+    severity: 'error',
+    sortOrder: 0,
+    updatedAt: '2026-08-05T00:00:00.000Z',
+  };
+}
+
+function validationIssueResponse() {
+  return {
+    environmentId,
+    environmentName: 'Production',
+    firstSeenAt: '2026-08-05T00:00:00.000Z',
+    id: '4ce13759-a72a-4595-8133-2d7100f42f01',
+    issueType: 'required_missing',
+    keyName: 'DATABASE_URL',
+    lastSeenAt: '2026-08-05T00:00:00.000Z',
+    lineNumber: null,
+    message: 'Required key is missing.',
+    observedName: null,
+    projectId,
+    resolvedAt: null,
+    ruleId: validationRuleResponse().id,
+    severity: 'error',
+    sourcePath: null,
+    status: 'open',
+    updatedAt: '2026-08-05T00:00:00.000Z',
   };
 }

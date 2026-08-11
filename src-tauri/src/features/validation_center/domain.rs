@@ -40,13 +40,6 @@ pub(super) fn evaluate(snapshot: &ValidationSnapshot) -> ValidationEvaluation {
         &sources,
         &mut issues,
     );
-    detect_unexpected_issues(
-        snapshot.project_id,
-        &active_rules,
-        &occurrences,
-        &sources,
-        &mut issues,
-    );
     detect_occurrence_issues(
         snapshot.project_id,
         &occurrences,
@@ -281,75 +274,6 @@ fn detect_rule_issues(
                 occurrence.map(|item| item.observed_name.clone()),
             ));
         }
-    }
-}
-
-fn detect_unexpected_issues(
-    project_id: Uuid,
-    rules: &[&ValidationRule],
-    groups: &OccurrenceGroup<'_>,
-    sources: &HashMap<Uuid, &ValidationSource>,
-    issues: &mut Vec<DetectedIssue>,
-) {
-    let mut allowed = HashMap::<String, HashSet<Uuid>>::new();
-    let mut forbidden = HashMap::<String, HashSet<Uuid>>::new();
-    let mut severity = HashMap::<String, ValidationSeverity>::new();
-    let mut representative_rule = HashMap::<String, Uuid>::new();
-    for rule in rules {
-        let normalized = normalize_key(&rule.key_name);
-        let targets = match rule.rule_type {
-            ValidationRuleType::Required | ValidationRuleType::Optional => {
-                allowed.entry(normalized.clone()).or_default()
-            }
-            ValidationRuleType::Forbidden => forbidden.entry(normalized.clone()).or_default(),
-        };
-        targets.extend(rule.environment_ids.iter().copied());
-        severity
-            .entry(normalized.clone())
-            .and_modify(|current| {
-                if severity_rank(rule.severity) > severity_rank(*current) {
-                    *current = rule.severity;
-                }
-            })
-            .or_insert(rule.severity);
-        representative_rule.entry(normalized).or_insert(rule.id);
-    }
-
-    for ((normalized, environment_id), occurrences) in groups {
-        let Some(allowed_environments) = allowed.get(normalized) else {
-            continue;
-        };
-        if allowed_environments.contains(environment_id)
-            || forbidden
-                .get(normalized)
-                .is_some_and(|targets| targets.contains(environment_id))
-        {
-            continue;
-        }
-        let Some(occurrence) = occurrences.iter().copied().find(|item| !item.is_commented) else {
-            continue;
-        };
-        let source = sources.get(&occurrence.source_id).copied();
-        issues.push(detected_issue(
-            project_id,
-            ValidationIssueType::UnexpectedPresent,
-            severity
-                .get(normalized)
-                .copied()
-                .unwrap_or(ValidationSeverity::Warning),
-            Some(*environment_id),
-            Some(occurrence.key_definition_id),
-            representative_rule.get(normalized).copied(),
-            source,
-            occurrence.key_name.clone(),
-            normalized.clone(),
-            format!(
-                "Key '{}' is not allowed in this environment.",
-                occurrence.key_name
-            ),
-            Some(occurrence.line_number),
-            Some(occurrence.observed_name.clone()),
-        ));
     }
 }
 

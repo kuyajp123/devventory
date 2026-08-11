@@ -10,6 +10,7 @@ import { SemanticStatusChip } from '@/shared/ui';
 import {
   sourceStatusLabel,
   type Environment,
+  type EnvironmentMatrixCellValidation,
   type EnvironmentMatrixPage,
   type EnvironmentMatrixSourceDetail,
   type EnvironmentSource,
@@ -27,6 +28,11 @@ import {
   type EnvironmentMatrixSelectionStore,
   useEnvironmentMatrixCellSelection,
 } from './environment-matrix-selection-context';
+import {
+  getEnvironmentCellPresentation,
+  highestOpenValidationSeverity,
+  validationSeverityLabel,
+} from './environment-validation-presentation';
 
 export function InspectEnvironmentMatrix({
   environment,
@@ -67,7 +73,7 @@ export function InspectEnvironmentMatrix({
   }
 
   return (
-    <div className="space-y-4">
+    <div className="flex h-full min-h-0 flex-col">
       {/* <div className="rounded-xl border border-accent/30 bg-accent/5 p-4">
         <div className="flex gap-3">
           <IconInfoCircle
@@ -108,9 +114,9 @@ export function InspectEnvironmentMatrix({
         </EmptyState>
       ) : (
         <EnvironmentMatrixSelectionProvider store={selectionStore}>
-          <Table variant="secondary">
+          <Table className="min-h-0 flex-1" variant="secondary">
             <Table.ScrollContainer
-              className="max-h-[70vh] overflow-auto overscroll-contain"
+              className="h-full min-h-0 overflow-auto overscroll-contain"
               data-testid="inspect-environment-matrix-scroll"
             >
               <Table.Content
@@ -190,6 +196,12 @@ export function InspectEnvironmentMatrix({
                                 onSelect={onSelect}
                                 source={source}
                                 sourceDetails={details}
+                                validation={
+                                  environmentCell?.validation ?? {
+                                    openIssues: [],
+                                    rules: [],
+                                  }
+                                }
                               />
                             </Table.Cell>
                           );
@@ -214,6 +226,7 @@ const SourceMatrixCell = memo(function SourceMatrixCell({
   onSelect,
   source,
   sourceDetails,
+  validation,
 }: {
   allDetails: EnvironmentMatrixSourceDetail[];
   environment: Environment;
@@ -221,6 +234,7 @@ const SourceMatrixCell = memo(function SourceMatrixCell({
   onSelect: (selection: EnvironmentKeySelection) => void;
   source: EnvironmentSource;
   sourceDetails: EnvironmentMatrixSourceDetail[];
+  validation: EnvironmentMatrixCellValidation;
 }) {
   const isSelected = useEnvironmentMatrixCellSelection(
     keyName,
@@ -231,22 +245,31 @@ const SourceMatrixCell = memo(function SourceMatrixCell({
   const commented = sourceDetails.filter((detail) => detail.isCommented);
   const status = sourceCellStatus(source, active.length, commented.length);
   const summary = sourceCellSummary(active, commented);
+  const validationSeverity = highestOpenValidationSeverity(
+    validation.openIssues,
+  );
+  const validationLabel = validationSeverityLabel(validation.openIssues);
 
   return (
     <button
-      aria-label={`${keyName} in ${source.relativePath}: ${status}`}
-      aria-pressed={isSelected}
-      className={`flex min-h-16 w-full min-w-48 items-center justify-between gap-3 rounded-lg border border-transparent p-3 text-left transition-colors hover:bg-surface-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent ${
-        isSelected ? 'relative z-10 border-accent bg-accent/15 shadow-sm' : ''
+      aria-label={`${keyName} in ${source.relativePath}: ${status}${
+        validationLabel ? `. ${validationLabel}` : ''
       }`}
+      aria-pressed={isSelected}
+      className={`flex min-h-16 w-full min-w-48 items-center justify-between gap-3 rounded-[4px] border p-3 text-left transition-colors hover:bg-surface-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground/40 ${getEnvironmentCellPresentation(
+        validationSeverity,
+        isSelected,
+      )}`}
       data-cell-id={`${keyName}:${source.id}`}
       data-selected={isSelected ? 'true' : undefined}
+      data-validation-severity={validationSeverity ?? undefined}
       onClick={() =>
         onSelect({
           environment,
           keyName,
           selectedSourcePath: source.relativePath,
           sourceDetails: allDetails,
+          validation,
         })
       }
       type="button"

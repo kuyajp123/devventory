@@ -59,7 +59,13 @@ export function ValidationRuleFormModal({
     resolver: zodResolver(validationRuleFormSchema),
   });
 
-  useEffect(() => reset(formDefaults(rule)), [reset, rule]);
+  useEffect(() => {
+    reset(formDefaults(rule), {
+      keepDirty: false,
+      keepErrors: false,
+      keepTouched: false,
+    });
+  }, [isOpen, reset, rule]);
 
   const submit = handleSubmit(async (values) => {
     await onSubmit({
@@ -92,20 +98,30 @@ export function ValidationRuleFormModal({
           onSubmit={(event) => event.preventDefault()}
           validationBehavior="aria"
         >
-          <TextField
-            fullWidth
-            isInvalid={Boolean(errors.keyName)}
-            variant="secondary"
-          >
-            <Label>Environment key</Label>
-            <Input
-              autoFocus
-              disabled={isSaving}
-              placeholder="DATABASE_URL"
-              {...register('keyName')}
-            />
-            <FieldError>{errors.keyName?.message}</FieldError>
-          </TextField>
+          <Controller
+            control={control}
+            name="keyName"
+            render={({ field }) => (
+              <TextField
+                fullWidth
+                isInvalid={Boolean(errors.keyName)}
+                variant="secondary"
+              >
+                <Label>Environment key</Label>
+                <Input
+                  autoFocus
+                  disabled={isSaving}
+                  name={field.name}
+                  onBlur={field.onBlur}
+                  onChange={field.onChange}
+                  placeholder="DATABASE_URL"
+                  ref={field.ref}
+                  value={field.value}
+                />
+                <FieldError>{errors.keyName?.message}</FieldError>
+              </TextField>
+            )}
+          />
 
           <div className="grid gap-4 sm:grid-cols-2">
             <Controller

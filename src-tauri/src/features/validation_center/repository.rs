@@ -357,6 +357,50 @@ impl SqliteValidationRepository {
         })
     }
 
+    pub(crate) async fn open_matrix_issues(
+        &self,
+        project_id: Uuid,
+        normalized_keys: &[String],
+        environment_ids: &[Uuid],
+    ) -> Result<Vec<ValidationIssue>, ValidationError> {
+        if normalized_keys.is_empty() || environment_ids.is_empty() {
+            return Ok(Vec::new());
+        }
+
+        let normalized_keys_json =
+            serde_json::to_string(normalized_keys).map_err(|_| ValidationError::InvalidInput)?;
+        let environment_ids_json = serde_json::to_string(
+            &environment_ids
+                .iter()
+                .map(Uuid::to_string)
+                .collect::<Vec<_>>(),
+        )
+        .map_err(|_| ValidationError::InvalidInput)?;
+
+        sqlx::query_as::<_, ValidationIssueRow>(
+            "SELECT i.id, i.project_id, i.environment_id, e.name AS environment_name,
+                    i.rule_id, i.key_name, i.issue_type, i.severity, i.status, i.message,
+                    i.source_path, i.line_number, i.observed_name, i.first_seen_at,
+                    i.last_seen_at, i.resolved_at, i.updated_at
+             FROM validation_issues i
+             LEFT JOIN environments e
+               ON e.project_id = i.project_id AND e.id = i.environment_id
+             WHERE i.project_id = ? AND i.status = 'open'
+               AND i.normalized_key IN (SELECT value FROM json_each(?))
+               AND i.environment_id IN (SELECT value FROM json_each(?))
+             ORDER BY CASE i.severity WHEN 'error' THEN 0 WHEN 'warning' THEN 1 ELSE 2 END,
+                      i.updated_at DESC, i.id ASC",
+        )
+        .bind(project_id.to_string())
+        .bind(normalized_keys_json)
+        .bind(environment_ids_json)
+        .fetch_all(&self.pool)
+        .await?
+        .into_iter()
+        .map(TryInto::try_into)
+        .collect()
+    }
+
     pub(crate) async fn set_issue_status(
         &self,
         project_id: Uuid,

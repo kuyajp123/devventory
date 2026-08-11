@@ -207,6 +207,23 @@ export function ValidationCenterPage() {
             );
           }
         }}
+        onToggle={(rule) => {
+          void saveRule
+            .mutateAsync({
+              description: rule.description ?? '',
+              enabled: !rule.enabled,
+              environmentIds: rule.environmentIds,
+              keyName: rule.keyName,
+              ruleId: rule.id,
+              ruleType: rule.ruleType,
+              severity: rule.severity,
+            })
+            .catch((error: unknown) =>
+              toast.danger(
+                safeError(error, 'The validation rule could not be updated.'),
+              ),
+            );
+        }}
         rules={ruleItems}
       />
 

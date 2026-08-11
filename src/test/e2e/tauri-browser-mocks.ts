@@ -648,8 +648,13 @@ export function installTauriBrowserMocks() {
                             },
                           ],
                           state: 'present',
+                          validation: { openIssues: [], rules: [] },
                         }
-                      : { sourceDetails: [], state: 'absent' };
+                      : {
+                          sourceDetails: [],
+                          state: 'absent',
+                          validation: { openIssues: [], rules: [] },
+                        };
                   }),
                   keyName: 'APP_MODE',
                 },

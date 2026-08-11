@@ -25,13 +25,7 @@ export const validationKeys = {
 
 function useValidationInvalidation(projectId: string) {
   const queryClient = useQueryClient();
-  return () =>
-    Promise.all([
-      queryClient.invalidateQueries({
-        queryKey: validationKeys.project(projectId),
-      }),
-      invalidateDerivedProjectQueries(queryClient, projectId),
-    ]);
+  return () => invalidateDerivedProjectQueries(queryClient, projectId);
 }
 
 export function useValidationRulesQuery(projectId: string) {
@@ -53,9 +47,10 @@ export function useValidationSummaryQuery(projectId: string) {
 export function useValidationIssuesQuery(
   projectId: string,
   filters: ValidationIssueFilters,
+  enabled = true,
 ) {
   return useQuery({
-    enabled: Boolean(projectId),
+    enabled: enabled && Boolean(projectId),
     placeholderData: keepPreviousData,
     queryFn: () => validationCenterGateway.listIssues(projectId, filters),
     queryKey: validationKeys.issues(projectId, filters),

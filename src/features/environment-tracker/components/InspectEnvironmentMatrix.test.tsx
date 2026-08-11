@@ -116,6 +116,7 @@ function matrixResponse(): EnvironmentMatrixPage {
               },
             ],
             state: 'present',
+            validation: { openIssues: [], rules: [] },
           },
         ],
         keyName: 'APP_BASE_URL',

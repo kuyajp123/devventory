@@ -66,5 +66,6 @@ function selectionFor(keyName: string): EnvironmentKeySelection {
     environment,
     keyName,
     sourceDetails: [],
+    validation: { openIssues: [], rules: [] },
   };
 }

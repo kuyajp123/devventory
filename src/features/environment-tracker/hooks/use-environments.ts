@@ -8,8 +8,6 @@ import { invalidateDerivedProjectQueries } from '@/shared/query/derived-query-ke
 import type { EnvironmentPageFilters } from '../models/environment';
 import { environmentTrackerGateway } from '../services/environment-tracker.gateway';
 
-const INSPECT_FETCH_PAGE_SIZE = 100;
-
 export const environmentKeys = {
   all: ['environment-tracker'] as const,
   project: (projectId: string) => ['environment-tracker', projectId] as const,
@@ -20,14 +18,14 @@ export const environmentKeys = {
   inspectMatrix: (
     projectId: string,
     environmentId: string,
-    search: string | undefined,
+    filters: EnvironmentPageFilters,
   ) =>
     [
       'environment-tracker',
       projectId,
       'inspect-matrix',
       environmentId,
-      search ?? '',
+      filters,
     ] as const,
   sourceCandidates: (projectId: string, filters: EnvironmentPageFilters) =>
     ['environment-tracker', projectId, 'source-candidates', filters] as const,
@@ -37,13 +35,7 @@ export const environmentKeys = {
 
 function useProjectInvalidation(projectId: string) {
   const queryClient = useQueryClient();
-  return () =>
-    Promise.all([
-      queryClient.invalidateQueries({
-        queryKey: environmentKeys.project(projectId),
-      }),
-      invalidateDerivedProjectQueries(queryClient, projectId),
-    ]);
+  return () => invalidateDerivedProjectQueries(queryClient, projectId);
 }
 
 export function useEnvironmentsQuery(projectId: string) {
@@ -70,45 +62,18 @@ export function useEnvironmentMatrixQuery(
 export function useEnvironmentInspectMatrixQuery(
   projectId: string,
   environmentId: string,
-  search: string | undefined,
+  filters: EnvironmentPageFilters,
   enabled = true,
 ) {
   return useQuery({
     enabled: enabled && Boolean(projectId && environmentId),
-    queryKey: environmentKeys.inspectMatrix(projectId, environmentId, search),
-    queryFn: async () => {
-      const firstPage = await environmentTrackerGateway.matrix(projectId, {
-        page: 1,
-        pageSize: INSPECT_FETCH_PAGE_SIZE,
-        ...(search ? { search } : {}),
-      });
-      const remainingPages = await Promise.all(
-        Array.from(
-          { length: Math.max(0, firstPage.totalPages - 1) },
-          (_, index) =>
-            environmentTrackerGateway.matrix(projectId, {
-              page: index + 2,
-              pageSize: INSPECT_FETCH_PAGE_SIZE,
-              ...(search ? { search } : {}),
-            }),
-        ),
-      );
-      const environmentIndex = firstPage.environments.findIndex(
-        (environment) => environment.id === environmentId,
-      );
-      const rows = [firstPage, ...remainingPages]
-        .flatMap((matrixPage) => matrixPage.rows)
-        .filter((row) => {
-          if (environmentIndex < 0) return false;
-          return (row.cells[environmentIndex]?.sourceDetails.length ?? 0) > 0;
-        });
-
-      return {
-        environments: firstPage.environments,
-        rows,
-        totalItems: rows.length,
-      };
-    },
+    placeholderData: keepPreviousData,
+    queryKey: environmentKeys.inspectMatrix(projectId, environmentId, filters),
+    queryFn: () =>
+      environmentTrackerGateway.matrix(projectId, {
+        ...filters,
+        environmentId,
+      }),
   });
 }
 

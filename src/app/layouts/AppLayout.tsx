@@ -12,7 +12,6 @@ import {
   IconRobot,
   IconSearch,
   IconSettings,
-  IconShieldCheck,
   IconSun,
 } from '@tabler/icons-react';
 import { useRef } from 'react';
@@ -56,12 +55,6 @@ const primaryNavigationItems: NavigationItem[] = [
     label: 'Environment Tracker',
     requiresProject: true,
     to: '/environments',
-  },
-  {
-    icon: IconShieldCheck,
-    label: 'Validation Center',
-    requiresProject: true,
-    to: '/validation',
   },
   {
     icon: IconSearch,
@@ -135,7 +128,8 @@ export function AppLayout() {
         (item.to !== '/dashboard' && location.pathname.startsWith(item.to)),
     )?.label ?? 'Workbench';
   const isFixedWorkspaceRoute =
-    location.pathname === '/environments' || location.pathname === '/search';
+    location.pathname.startsWith('/environments') ||
+    location.pathname === '/search';
 
   return (
     <div className="flex h-screen w-screen flex-col overflow-hidden bg-background text-foreground select-none">

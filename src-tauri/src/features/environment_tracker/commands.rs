@@ -166,7 +166,7 @@ pub(crate) async fn get_environment_matrix(
     input: EnvironmentMatrixQueryInput,
 ) -> Result<EnvironmentMatrixPage, CommandError> {
     state
-        .environment_service()
+        .environment_workspace_service()
         .matrix(input.try_into().map_err(CommandError::from)?)
         .await
         .map_err(Into::into)

@@ -24,6 +24,8 @@ import {
   IconGripVertical,
   IconPlus,
   IconTrash,
+  IconToggleLeft,
+  IconToggleRight,
 } from '@tabler/icons-react';
 import { useMemo, useState } from 'react';
 import type { Environment } from '@/features/environment-tracker';
@@ -39,6 +41,7 @@ interface ValidationRulePanelProps {
   onDelete: (rule: ValidationRule) => void;
   onEdit: (rule: ValidationRule) => void;
   onReorder: (ruleIds: string[]) => Promise<void>;
+  onToggle: (rule: ValidationRule) => void;
   rules: ValidationRule[];
 }
 
@@ -50,6 +53,7 @@ export function ValidationRulePanel({
   onDelete,
   onEdit,
   onReorder,
+  onToggle,
   rules,
 }: ValidationRulePanelProps) {
   const [optimisticOrder, setOptimisticOrder] = useState<string[] | null>(null);
@@ -105,7 +109,7 @@ export function ValidationRulePanel({
   }
 
   return (
-    <Card className="overflow-hidden border border-divider bg-surface rounded-[4px] shadow-none">
+    <Card className="flex h-full min-h-0 flex-col overflow-hidden border border-divider bg-surface rounded-[4px] shadow-none">
       <Card.Header className="flex flex-row items-center justify-between gap-3 border-b border-divider px-4 py-3">
         <div>
           <Card.Title className="text-sm font-semibold">
@@ -129,7 +133,7 @@ export function ValidationRulePanel({
           Add rule
         </Button>
       </Card.Header>
-      <Card.Content className="p-0">
+      <Card.Content className="min-h-0 flex-1 overflow-auto p-0">
         {isLoading ? (
           <div className="space-y-2 p-4">
             {Array.from({ length: 3 }, (_, index) => (
@@ -180,6 +184,7 @@ export function ValidationRulePanel({
                     onEdit={() => onEdit(rule)}
                     onMoveDown={() => move(rule.id, 1)}
                     onMoveUp={() => move(rule.id, -1)}
+                    onToggle={() => onToggle(rule)}
                     rule={rule}
                   />
                 ))}
@@ -218,6 +223,7 @@ function SortableRule({
   onEdit,
   onMoveDown,
   onMoveUp,
+  onToggle,
   rule,
 }: {
   environmentNames: string[];
@@ -229,6 +235,7 @@ function SortableRule({
   onEdit: () => void;
   onMoveDown: () => void;
   onMoveUp: () => void;
+  onToggle: () => void;
   rule: ValidationRule;
 }) {
   const { attributes, listeners, setNodeRef, transform, transition } =
@@ -307,6 +314,34 @@ function SortableRule({
       </div>
 
       <div className="flex shrink-0 items-center gap-0.5">
+        <Tooltip delay={0}>
+          <Button
+            aria-label={`${rule.enabled ? 'Disable' : 'Enable'} ${rule.keyName}`}
+            isDisabled={isBusy}
+            isIconOnly
+            onPress={onToggle}
+            size="sm"
+            variant="ghost"
+          >
+            {rule.enabled ? (
+              <IconToggleRight
+                aria-hidden="true"
+                size={ICON_SIZE.small}
+                stroke={ICON_STROKE}
+              />
+            ) : (
+              <IconToggleLeft
+                aria-hidden="true"
+                size={ICON_SIZE.small}
+                stroke={ICON_STROKE}
+              />
+            )}
+          </Button>
+          <Tooltip.Content>
+            <p>{rule.enabled ? 'Disable rule' : 'Enable rule'}</p>
+          </Tooltip.Content>
+        </Tooltip>
+
         <Tooltip delay={0}>
           <Button
             aria-label={`Move ${rule.keyName} up`}

@@ -7,13 +7,32 @@ import { renderWithProviders } from '@/test/render';
 import { appRoutes } from './routes';
 
 function createActiveProjectContext() {
+  const activeProject = {
+    createdAt: '2026-08-01T00:00:00.000Z',
+    description: null,
+    exclusions: [],
+    id: '30af17bd-2dd6-4b89-a5e7-8517191815a7',
+    initialScan: {
+      completed: true,
+      directoriesVisited: 1,
+      durationMs: 1,
+      entriesExcluded: 0,
+      entriesUnreadable: 0,
+      filesDiscovered: 1,
+    },
+    name: 'Desktop app',
+    projectType: 'desktop',
+    rootPath: 'C:\\workspace\\app',
+    updatedAt: '2026-08-01T00:00:00.000Z',
+    watchedLocations: ['.'],
+  };
   return {
-    activeProject: null,
-    activeProjectId: null,
-    hasProjects: false,
+    activeProject,
+    activeProjectId: activeProject.id,
+    hasProjects: true,
     isHydrating: false,
     projectLoadFailed: false,
-    projects: [],
+    projects: [activeProject],
     selectProject: vi.fn(),
   };
 }
@@ -42,6 +61,10 @@ vi.mock('@/features/agent-usage', async (importOriginal) => {
     AgentUsageReminderSync: () => null,
   };
 });
+
+vi.mock('@/features/environment-tracker', () => ({
+  EnvironmentTrackerPage: () => <h1>Environment Tracker</h1>,
+}));
 
 vi.mock('./LazyDashboardRoute', () => ({
   LazyDashboardRoute: () => <h1>Add your first project</h1>,
@@ -79,7 +102,7 @@ describe('application routes', () => {
     );
   });
 
-  it('keeps Agent Usage available without an active project', async () => {
+  it('keeps Agent Usage available from the application shell', async () => {
     const router = createMemoryRouter(appRoutes, {
       initialEntries: ['/agent-usage'],
     });
@@ -93,5 +116,21 @@ describe('application routes', () => {
       'href',
       '/agent-usage',
     );
+  });
+
+  it('redirects the legacy Validation Center route into the integrated workspace', async () => {
+    const router = createMemoryRouter(appRoutes, {
+      initialEntries: ['/validation'],
+    });
+
+    renderWithProviders(<RouterProvider router={router} />);
+
+    expect(
+      await screen.findByRole('heading', { name: 'Environment Tracker' }),
+    ).toBeVisible();
+    expect(router.state.location.pathname).toBe('/environments/rules');
+    expect(
+      screen.queryByRole('link', { name: 'Validation Center' }),
+    ).not.toBeInTheDocument();
   });
 });

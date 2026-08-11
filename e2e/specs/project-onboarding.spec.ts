@@ -160,12 +160,8 @@ test('adds a project through the selector and restores it after reload', async (
   await page.getByRole('button', { name: 'Done' }).click();
   await expect(page.getByText('APP_MODE', { exact: true })).toBeVisible();
 
-  await primaryNavigation
-    .getByRole('link', { name: 'Validation Center' })
-    .click();
-  await expect(
-    page.getByRole('heading', { name: 'Validation Center' }),
-  ).toBeVisible();
+  await page.getByRole('tab', { name: 'Rules & Health' }).click();
+  await expect(page.getByText('Validation rules')).toBeVisible();
   await page.getByRole('button', { name: 'Add rule' }).click();
   await page.getByLabel('Environment key').fill('DATABASE_URL');
   await page
@@ -174,7 +170,9 @@ test('adds a project through the selector and restores it after reload', async (
     .click();
   await page.getByRole('button', { name: 'Create rule' }).click();
   await expect(page.getByText('DATABASE_URL').first()).toBeVisible();
+  await page.getByRole('tab', { name: /Issues/ }).click();
   await page.getByRole('button', { name: 'Ignore DATABASE_URL issue' }).click();
+  await page.getByRole('tab', { name: 'Rules & Health' }).click();
   await page.getByRole('button', { name: 'Export .env.example' }).click();
   await page.getByRole('button', { name: 'Preview' }).click();
   await expect(page.getByText('DATABASE_URL=', { exact: false })).toBeVisible();

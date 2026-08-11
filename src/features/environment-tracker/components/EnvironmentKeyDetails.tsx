@@ -10,14 +10,17 @@ import { ICON_SIZE, ICON_STROKE } from '@/shared/constants/icon.constants';
 import { SemanticStatusChip } from '@/shared/ui';
 import type {
   Environment,
+  EnvironmentMatrixCellValidation,
   EnvironmentMatrixSourceDetail,
 } from '../models/environment';
+import { EnvironmentValidationDetails } from './EnvironmentValidationDetails';
 
 export interface EnvironmentKeySelection {
   environment: Environment;
   keyName: string;
   selectedSourcePath?: string;
   sourceDetails: EnvironmentMatrixSourceDetail[];
+  validation: EnvironmentMatrixCellValidation;
 }
 
 export function EnvironmentKeyDetails({
@@ -123,7 +126,7 @@ function EnvironmentKeyDetailsContent({
         </Button>
       </header>
 
-      <div className="space-y-5 p-5">
+      <div className="space-y-4 p-4">
         <section>
           <p className="text-xs font-medium uppercase tracking-wide text-muted">
             Status
@@ -153,6 +156,10 @@ function EnvironmentKeyDetailsContent({
           </p>
         </section>
 
+        <div className="border-t border-divider pt-4">
+          <EnvironmentValidationDetails validation={selection.validation} />
+        </div>
+
         <section>
           <div className="flex items-center justify-between gap-2">
             <h3 className="font-medium">Definitions in this environment</h3>
@@ -172,11 +179,13 @@ function EnvironmentKeyDetailsContent({
                   >
                     <button
                       aria-pressed={isSelected}
-                      className={`w-full rounded-xl border p-3 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent ${
-                        isSelected ? 'relative z-10 shadow-sm' : ''
+                      className={`w-full rounded-xl border p-3 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground/40 ${
+                        isSelected
+                          ? 'relative z-10 bg-surface-secondary shadow-sm ring-2 ring-inset ring-foreground/25'
+                          : ''
                       } ${
                         onDefinitionClick
-                          ? 'cursor-pointer hover:border-accent/60 hover:bg-accent/5'
+                          ? 'cursor-pointer hover:border-foreground/25 hover:bg-surface-secondary'
                           : 'cursor-default'
                       }`}
                       data-definition-path={detail.relativePath}

@@ -10,7 +10,9 @@ use crate::features::backups::repository::{
     BackupRecordDraft, BackupRepository, SqliteBackupRepository,
 };
 use crate::features::dashboard::{DashboardService, SqliteDashboardRepository};
-use crate::features::environment_tracker::{EnvironmentService, SqliteEnvironmentRepository};
+use crate::features::environment_tracker::{
+    EnvironmentService, EnvironmentWorkspaceService, SqliteEnvironmentRepository,
+};
 use crate::features::file_inventory::{
     FileInventoryService, InventoryRuntime, SqliteFileInventoryRepository,
 };
@@ -34,6 +36,7 @@ pub(crate) struct AppState {
     file_inventory_service: FileInventoryService,
     asset_service: AssetService,
     environment_service: EnvironmentService,
+    environment_workspace_service: EnvironmentWorkspaceService,
     validation_service: ValidationService,
     inventory_runtime: InventoryRuntime,
     agent_reminder_runtime: AgentReminderRuntime,
@@ -112,12 +115,17 @@ impl AppState {
             file_inventory_service.clone(),
             LocalManifestFilesystem,
         );
+        let environment_workspace_service = EnvironmentWorkspaceService::new(
+            environment_service.clone(),
+            validation_service.clone(),
+        );
 
         Ok(Self {
             database,
             agent_usage_service,
             asset_service,
             environment_service,
+            environment_workspace_service,
             validation_service,
             file_inventory_service,
             inventory_runtime: InventoryRuntime::new(),
@@ -187,6 +195,10 @@ impl AppState {
 
     pub(crate) fn environment_service(&self) -> EnvironmentService {
         self.environment_service.clone()
+    }
+
+    pub(crate) fn environment_workspace_service(&self) -> EnvironmentWorkspaceService {
+        self.environment_workspace_service.clone()
     }
 
     pub(crate) fn validation_service(&self) -> ValidationService {

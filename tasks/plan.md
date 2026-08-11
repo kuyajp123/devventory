@@ -1,81 +1,97 @@
-# Implementation Plan: Phase 4 File Inventory and Watching
+# Implementation Plan: Environment Tracker + Validation Center Integration
 
 ## Objective
 
-Implement only Phase 4 from `docs/Devventory_Implementation_Plan.md`: persistent file metadata inventory, deterministic categorization, paginated search/filtering, manual and startup reconciliation, native file watching, missing-file recovery, and frontend refresh after native changes. Phase 5 environment parsing and every later phase remain out of scope.
+Unify Environment Tracker and Validation Center into one fixed-height, tabbed
+developer workbench while preserving the existing Rust validation domain,
+environment-tracker behavior, backend authority, server pagination, current
+theme, and all unrelated local changes.
 
-## Locked Contracts
+## Locked contracts
 
-- Preserve the Phase 1-3 feature-first dependency direction and keep the new frontend feature under `src/features/file-inventory/` with a controlled `index.ts` API.
-- Keep Tauri commands thin. Rust services own scan/reconciliation rules, filesystem adapters own traversal and watcher mechanics, and repositories own all SQL.
-- Reuse canonical project roots, relative watched locations, exclusions, SQLite state, UUIDs, typed errors, and tracing from Phases 2-3.
-- Store file identity as a stable UUID plus unique `(project_id, relative_path)`. Store only metadata; never read or persist file contents.
-- Determine MIME type only from the extension. Use deterministic extension/category rules and an `other` fallback.
-- Exclude symbolic links and Windows reparse points. Never traverse a link target, even when it resolves inside the root.
-- Stream scan results through bounded batches rather than returning an entire inventory in memory.
-- Mark unseen records missing only after an authoritative, completed scan for the relevant scope. Partial, failed, unavailable-root, and ambiguous scans preserve existing status.
-- Keep missing records so reappearance can reactivate the same local identity at the same relative path.
-- Keep watcher intake bounded and debounced. Coalesce logical changes and use a full project reconciliation for correctness when native events are ambiguous, renamed, moved, or dropped.
-- Expose paginated inventory queries with bounded page sizes and parameterized filters. Phase 8 full-text search is not introduced.
-- Invalidate only the affected project inventory query prefix after a successful manual scan or backend inventory event.
-- No hashes are computed in Phase 4 because no demonstrated feature requires them.
+- Tabs are route-backed: Environments is the default, with Rules & Health and
+  Issues as integrated modes. `/validation` remains a compatibility redirect.
+- Structural state stays in the existing cell chip. Validation changes only the
+  cell's outer border, using the highest open severity.
+- Selection uses a neutral inset treatment and never overwrites validation
+  severity styling.
+- Matrix data remains one server-paginated query. Active rule-only keys join the
+  same search/page universe; disabled-rule-only keys are omitted.
+- Matrix validation details are projected in bounded backend queries, never with
+  per-cell IPC or SQL calls.
+- Validation rules, issues, summaries, lifecycle, and SQL remain owned by the
+  validation-center backend. Environment structural data remains owned by the
+  environment-tracker backend.
+- Existing Compare/Inspect, source management, reordering, refresh, issue
+  history, manifest export, and mutation flows are reused rather than rebuilt.
+- The workbench has one primary scroll plane per active tab; title, tabs, tab
+  actions, and pagination stay fixed.
 
-## Threat Model
+## Ordered vertical slices
 
-| Threat                                                                       | Boundary                                        | Mitigation                                                                                                                                    |
-| ---------------------------------------------------------------------------- | ----------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
-| Traversal or watched path escapes the approved root                          | Stored project configuration to scanner/watcher | Re-canonicalize the root and each watched location; reject anything outside the root; never accept frontend-provided absolute inventory paths |
-| Symlink/junction escape or cycle                                             | Recursive traversal                             | Inspect link metadata, skip symlinks/reparse points, and never follow them                                                                    |
-| Inaccessible or temporarily unavailable storage creates mass false deletions | Filesystem to reconciliation                    | Record partial/failed scan status and never mark unseen rows missing unless the scan completes authoritatively                                |
-| Event storms exhaust memory or run overlapping scans                         | OS watcher to service                           | Bounded queue, debounce/coalescing, serialized reconciliation, and overflow-to-full-reconciliation fallback                                   |
-| Search input alters SQL                                                      | Frontend/IPC to repository                      | Validate lengths/enums/page bounds and bind all values through SQLx query parameters                                                          |
-| Sensitive local data is leaked                                               | DTO/log boundary                                | Return relative paths and metadata only; do not read contents; log project/scan IDs and counts, never file contents or environment values     |
-| Large projects exhaust memory or stall UI                                    | Scanner/query boundary                          | Fixed scan batch size, bounded channels, blocking traversal off the async runtime, paginated queries, and indexed filter columns              |
+### 1. Regression tests and integrated contracts
 
-## Ordered Slices
+- Add failing frontend tests for route tabs, edit-form reset/population,
+  severity presentation, neutral selection, Add Rule, and query invalidation.
+- Add failing Rust tests for active rule-only key union, search/pagination,
+  disabled-rule omission, and bounded validation projection.
+- Extend typed frontend/Rust matrix DTO contracts with cell validation details.
 
-### 1. Schema and public contracts
+### 2. Backend matrix composition
 
-- Add append-only `0003_file_inventory.sql` for `indexed_files` and `scan_runs` with constraints and indexes.
-- Define Rust inventory models, DTOs, typed errors, and repository/service interfaces.
-- Add failing migration, categorization, filter-validation, and repository tests first.
+- Add validation-repository reads for active matrix rule keys and open issue
+  projections over a bounded page of keys/environments.
+- Allow the environment repository to merge provided rule keys with observed
+  definitions before search, sort, count, and pagination without querying
+  validation tables directly.
+- Add a cross-feature workspace service that composes both feature services and
+  enriches one matrix page in bulk.
+- Keep the Tauri matrix command thin and return safe DTOs only.
 
-### 2. Authoritative scanner and reconciliation
+### 3. Frontend matrix and inspector integration
 
-- Add a safe recursive scanner over configured watched locations.
-- Capture relative path, name, extension, extension-derived MIME, size, modified timestamp, category, source, and watched-location ID.
-- Stream fixed-size batches to SQLite and record added/updated/unchanged/missing/excluded/unreadable counts.
-- Support initial/startup/manual-project/manual-location/watcher scan kinds and completed/partial/failed status.
+- Parse validation projection fields in the existing matrix gateway.
+- Map highest open severity to accessible outer-border presentation.
+- Keep structural chips unchanged and replace blue selection borders with a
+  neutral inset state in Compare and Inspect.
+- Extend the key inspector with structural status, applicable rules, and all
+  open cell issues while preserving source detail behavior.
+- Convert Inspect to the same server-pagination path, scoped to one environment.
 
-### 3. Query and rescan IPC
+### 4. Unified route-backed workbench
 
-- Add paginated searchable/filterable inventory and recent scan DTOs.
-- Add full-project and watched-location rescan commands.
-- Register commands without expanding Tauri filesystem permissions.
+- Add Environments, Rules & Health, and Issues tabs under `/environments`.
+- Extract reusable validation controllers/panels and reuse the same Add/Edit
+  Rule modal from the matrix toolbar and Rules & Health.
+- Fix rule-form lifecycle reset so edit/create switching always shows current
+  values without false dirty state.
+- Bound rule and issue content with internal scrolling and pinned pagination.
+- Redirect `/validation` to `/environments/rules` and remove the separate
+  Validation Center navigation item.
 
-### 4. Frontend inventory feature
+### 5. Verification and scope review
 
-- Add Zod-validated gateway contracts and TanStack Query hooks.
-- Add a responsive inventory page with search, category/extension/status filters, pagination, scan status, empty/loading/error states, and manual rescan actions.
-- Link the public page from routing and project details without deep imports.
+- Run focused unit and Rust tests while iterating.
+- Run `npm run typecheck`, `npm run lint`, `npm run test:unit`, and
+  `npm run build`.
+- From `src-tauri`, run `cargo fmt --check`, `cargo check`,
+  `cargo clippy --all-targets --all-features -- -D warnings`, and `cargo test`
+  with long waits.
+- Manually inspect the fixed-height tab workspaces when the Tauri runtime is
+  supported, using an available port and without changing the UI theme.
+- Review the final diff for N+1 calls, duplicated state, backend-boundary leaks,
+  unrelated redesign, and accidental release or Git actions.
 
-### 5. Native watcher and reconciliation lifecycle
+## Definition of done
 
-- Add a testable notify adapter, logical event coalescer, bounded runtime queue, and serialized reconciliation worker.
-- Register project watched locations at startup, reconcile all projects at startup, refresh watcher registrations after new project creation, and emit safe project-scoped inventory change events.
-- Add frontend event cleanup and query invalidation.
-
-### 6. Validation and scope review
-
-- Run all existing frontend and Rust checks, plus focused inventory tests and Playwright when supported.
-- Review filesystem safety, query bounds, event overload behavior, error sanitization, file sizes, feature boundaries, and Phase 5 scope exclusion.
-- Update `AGENTS.md` and this checklist to describe the implemented Phase 4 boundary.
-
-## Definition of Done
-
-- A registered project can be reconciled into persistent, queryable file metadata without reading file contents.
-- Create/modify/delete/rename/move changes converge correctly through native watching and reconciliation.
-- Partial failures are visible and cannot silently mark the entire inventory missing.
-- UI users can search/filter/page through records, inspect last scan state, and trigger project or watched-location rescans.
-- Tests cover categorization, exclusions, traversal/link safety, batch persistence, missing/recovery, pagination/filtering, event coalescing, typed IPC parsing, query invalidation, and key UI states.
-- No Phase 5+ behavior, cloud/HTTP dependency, environment parsing, file content storage, or broad filesystem permission is added.
+- The integrated route exposes all three modes and keeps `/validation`
+  compatible.
+- Rule creation/editing is shared and the Environment Key edit regression is
+  covered by tests.
+- Active rule-only keys appear once with correct server totals/search/pages.
+- Open validation issues style cells by highest severity without changing
+  structural chips; historical statuses do not affect borders.
+- Compare and Inspect use neutral selection and preserve validation borders.
+- Inspector, Rules & Health, and Issues expose the required details and actions
+  in bounded scroll regions.
+- All claimed checks are actually run and their exact outcomes are reported.

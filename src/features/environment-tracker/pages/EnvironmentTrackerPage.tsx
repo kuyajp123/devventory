@@ -1,4 +1,10 @@
 import { useActiveProject } from '@/features/projects';
+import {
+  ValidationIssuesWorkspace,
+  ValidationRulesHealthWorkspace,
+  ValidationWorkspaceDialogs,
+  useValidationWorkspace,
+} from '@/features/validation-center';
 import { ICON_SIZE, ICON_STROKE } from '@/shared/constants/icon.constants';
 import { TauriCommandError } from '@/shared/infrastructure/tauri/tauri-error';
 import { AppPagination } from '@/shared/ui/AppPagination';
@@ -27,6 +33,7 @@ import {
   IconSettings,
 } from '@tabler/icons-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { NavLink, useLocation } from 'react-router';
 import { EnvironmentFormModal } from '../components/EnvironmentFormModal';
 import { EnvironmentKeyDetails } from '../components/EnvironmentKeyDetails';
 import { EnvironmentMatrix } from '../components/EnvironmentMatrix';
@@ -53,8 +60,10 @@ import type { Environment, EnvironmentFormValues } from '../models/environment';
 
 const MATRIX_PAGE_SIZE = 50;
 type TrackerView = 'compare' | 'inspect';
+type EnvironmentWorkspaceTab = 'environments' | 'rules' | 'issues';
 
 export function EnvironmentTrackerPage() {
+  const location = useLocation();
   const {
     activeProject,
     activeProjectId: projectId,
@@ -72,6 +81,17 @@ export function EnvironmentTrackerPage() {
     useState<Environment | null>(null);
   const previousProjectId = useRef(projectId);
   const matrixContainerRef = useRef<HTMLDivElement>(null);
+  const activeTab: EnvironmentWorkspaceTab = location.pathname.endsWith(
+    '/rules',
+  )
+    ? 'rules'
+    : location.pathname.endsWith('/issues')
+      ? 'issues'
+      : 'environments';
+  const validation = useValidationWorkspace(
+    projectId ?? '',
+    activeTab === 'issues',
+  );
 
   const pendingDeletion = usePendingEnvironmentDeletion(
     projectId ?? '',
@@ -110,17 +130,19 @@ export function EnvironmentTrackerPage() {
   const compareMatrix = useEnvironmentMatrixQuery(
     projectId ?? '',
     filters,
-    view === 'compare',
+    activeTab === 'environments' && view === 'compare',
   );
   const inspectMatrix = useEnvironmentInspectMatrixQuery(
     projectId ?? '',
     selectedEnvironment?.id ?? '',
-    search.trim() || undefined,
-    view === 'inspect',
+    filters,
+    activeTab === 'environments' && view === 'inspect',
   );
   const selectedSources = useEnvironmentSourcesQuery(
     projectId ?? '',
-    view === 'inspect' ? (selectedEnvironment?.id ?? '') : '',
+    activeTab === 'environments' && view === 'inspect'
+      ? (selectedEnvironment?.id ?? '')
+      : '',
   );
   const createEnvironment = useCreateEnvironmentMutation(projectId ?? '');
   const reorder = useReorderEnvironmentsMutation(projectId ?? '');
@@ -234,25 +256,9 @@ export function EnvironmentTrackerPage() {
     [selectionStore, view, selectedSources.data],
   );
 
-  const inspectMatrixPage = useMemo(() => {
-    if (!inspectMatrix.data) return null;
-    const totalPages = Math.ceil(
-      inspectMatrix.data.totalItems / MATRIX_PAGE_SIZE,
-    );
-    const start = (page - 1) * MATRIX_PAGE_SIZE;
-    return {
-      environments: inspectMatrix.data.environments,
-      page,
-      pageSize: MATRIX_PAGE_SIZE,
-      rows: inspectMatrix.data.rows.slice(start, start + MATRIX_PAGE_SIZE),
-      totalItems: inspectMatrix.data.totalItems,
-      totalPages,
-    };
-  }, [inspectMatrix.data, page]);
-
   const activeMatrix = view === 'compare' ? compareMatrix : inspectMatrix;
   const matrixData =
-    view === 'compare' ? compareMatrix.data : inspectMatrixPage;
+    view === 'compare' ? compareMatrix.data : inspectMatrix.data;
   const isLoading = environments.isPending || activeMatrix.isPending;
 
   if (isHydrating) return <EnvironmentTrackerSkeleton />;
@@ -271,7 +277,10 @@ export function EnvironmentTrackerPage() {
   }
 
   return (
-    <div className="-mx-4 -mb-4 flex h-full min-h-0 flex-1 flex-col overflow-hidden sm:-mx-6 sm:-mb-6 lg:-mx-8 lg:-mb-8">
+    <div
+      className="-mx-4 -mb-4 flex h-full min-h-0 flex-1 flex-col overflow-hidden sm:-mx-6 sm:-mb-6 lg:-mx-8 lg:-mb-8"
+      data-testid="environment-tracker-workspace"
+    >
       <header className="border-b border-divider px-4 sm:px-6 lg:px-8 pb-3 space-y-1 shrink-0">
         <div className="flex items-center gap-2">
           <IconAdjustments
@@ -293,13 +302,40 @@ export function EnvironmentTrackerPage() {
         </p>
       </header>
 
-      {isLoading && (
+      <nav
+        aria-label="Environment Tracker sections"
+        className="flex h-10 shrink-0 items-end gap-1 overflow-x-auto border-b border-divider bg-surface px-4 sm:px-6 lg:px-8"
+        role="tablist"
+      >
+        <EnvironmentWorkspaceTabLink
+          isCurrent={activeTab === 'environments'}
+          label="Environments"
+          tab="environments"
+          to="/environments"
+        />
+        <EnvironmentWorkspaceTabLink
+          isCurrent={activeTab === 'rules'}
+          label="Rules & Health"
+          tab="rules"
+          to="/environments/rules"
+        />
+        <EnvironmentWorkspaceTabLink
+          count={validation.summary.data?.openIssues ?? 0}
+          isCurrent={activeTab === 'issues'}
+          label="Issues"
+          tab="issues"
+          to="/environments/issues"
+        />
+      </nav>
+
+      {activeTab === 'environments' && isLoading && (
         <div className="p-4 sm:p-6 lg:p-8">
           <EnvironmentTrackerSkeleton />
         </div>
       )}
 
-      {environments.isError || activeMatrix.isError ? (
+      {activeTab === 'environments' &&
+      (environments.isError || activeMatrix.isError) ? (
         <div className="p-4">
           <Alert role="alert" status="danger">
             <Alert.Indicator />
@@ -313,7 +349,10 @@ export function EnvironmentTrackerPage() {
         </div>
       ) : null}
 
-      {!isLoading && !environments.isError && environmentItems.length === 0 ? (
+      {activeTab === 'environments' &&
+      !isLoading &&
+      !environments.isError &&
+      environmentItems.length === 0 ? (
         <div className="p-6">
           <EmptyState className="rounded-md border border-dashed border-divider bg-surface p-8 text-center">
             <IconAdjustments
@@ -341,7 +380,9 @@ export function EnvironmentTrackerPage() {
         </div>
       ) : null}
 
-      {environmentItems.length > 0 && !environments.isError ? (
+      {activeTab === 'environments' &&
+      environmentItems.length > 0 &&
+      !environments.isError ? (
         <section
           aria-labelledby="environment-matrix-heading"
           className="flex flex-col flex-1 min-h-0"
@@ -349,7 +390,7 @@ export function EnvironmentTrackerPage() {
           {/* Continuous Single-Row Table Toolbar */}
           <div className="flex h-12 shrink-0 items-center justify-between gap-3 border-b border-divider bg-surface px-4 sm:px-6 lg:px-8">
             <div className="flex items-center gap-3 min-w-0">
-              <TextField className="w-56 sm:w-72" variant="secondary">
+              <TextField className="w-40 lg:w-56 2xl:w-72" variant="secondary">
                 <div className="relative">
                   <IconSearch
                     aria-hidden="true"
@@ -470,18 +511,43 @@ export function EnvironmentTrackerPage() {
                 </span>
               ) : null}
 
-              <Button
-                onPress={() => setEditing('new')}
-                size="sm"
-                variant="primary"
-              >
-                <IconPlus
-                  aria-hidden="true"
-                  size={ICON_SIZE.button}
-                  stroke={ICON_STROKE}
-                />
-                Create environment
-              </Button>
+              <Tooltip delay={0}>
+                <Button
+                  aria-label="Add rule"
+                  onPress={validation.openCreateRule}
+                  size="sm"
+                  variant="secondary"
+                >
+                  <IconPlus
+                    aria-hidden="true"
+                    size={ICON_SIZE.button}
+                    stroke={ICON_STROKE}
+                  />
+                  <span className="hidden xl:inline">Add rule</span>
+                </Button>
+                <Tooltip.Content placement="bottom">
+                  <p>Add validation rule</p>
+                </Tooltip.Content>
+              </Tooltip>
+
+              <Tooltip delay={0}>
+                <Button
+                  aria-label="Create environment"
+                  onPress={() => setEditing('new')}
+                  size="sm"
+                  variant="primary"
+                >
+                  <IconPlus
+                    aria-hidden="true"
+                    size={ICON_SIZE.button}
+                    stroke={ICON_STROKE}
+                  />
+                  <span className="hidden xl:inline">Create environment</span>
+                </Button>
+                <Tooltip.Content placement="bottom">
+                  <p>Create environment</p>
+                </Tooltip.Content>
+              </Tooltip>
 
               <Tooltip delay={0}>
                 <Button
@@ -515,7 +581,7 @@ export function EnvironmentTrackerPage() {
               <>
                 <div
                   ref={matrixContainerRef}
-                  className="flex-1 min-w-0 flex flex-col min-h-0 bg-surface overflow-auto"
+                  className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-surface"
                 >
                   {view === 'compare' ? (
                     <EnvironmentMatrix
@@ -583,6 +649,24 @@ export function EnvironmentTrackerPage() {
         </section>
       ) : null}
 
+      {activeTab === 'rules' ? (
+        <div className="min-h-0 flex-1">
+          <ValidationRulesHealthWorkspace
+            controller={validation}
+            environments={environmentItems}
+          />
+        </div>
+      ) : null}
+
+      {activeTab === 'issues' ? (
+        <div className="min-h-0 flex-1">
+          <ValidationIssuesWorkspace
+            controller={validation}
+            environments={environmentItems}
+          />
+        </div>
+      ) : null}
+
       <EnvironmentFormModal
         environment={null}
         isOpen={editing !== null}
@@ -622,7 +706,50 @@ export function EnvironmentTrackerPage() {
           secondsRemaining={pendingDeletion.pending.secondsRemaining}
         />
       )}
+      <ValidationWorkspaceDialogs
+        controller={validation}
+        environments={environmentItems}
+        projectId={projectId ?? ''}
+      />
     </div>
+  );
+}
+
+function EnvironmentWorkspaceTabLink({
+  count,
+  isCurrent,
+  label,
+  tab,
+  to,
+}: {
+  count?: number;
+  isCurrent: boolean;
+  label: string;
+  tab: EnvironmentWorkspaceTab;
+  to: string;
+}) {
+  return (
+    <NavLink
+      aria-selected={isCurrent}
+      className={`flex h-9 shrink-0 items-center gap-2 border-b-2 px-3 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent ${
+        isCurrent
+          ? 'border-accent text-foreground'
+          : 'border-transparent text-muted hover:text-foreground'
+      }`}
+      end={tab === 'environments'}
+      role="tab"
+      to={to}
+    >
+      {label}
+      {count && count > 0 ? (
+        <span
+          aria-label={`${count} open validation issues`}
+          className="rounded-full border border-danger/40 bg-danger/10 px-1.5 font-mono text-[10px] text-danger"
+        >
+          {count > 99 ? '99+' : count}
+        </span>
+      ) : null}
+    </NavLink>
   );
 }
 

@@ -1,4 +1,10 @@
 import { z } from 'zod';
+import {
+  validationIssueSchema,
+  validationRuleSchema,
+  type ValidationIssue,
+  type ValidationRule,
+} from '@/shared/models/validation';
 
 export const environmentSchema = z
   .object({
@@ -93,10 +99,24 @@ export type EnvironmentMatrixSourceDetail = z.infer<
   typeof environmentMatrixSourceDetailSchema
 >;
 
+export type EnvironmentMatrixValidationRule = ValidationRule;
+export type EnvironmentMatrixValidationIssue = ValidationIssue;
+
+export const environmentMatrixCellValidationSchema = z
+  .object({
+    openIssues: z.array(validationIssueSchema),
+    rules: z.array(validationRuleSchema),
+  })
+  .strict();
+export type EnvironmentMatrixCellValidation = z.infer<
+  typeof environmentMatrixCellValidationSchema
+>;
+
 export const environmentMatrixCellSchema = z
   .object({
     sourceDetails: z.array(environmentMatrixSourceDetailSchema),
     state: environmentMatrixCellStateSchema,
+    validation: environmentMatrixCellValidationSchema,
   })
   .strict();
 export type EnvironmentMatrixCell = z.infer<typeof environmentMatrixCellSchema>;
@@ -128,6 +148,7 @@ export const environmentFormSchema = z.object({
 export type EnvironmentFormValues = z.infer<typeof environmentFormSchema>;
 
 export interface EnvironmentPageFilters {
+  environmentId?: string;
   page: number;
   pageSize: number;
   search?: string;

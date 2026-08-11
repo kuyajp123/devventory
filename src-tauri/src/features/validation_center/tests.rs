@@ -136,43 +136,29 @@ fn required_optional_and_forbidden_rules_follow_active_occurrences() {
 }
 
 #[test]
-fn unexpected_keys_require_an_explicit_allowed_environment_rule() {
+fn targeted_rules_do_not_validate_or_forbid_other_environments() {
     let project_id = Uuid::new_v4();
     let local = environment("Local", 0);
     let production = environment("Production", 1);
-    let source = source(
-        production.id,
-        ".env.production",
-        ValidationSourceStatus::Parsed,
-    );
+    let source = source(local.id, ".env.local", ValidationSourceStatus::Parsed);
     let snapshot = ValidationSnapshot {
         project_id,
         environments: vec![local.clone(), production.clone()],
         sources: vec![source.clone()],
-        occurrences: vec![
-            occurrence(
-                Uuid::new_v4(),
-                production.id,
-                source.id,
-                "FEATURE_FLAG",
-                false,
-                false,
-            ),
-            occurrence(
-                Uuid::new_v4(),
-                production.id,
-                source.id,
-                "FREEFORM_KEY",
-                false,
-                false,
-            ),
-        ],
+        occurrences: vec![occurrence(
+            Uuid::new_v4(),
+            local.id,
+            source.id,
+            "VERCEL_AUTOMATION_BYPASS_SECRET",
+            false,
+            false,
+        )],
         rules: vec![rule(
             project_id,
-            "FEATURE_FLAG",
-            ValidationRuleType::Optional,
-            ValidationSeverity::Warning,
-            vec![local.id],
+            "VERCEL_AUTOMATION_BYPASS_SECRET",
+            ValidationRuleType::Required,
+            ValidationSeverity::Error,
+            vec![production.id],
             0,
         )],
     };
@@ -180,13 +166,13 @@ fn unexpected_keys_require_an_explicit_allowed_environment_rule() {
     let result = evaluate(&snapshot);
 
     assert!(result.issues.iter().any(|issue| {
-        issue.issue_type == ValidationIssueType::UnexpectedPresent
-            && issue.key_name == "FEATURE_FLAG"
+        issue.issue_type == ValidationIssueType::RequiredMissing
+            && issue.key_name == "VERCEL_AUTOMATION_BYPASS_SECRET"
             && issue.environment_id == Some(production.id)
     }));
     assert!(!result.issues.iter().any(|issue| {
-        issue.issue_type == ValidationIssueType::UnexpectedPresent
-            && issue.key_name == "FREEFORM_KEY"
+        issue.key_name == "VERCEL_AUTOMATION_BYPASS_SECRET"
+            && issue.environment_id == Some(local.id)
     }));
 }
 
@@ -712,6 +698,76 @@ async fn manifest_preview_and_export_include_only_empty_values_and_refresh_inven
         fs::read_to_string(context.root.join(".env.example")).expect("exported manifest"),
         "API_TOKEN=\n"
     );
+}
+
+#[tokio::test]
+async fn migration_0012_resolves_legacy_cross_environment_findings() {
+    let context = TestContext::new("Validation scope migration").await;
+    let local_id = context.environment("Local").await;
+    let production_id = context.environment("Production").await;
+    let rule = context
+        .service
+        .save_rule(SaveValidationRule {
+            project_id: context.project_id,
+            rule_id: None,
+            key_name: "APP_SETTINGS_ENCRYPTION_KEY".to_owned(),
+            rule_type: ValidationRuleType::Optional,
+            severity: ValidationSeverity::Info,
+            description: None,
+            enabled: true,
+            environment_ids: vec![local_id],
+        })
+        .await
+        .expect("local-only rule");
+    let issue_id = Uuid::new_v4();
+
+    sqlx::query(
+        "INSERT INTO validation_issues (
+            id, project_id, environment_id, rule_id, fingerprint, key_name,
+            normalized_key, issue_type, severity, status, message, last_seen_run_id
+         ) VALUES (?, ?, ?, ?, ?, ?, ?, 'unexpected_present', 'info', 'open', ?, ?)",
+    )
+    .bind(issue_id.to_string())
+    .bind(context.project_id.to_string())
+    .bind(production_id.to_string())
+    .bind(rule.id.to_string())
+    .bind("e".repeat(64))
+    .bind("APP_SETTINGS_ENCRYPTION_KEY")
+    .bind("APP_SETTINGS_ENCRYPTION_KEY")
+    .bind("Legacy out-of-scope issue")
+    .bind(Uuid::new_v4().to_string())
+    .execute(&context.pool)
+    .await
+    .expect("legacy issue fixture");
+    sqlx::query("UPDATE project_validation_state SET health = 'error' WHERE project_id = ?")
+        .bind(context.project_id.to_string())
+        .execute(&context.pool)
+        .await
+        .expect("legacy health fixture");
+    sqlx::query("DELETE FROM _sqlx_migrations WHERE version = 12")
+        .execute(&context.pool)
+        .await
+        .expect("version 12 rollback fixture");
+
+    sqlx::migrate!("./migrations")
+        .run(&context.pool)
+        .await
+        .expect("scope cleanup migration");
+
+    let status: String = sqlx::query_scalar("SELECT status FROM validation_issues WHERE id = ?")
+        .bind(issue_id.to_string())
+        .fetch_one(&context.pool)
+        .await
+        .expect("migrated issue status");
+    let health: String =
+        sqlx::query_scalar("SELECT health FROM project_validation_state WHERE project_id = ?")
+            .bind(context.project_id.to_string())
+            .fetch_one(&context.pool)
+            .await
+            .expect("migrated validation health");
+
+    assert_eq!(status, "resolved");
+    assert_eq!(health, "healthy");
 }
 
 struct TestContext {

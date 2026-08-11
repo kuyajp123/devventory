@@ -1,7 +1,9 @@
 import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { MemoryRouter } from 'react-router';
 import { renderWithProviders } from '@/test/render';
+import { validationCenterGateway } from '@/features/validation-center/services/validation-center.gateway';
 import { environmentTrackerGateway } from '../services/environment-tracker.gateway';
 import { EnvironmentTrackerPage } from './EnvironmentTrackerPage';
 
@@ -53,6 +55,24 @@ vi.mock('../services/environment-tracker.gateway', () => ({
   },
 }));
 
+vi.mock(
+  '@/features/validation-center/services/validation-center.gateway',
+  () => ({
+    validationCenterGateway: {
+      deleteRule: vi.fn(),
+      exportManifest: vi.fn(),
+      listIssues: vi.fn(),
+      listRules: vi.fn(),
+      previewManifest: vi.fn(),
+      reorderRules: vi.fn(),
+      saveRule: vi.fn(),
+      setIssueStatus: vi.fn(),
+      summary: vi.fn(),
+      validate: vi.fn(),
+    },
+  }),
+);
+
 describe('EnvironmentTrackerPage', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -76,11 +96,29 @@ describe('EnvironmentTrackerPage', () => {
     vi.mocked(environmentTrackerGateway.create).mockResolvedValue(
       environmentResponse(),
     );
+    vi.mocked(validationCenterGateway.listRules).mockResolvedValue([]);
+    vi.mocked(validationCenterGateway.listIssues).mockResolvedValue({
+      items: [],
+      page: 1,
+      pageSize: 25,
+      totalItems: 0,
+      totalPages: 0,
+    });
+    vi.mocked(validationCenterGateway.summary).mockResolvedValue({
+      errorIssues: 0,
+      health: 'healthy',
+      ignoredIssues: 0,
+      infoIssues: 0,
+      lastSuccessfulAt: null,
+      openIssues: 0,
+      resolvedIssues: 0,
+      warningIssues: 0,
+    });
   });
 
   it('creates an environment through the accessible HeroUI form without any value field', async () => {
     const user = userEvent.setup();
-    renderWithProviders(<EnvironmentTrackerPage />);
+    renderTracker();
 
     expect(
       await screen.findByText('Create your first environment'),
@@ -131,6 +169,7 @@ describe('EnvironmentTrackerPage', () => {
                   relativePath: '.env.local',
                 },
               ],
+              validation: { openIssues: [], rules: [] },
             },
           ],
         },
@@ -139,7 +178,7 @@ describe('EnvironmentTrackerPage', () => {
       totalPages: 1,
     });
 
-    renderWithProviders(<EnvironmentTrackerPage />);
+    renderTracker();
 
     expect(
       await screen.findByRole('button', { name: 'Reorder Development' }),
@@ -213,6 +252,7 @@ describe('EnvironmentTrackerPage', () => {
                   relativePath: '.env.security-test.local',
                 },
               ],
+              validation: { openIssues: [], rules: [] },
             },
           ],
         },
@@ -221,7 +261,7 @@ describe('EnvironmentTrackerPage', () => {
       totalPages: 1,
     });
 
-    renderWithProviders(<EnvironmentTrackerPage />);
+    renderTracker();
     await user.click(
       await screen.findByRole('button', { name: 'Inspect environment' }),
     );
@@ -244,7 +284,75 @@ describe('EnvironmentTrackerPage', () => {
     expect(screen.getAllByText('Line 4').length).toBeGreaterThan(0);
     expect(screen.getAllByText('Line 17').length).toBeGreaterThan(0);
   });
+
+  it('keeps validation inside route-backed workbench tabs and shares Add Rule', async () => {
+    const user = userEvent.setup();
+    const environment = environmentResponse();
+    vi.mocked(environmentTrackerGateway.list).mockResolvedValue([environment]);
+    vi.mocked(environmentTrackerGateway.matrix).mockResolvedValue({
+      environments: [environment],
+      page: 1,
+      pageSize: 50,
+      rows: [],
+      totalItems: 0,
+      totalPages: 0,
+    });
+    vi.mocked(validationCenterGateway.summary).mockResolvedValue({
+      errorIssues: 2,
+      health: 'error',
+      ignoredIssues: 0,
+      infoIssues: 1,
+      lastSuccessfulAt: '2026-08-08T00:00:00.000Z',
+      openIssues: 4,
+      resolvedIssues: 0,
+      warningIssues: 1,
+    });
+
+    renderTracker();
+
+    expect(screen.getByTestId('environment-tracker-workspace')).toHaveClass(
+      'h-full',
+      'min-h-0',
+      'overflow-hidden',
+    );
+    expect(
+      await screen.findByRole('tab', { name: 'Environments' }),
+    ).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByRole('tab', { name: 'Rules & Health' })).toHaveAttribute(
+      'href',
+      '/environments/rules',
+    );
+    expect(
+      await screen.findByLabelText('4 open validation issues'),
+    ).toBeVisible();
+
+    await user.click(await screen.findByRole('button', { name: 'Add rule' }));
+    expect(
+      await screen.findByRole('dialog', { name: 'Create validation rule' }),
+    ).toBeVisible();
+    await user.click(screen.getByRole('button', { name: 'Cancel' }));
+
+    await user.click(screen.getByRole('tab', { name: 'Rules & Health' }));
+    expect(screen.getByRole('tab', { name: 'Rules & Health' })).toHaveAttribute(
+      'aria-selected',
+      'true',
+    );
+    expect(await screen.findByText('Validation rules')).toBeVisible();
+    expect(screen.getByText('Project health')).toBeVisible();
+
+    await user.click(screen.getByRole('tab', { name: /^Issues/ }));
+    expect(await screen.findByText('Validation issues')).toBeVisible();
+    expect(screen.getByLabelText('Search issues')).toBeVisible();
+  });
 });
+
+function renderTracker(initialEntry = '/environments') {
+  return renderWithProviders(
+    <MemoryRouter initialEntries={[initialEntry]}>
+      <EnvironmentTrackerPage />
+    </MemoryRouter>,
+  );
+}
 
 function environmentResponse() {
   return {

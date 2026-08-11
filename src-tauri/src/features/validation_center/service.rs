@@ -90,6 +90,17 @@ impl ValidationService {
         self.repository.list_issues(&query).await
     }
 
+    pub(crate) async fn open_matrix_issues(
+        &self,
+        project_id: Uuid,
+        normalized_keys: &[String],
+        environment_ids: &[Uuid],
+    ) -> Result<Vec<ValidationIssue>, ValidationError> {
+        self.repository
+            .open_matrix_issues(project_id, normalized_keys, environment_ids)
+            .await
+    }
+
     pub(crate) async fn set_issue_status(
         &self,
         project_id: Uuid,
