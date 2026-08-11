@@ -270,7 +270,7 @@ fn detect_rule_issues(
                 rule.key_name.clone(),
                 normalized.clone(),
                 message,
-                occurrence.map(|item| item.line_number),
+                occurrence.and_then(|item| item.line_number),
                 occurrence.map(|item| item.observed_name.clone()),
             ));
         }
@@ -308,7 +308,7 @@ fn detect_occurrence_issues(
                     occurrence.key_name.clone(),
                     normalized.clone(),
                     format!("Key '{}' is declared more than once.", occurrence.key_name),
-                    Some(occurrence.line_number),
+                    occurrence.line_number,
                     Some(occurrence.observed_name.clone()),
                 ));
             }
@@ -339,7 +339,7 @@ fn detect_occurrence_issues(
                     "Key '{}' should use the canonical spelling '{}'.",
                     occurrence.observed_name, canonical_name
                 ),
-                Some(occurrence.line_number),
+                occurrence.line_number,
                 Some(occurrence.observed_name.clone()),
             ));
         }

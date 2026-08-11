@@ -76,6 +76,49 @@ export type EnvironmentSourceCandidatePage = z.infer<
   typeof environmentSourceCandidatePageSchema
 >;
 
+export const environmentSourceOriginSchema = z.enum(['file', 'custom']);
+export type EnvironmentSourceOrigin = z.infer<
+  typeof environmentSourceOriginSchema
+>;
+
+export const customEnvironmentKeySchema = z
+  .object({
+    createdAt: z.string().min(1),
+    environmentId: z.string().uuid(),
+    id: z.string().uuid(),
+    name: z.string().min(1).max(255),
+    normalizedName: z.string().min(1).max(255),
+    projectId: z.string().uuid(),
+    sourceId: z.string().uuid(),
+    updatedAt: z.string().min(1),
+  })
+  .strict();
+export type CustomEnvironmentKey = z.infer<typeof customEnvironmentKeySchema>;
+
+export const customEnvironmentSourceSchema = z
+  .object({
+    createdAt: z.string().min(1),
+    environmentId: z.string().uuid(),
+    id: z.string().uuid(),
+    keys: z.array(customEnvironmentKeySchema),
+    name: z.string().min(1).max(120),
+    projectId: z.string().uuid(),
+    sortOrder: z.number().int().nonnegative(),
+    updatedAt: z.string().min(1),
+  })
+  .strict();
+export type CustomEnvironmentSource = z.infer<
+  typeof customEnvironmentSourceSchema
+>;
+
+export interface EnvironmentInspectableSource {
+  id: string;
+  label: string;
+  origin: EnvironmentSourceOrigin;
+  parseStatus: EnvironmentSource['parseStatus'];
+  sortOrder: number;
+}
+
 export const environmentMatrixCellStateSchema = z.enum([
   'present',
   'duplicate',
@@ -92,7 +135,10 @@ export const environmentMatrixSourceDetailSchema = z
   .object({
     isCommented: z.boolean(),
     lineNumber: z.number().int().positive().nullable(),
-    relativePath: z.string().min(1),
+    origin: environmentSourceOriginSchema,
+    relativePath: z.string().min(1).nullable(),
+    sourceId: z.string().uuid(),
+    sourceName: z.string().min(1),
   })
   .strict();
 export type EnvironmentMatrixSourceDetail = z.infer<
@@ -146,6 +192,34 @@ export const environmentFormSchema = z.object({
   name: z.string().trim().min(1, 'Enter an environment name.').max(120),
 });
 export type EnvironmentFormValues = z.infer<typeof environmentFormSchema>;
+
+const metadataName = (maximum: number, message: string) =>
+  z
+    .string()
+    .trim()
+    .min(1, message)
+    .max(maximum)
+    .refine(
+      (value) =>
+        Array.from(value).every((character) => {
+          const codePoint = character.codePointAt(0) ?? 0;
+          return codePoint > 31 && codePoint !== 127;
+        }),
+      {
+        message: 'Control characters are not allowed.',
+      },
+    );
+
+export const customSourceFormSchema = z.object({
+  keyNames: z.array(metadataName(255, 'Enter a custom key name.')).max(200),
+  name: metadataName(120, 'Enter a custom source name.'),
+});
+export type CustomSourceFormValues = z.infer<typeof customSourceFormSchema>;
+
+export const customKeyFormSchema = z.object({
+  name: metadataName(255, 'Enter a custom key name.'),
+});
+export type CustomKeyFormValues = z.infer<typeof customKeyFormSchema>;
 
 export interface EnvironmentPageFilters {
   environmentId?: string;

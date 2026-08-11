@@ -13,6 +13,14 @@ import * as gateway from './services/quick-access.gateway';
 const { startDragging } = vi.hoisted(() => ({
   startDragging: vi.fn(),
 }));
+const { environmentGateway, selectionGateway } = vi.hoisted(() => ({
+  environmentGateway: {
+    addCustomKey: vi.fn(),
+    list: vi.fn(),
+    listCustomSources: vi.fn(),
+  },
+  selectionGateway: { getLastOpenedProjectId: vi.fn() },
+}));
 
 let unreadEventCallback: ((event: { payload: unknown }) => void) | null = null;
 
@@ -39,8 +47,17 @@ vi.mock('./services/quick-access.gateway', () => ({
     revision: 0,
   }),
   openAgentUnreadFromQuickAccess: vi.fn().mockResolvedValue(undefined),
+  openEnvironmentSettingsFromQuickAccess: vi.fn().mockResolvedValue(undefined),
   openMainWindowFromQuickAccess: vi.fn().mockResolvedValue(undefined),
   setQuickAccessPreventAutoHide: vi.fn().mockResolvedValue(undefined),
+}));
+
+vi.mock('@/features/environment-tracker', () => ({
+  environmentTrackerGateway: environmentGateway,
+}));
+
+vi.mock('@/features/projects', () => ({
+  projectSelectionGateway: selectionGateway,
 }));
 
 describe('QuickAccessApp', () => {
@@ -52,16 +69,74 @@ describe('QuickAccessApp', () => {
       pulse: false,
       revision: 0,
     });
+    selectionGateway.getLastOpenedProjectId.mockResolvedValue(null);
+    environmentGateway.list.mockResolvedValue([]);
+    environmentGateway.listCustomSources.mockResolvedValue([]);
+    environmentGateway.addCustomKey.mockResolvedValue(undefined);
   });
 
-  it('renders custom titlebar and action placeholders', () => {
+  it('renders the functional environment-key action and remaining placeholder', () => {
     render(<QuickAccessApp />);
 
     expect(screen.getByText('Devventory Quick Access')).toBeInTheDocument();
     expect(screen.getByText('QUICK ACTIONS')).toBeInTheDocument();
     expect(screen.getByText('+ Environment Key')).toBeInTheDocument();
     expect(screen.getByText('+ Quota Window')).toBeInTheDocument();
-    expect(screen.getAllByText('Coming soon')).toHaveLength(2);
+    expect(screen.getByText('Add')).toBeInTheDocument();
+    expect(screen.getAllByText('Coming soon')).toHaveLength(1);
+  });
+
+  it('adds a metadata-only key to an existing custom source', async () => {
+    const user = userEvent.setup();
+    const projectId = '30af17bd-2dd6-4b89-a5e7-8517191815a7';
+    const environmentId = 'd63f9ad6-0817-4b8b-ad88-ec19881295b8';
+    const sourceId = '4b2cc20c-9360-44b8-85d3-d5f089582d6e';
+    selectionGateway.getLastOpenedProjectId.mockResolvedValue(projectId);
+    environmentGateway.list.mockResolvedValue([
+      { id: environmentId, name: 'Production' },
+    ]);
+    environmentGateway.listCustomSources.mockResolvedValue([
+      { id: sourceId, name: 'Deployment secrets' },
+    ]);
+
+    render(<QuickAccessApp />);
+    await user.click(screen.getByRole('button', { name: /environment key/i }));
+    const input = await screen.findByLabelText('Custom environment key name');
+    await user.type(input, 'signing-key.p12');
+    await user.click(screen.getByRole('button', { name: 'Add key' }));
+
+    await waitFor(() =>
+      expect(environmentGateway.addCustomKey).toHaveBeenCalledWith({
+        environmentId,
+        name: 'signing-key.p12',
+        projectId,
+        sourceId,
+      }),
+    );
+    expect(screen.getByRole('status')).toHaveTextContent('metadata only');
+  });
+
+  it('opens the main Environment Settings flow when no custom source exists', async () => {
+    const user = userEvent.setup();
+    const projectId = '30af17bd-2dd6-4b89-a5e7-8517191815a7';
+    const environmentId = 'd63f9ad6-0817-4b8b-ad88-ec19881295b8';
+    selectionGateway.getLastOpenedProjectId.mockResolvedValue(projectId);
+    environmentGateway.list.mockResolvedValue([
+      { id: environmentId, name: 'Production' },
+    ]);
+    environmentGateway.listCustomSources.mockResolvedValue([]);
+
+    render(<QuickAccessApp />);
+    await user.click(screen.getByRole('button', { name: /environment key/i }));
+    await user.click(
+      await screen.findByRole('button', {
+        name: 'Open Environment Settings',
+      }),
+    );
+
+    expect(gateway.openEnvironmentSettingsFromQuickAccess).toHaveBeenCalledWith(
+      environmentId,
+    );
   });
 
   it('triggers openMainWindowFromQuickAccess when external link button is clicked', async () => {

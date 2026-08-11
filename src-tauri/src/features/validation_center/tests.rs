@@ -5,7 +5,10 @@ use uuid::Uuid;
 
 use crate::{
     features::{
-        environment_tracker::{CreateEnvironment, EnvironmentService, SqliteEnvironmentRepository},
+        environment_tracker::{
+            CreateCustomEnvironmentSource, CreateEnvironment, EnvironmentService,
+            SqliteEnvironmentRepository,
+        },
         file_inventory::{FileInventoryService, SqliteFileInventoryRepository},
         projects::{
             CreateProject, LocalProjectFilesystem, ProjectService, ProjectType,
@@ -701,6 +704,70 @@ async fn manifest_preview_and_export_include_only_empty_values_and_refresh_inven
 }
 
 #[tokio::test]
+async fn custom_definitions_participate_in_required_and_duplicate_validation() {
+    let context = TestContext::new("Custom validation project").await;
+    let environment_id = context.environment("Production").await;
+    context
+        .environment_service
+        .create_custom_source(CreateCustomEnvironmentSource {
+            project_id: context.project_id,
+            environment_id,
+            name: "Deployment secrets".to_owned(),
+            key_names: vec!["API_TOKEN".to_owned()],
+        })
+        .await
+        .expect("custom source");
+    context
+        .service
+        .save_rule(SaveValidationRule {
+            project_id: context.project_id,
+            rule_id: None,
+            key_name: "API_TOKEN".to_owned(),
+            rule_type: ValidationRuleType::Required,
+            severity: ValidationSeverity::Error,
+            description: None,
+            enabled: true,
+            environment_ids: vec![environment_id],
+        })
+        .await
+        .expect("required custom key rule");
+    assert!(!context
+        .repository
+        .list_issues(&issue_query(context.project_id, 1, 25))
+        .await
+        .expect("custom required issues")
+        .items
+        .iter()
+        .any(|issue| issue.issue_type == ValidationIssueType::RequiredMissing));
+
+    context.write_source("config/production.env", b"API_TOKEN=file-value\n");
+    context
+        .environment_service
+        .add_source(
+            context.project_id,
+            environment_id,
+            "config/production.env".to_owned(),
+        )
+        .await
+        .expect("file source");
+    context
+        .service
+        .validate(context.project_id)
+        .await
+        .expect("validation with file and custom definition");
+    assert!(context
+        .repository
+        .list_issues(&issue_query(context.project_id, 1, 25))
+        .await
+        .expect("duplicate issues")
+        .items
+        .iter()
+        .any(|issue| issue.issue_type == ValidationIssueType::Duplicate
+            && issue.key_name == "API_TOKEN"
+            && issue.environment_id == Some(environment_id)));
+}
+
+#[tokio::test]
 async fn migration_0012_resolves_legacy_cross_environment_findings() {
     let context = TestContext::new("Validation scope migration").await;
     let local_id = context.environment("Local").await;
@@ -926,7 +993,7 @@ fn occurrence(
         key_name: observed_name.to_owned(),
         observed_name: observed_name.to_owned(),
         normalized_key: observed_name.to_ascii_uppercase(),
-        line_number: 1,
+        line_number: Some(1),
         is_commented,
         is_duplicate,
     }

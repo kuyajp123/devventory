@@ -331,7 +331,7 @@ pub(super) struct ValidationOccurrence {
     pub(super) key_name: String,
     pub(super) observed_name: String,
     pub(super) normalized_key: String,
-    pub(super) line_number: u32,
+    pub(super) line_number: Option<u32>,
     pub(super) is_commented: bool,
     pub(super) is_duplicate: bool,
 }

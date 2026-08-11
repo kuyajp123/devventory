@@ -3,6 +3,7 @@ use uuid::Uuid;
 
 use super::error::EnvironmentError;
 use super::model::{
+    CopyCustomEnvironmentKey, CopyCustomEnvironmentSource, CreateCustomEnvironmentSource,
     CreateEnvironment, EnvironmentMatrixQuery, EnvironmentSourceCandidateQuery, UpdateEnvironment,
 };
 
@@ -12,6 +13,7 @@ const MAX_PAGE_SIZE: u32 = 100;
 const MAX_PATH_LENGTH: usize = 1_024;
 const MAX_SEARCH_LENGTH: usize = 128;
 const MAX_SOURCES: usize = 64;
+const MAX_CUSTOM_KEYS: usize = 200;
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -170,6 +172,139 @@ impl EnvironmentSourceOrderInput {
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub(crate) struct CreateCustomEnvironmentSourceInput {
+    project_id: String,
+    environment_id: String,
+    name: String,
+    key_names: Vec<String>,
+}
+
+impl TryFrom<CreateCustomEnvironmentSourceInput> for CreateCustomEnvironmentSource {
+    type Error = EnvironmentError;
+
+    fn try_from(input: CreateCustomEnvironmentSourceInput) -> Result<Self, Self::Error> {
+        if input.key_names.len() > MAX_CUSTOM_KEYS {
+            return Err(EnvironmentError::InvalidInput);
+        }
+        Ok(Self {
+            project_id: parse_uuid(&input.project_id)?,
+            environment_id: parse_uuid(&input.environment_id)?,
+            name: normalize_required(input.name, MAX_ENVIRONMENT_NAME_LENGTH)?,
+            key_names: input
+                .key_names
+                .into_iter()
+                .map(|name| normalize_required(name, 255))
+                .collect::<Result<_, _>>()?,
+        })
+    }
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub(crate) struct RenameCustomEnvironmentSourceInput {
+    project_id: String,
+    environment_id: String,
+    source_id: String,
+    name: String,
+}
+
+impl RenameCustomEnvironmentSourceInput {
+    pub(crate) fn parse(&self) -> Result<(Uuid, Uuid, Uuid, String), EnvironmentError> {
+        Ok((
+            parse_uuid(&self.project_id)?,
+            parse_uuid(&self.environment_id)?,
+            parse_uuid(&self.source_id)?,
+            normalize_required(self.name.clone(), MAX_ENVIRONMENT_NAME_LENGTH)?,
+        ))
+    }
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub(crate) struct CustomEnvironmentKeyInput {
+    project_id: String,
+    environment_id: String,
+    source_id: String,
+    name: String,
+}
+
+impl CustomEnvironmentKeyInput {
+    pub(crate) fn parse(&self) -> Result<(Uuid, Uuid, Uuid, String), EnvironmentError> {
+        Ok((
+            parse_uuid(&self.project_id)?,
+            parse_uuid(&self.environment_id)?,
+            parse_uuid(&self.source_id)?,
+            normalize_required(self.name.clone(), 255)?,
+        ))
+    }
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub(crate) struct CustomEnvironmentKeyIdInput {
+    project_id: String,
+    environment_id: String,
+    source_id: String,
+    key_id: String,
+}
+
+impl CustomEnvironmentKeyIdInput {
+    pub(crate) fn parse(&self) -> Result<(Uuid, Uuid, Uuid, Uuid), EnvironmentError> {
+        Ok((
+            parse_uuid(&self.project_id)?,
+            parse_uuid(&self.environment_id)?,
+            parse_uuid(&self.source_id)?,
+            parse_uuid(&self.key_id)?,
+        ))
+    }
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub(crate) struct CopyCustomEnvironmentKeyInput {
+    project_id: String,
+    key_id: String,
+    target_environment_id: String,
+    target_source_id: String,
+}
+
+impl TryFrom<CopyCustomEnvironmentKeyInput> for CopyCustomEnvironmentKey {
+    type Error = EnvironmentError;
+
+    fn try_from(input: CopyCustomEnvironmentKeyInput) -> Result<Self, Self::Error> {
+        Ok(Self {
+            project_id: parse_uuid(&input.project_id)?,
+            key_id: parse_uuid(&input.key_id)?,
+            target_environment_id: parse_uuid(&input.target_environment_id)?,
+            target_source_id: parse_uuid(&input.target_source_id)?,
+        })
+    }
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub(crate) struct CopyCustomEnvironmentSourceInput {
+    project_id: String,
+    source_id: String,
+    target_environment_id: String,
+    target_name: Option<String>,
+}
+
+impl TryFrom<CopyCustomEnvironmentSourceInput> for CopyCustomEnvironmentSource {
+    type Error = EnvironmentError;
+
+    fn try_from(input: CopyCustomEnvironmentSourceInput) -> Result<Self, Self::Error> {
+        Ok(Self {
+            project_id: parse_uuid(&input.project_id)?,
+            source_id: parse_uuid(&input.source_id)?,
+            target_environment_id: parse_uuid(&input.target_environment_id)?,
+            target_name: normalize_optional(input.target_name, MAX_ENVIRONMENT_NAME_LENGTH)?,
+        })
+    }
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub(crate) struct EnvironmentSourceCandidateQueryInput {
     project_id: String,
     search: Option<String>,
@@ -224,7 +359,10 @@ fn parse_uuid(value: &str) -> Result<Uuid, EnvironmentError> {
 
 fn normalize_required(value: String, maximum_length: usize) -> Result<String, EnvironmentError> {
     let value = value.trim().to_owned();
-    if value.is_empty() || value.chars().count() > maximum_length {
+    if value.is_empty()
+        || value.chars().count() > maximum_length
+        || value.chars().any(char::is_control)
+    {
         return Err(EnvironmentError::InvalidInput);
     }
     Ok(value)

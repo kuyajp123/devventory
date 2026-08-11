@@ -63,6 +63,7 @@ vi.mock('@/features/agent-usage', async (importOriginal) => {
 });
 
 vi.mock('@/features/environment-tracker', () => ({
+  EnvironmentNavigationSync: () => null,
   EnvironmentTrackerPage: () => <h1>Environment Tracker</h1>,
 }));
 

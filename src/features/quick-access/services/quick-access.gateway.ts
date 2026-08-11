@@ -12,6 +12,14 @@ export function openMainWindowFromQuickAccess(): Promise<void> {
   return invokeCommand('open_main_window_from_quick_access_command');
 }
 
+export function openEnvironmentSettingsFromQuickAccess(
+  environmentId: string,
+): Promise<void> {
+  return invokeCommand('open_environment_settings_from_quick_access_command', {
+    environmentId,
+  });
+}
+
 export function setQuickAccessPreventAutoHide(prevent: boolean): Promise<void> {
   return invokeCommand('set_quick_access_prevent_auto_hide_command', {
     prevent,

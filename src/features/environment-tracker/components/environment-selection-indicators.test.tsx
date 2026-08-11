@@ -58,12 +58,18 @@ const sourceDetails = [
   {
     isCommented: false,
     lineNumber: 6,
+    origin: 'file' as const,
     relativePath: firstSource.relativePath,
+    sourceId: firstSource.id,
+    sourceName: firstSource.relativePath,
   },
   {
     isCommented: true,
     lineNumber: 12,
+    origin: 'file' as const,
     relativePath: secondSource.relativePath,
+    sourceId: secondSource.id,
+    sourceName: secondSource.relativePath,
   },
 ];
 
@@ -195,7 +201,13 @@ function InspectSelectionHarness() {
       matrix={inspectMatrix}
       onSelect={selectionStore.setSelection}
       selectionStore={selectionStore}
-      sources={[firstSource, secondSource]}
+      sources={[firstSource, secondSource].map((source) => ({
+        id: source.id,
+        label: source.relativePath,
+        origin: 'file' as const,
+        parseStatus: source.parseStatus,
+        sortOrder: source.sortOrder,
+      }))}
     />
   );
 }
@@ -247,9 +259,7 @@ describe('environment selection indicators', () => {
     expect(
       document.querySelectorAll('[data-definition-path][data-selected="true"]'),
     ).toHaveLength(1);
-    expect(onDefinitionClick).toHaveBeenLastCalledWith(
-      secondSource.relativePath,
-    );
+    expect(onDefinitionClick).toHaveBeenLastCalledWith(secondSource.id);
   });
 
   it('moves the compare-view cell indicator to the newly active cell', async () => {

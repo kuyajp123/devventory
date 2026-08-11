@@ -3,8 +3,8 @@ import { describe, expect, it, vi } from 'vitest';
 import { renderWithProviders } from '@/test/render';
 import type {
   Environment,
+  EnvironmentInspectableSource,
   EnvironmentMatrixPage,
-  EnvironmentSource,
 } from '../models/environment';
 import { InspectEnvironmentMatrix } from './InspectEnvironmentMatrix';
 import { createEnvironmentMatrixSelectionStore } from './environment-matrix-selection-context';
@@ -63,6 +63,90 @@ describe('InspectEnvironmentMatrix', () => {
       }),
     ).not.toBeInTheDocument();
   });
+
+  it('shows custom sources without fabricated file paths, parser health, or line numbers', () => {
+    const sourceId = '39f15e31-e7b1-47db-b027-c8707551d1d2';
+    const matrix = matrixResponse();
+    matrix.rows[0].cells[0].sourceDetails = [
+      {
+        isCommented: false,
+        lineNumber: null,
+        origin: 'custom',
+        relativePath: null,
+        sourceId,
+        sourceName: 'Credential registry',
+      },
+    ];
+
+    renderWithProviders(
+      <InspectEnvironmentMatrix
+        environment={environment}
+        matrix={matrix}
+        onSelect={vi.fn()}
+        selectionStore={createEnvironmentMatrixSelectionStore()}
+        sources={[
+          {
+            id: sourceId,
+            label: 'Credential registry',
+            origin: 'custom',
+            parseStatus: 'parsed',
+            sortOrder: 0,
+          },
+        ]}
+      />,
+    );
+
+    expect(screen.getByText('Credential registry')).toBeVisible();
+    expect(screen.getByText('Custom metadata source')).toBeVisible();
+    expect(
+      screen.getByRole('button', {
+        name: 'APP_BASE_URL in Credential registry: Present',
+      }),
+    ).toBeVisible();
+    expect(screen.queryByText(/line 1/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/parsed/i)).not.toBeInTheDocument();
+  });
+
+  it('carries custom source identity when the selected key is absent', () => {
+    const sourceId = '39f15e31-e7b1-47db-b027-c8707551d1d2';
+    const matrix = matrixResponse();
+    matrix.rows[0].cells[0].sourceDetails = [];
+    const onSelect = vi.fn();
+
+    renderWithProviders(
+      <InspectEnvironmentMatrix
+        environment={environment}
+        matrix={matrix}
+        onSelect={onSelect}
+        selectionStore={createEnvironmentMatrixSelectionStore()}
+        sources={[
+          {
+            id: sourceId,
+            label: 'Credential registry',
+            origin: 'custom',
+            parseStatus: 'parsed',
+            sortOrder: 0,
+          },
+        ]}
+      />,
+    );
+
+    screen
+      .getByRole('button', {
+        name: 'APP_BASE_URL in Credential registry: Absent',
+      })
+      .click();
+
+    expect(onSelect).toHaveBeenCalledWith(
+      expect.objectContaining({
+        selectedSource: {
+          id: sourceId,
+          label: 'Credential registry',
+          origin: 'custom',
+        },
+      }),
+    );
+  });
 });
 
 const environment: Environment = {
@@ -79,23 +163,13 @@ function sourceResponse(
   id: string,
   relativePath: string,
   sortOrder: number,
-): EnvironmentSource {
+): EnvironmentInspectableSource {
   return {
-    createdAt: '2026-08-05T00:00:00.000Z',
-    environmentId: environment.id,
     id,
-    lastIssueCode: null,
-    lastIssueLine: null,
-    lastIssueMessage: null,
-    lastObservedModifiedAtMs: null,
-    lastObservedSizeBytes: null,
-    lastParsedAt: '2026-08-05T00:00:00.000Z',
-    lastSuccessfulParseAt: '2026-08-05T00:00:00.000Z',
+    label: relativePath,
+    origin: 'file',
     parseStatus: 'parsed',
-    projectId: environment.projectId,
-    relativePath,
     sortOrder,
-    updatedAt: '2026-08-05T00:00:00.000Z',
   };
 }
 
@@ -112,7 +186,10 @@ function matrixResponse(): EnvironmentMatrixPage {
               {
                 isCommented: false,
                 lineNumber: 1,
+                origin: 'file',
                 relativePath: 'Backend/.env',
+                sourceId: '4b2cc20c-9360-44b8-85d3-d5f089582d6e',
+                sourceName: 'Backend/.env',
               },
             ],
             state: 'present',

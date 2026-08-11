@@ -621,7 +621,7 @@ function cellSummary(
     const activeSources = new Set(
       cell.sourceDetails
         .filter((detail) => !detail.isCommented)
-        .map((detail) => detail.relativePath),
+        .map((detail) => detail.sourceId),
     ).size;
 
     return `${activeCount} active across ${activeSources} source${

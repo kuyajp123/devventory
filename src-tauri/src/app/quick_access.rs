@@ -1,7 +1,7 @@
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::Arc;
 use std::time::{SystemTime, UNIX_EPOCH};
-use tauri::{AppHandle, Manager, PhysicalPosition, PhysicalSize, WebviewWindow};
+use tauri::{AppHandle, Emitter, Manager, PhysicalPosition, PhysicalSize, WebviewWindow};
 use tokio::sync::Mutex;
 use tracing::{info, warn};
 
@@ -326,6 +326,21 @@ pub(crate) async fn open_main_window_from_quick_access_command(
     show_main_exclusive(&app).map_err(|_err| {
         CommandError::operation_unavailable("Failed to activate main application window.")
     })
+}
+
+#[tauri::command]
+pub(crate) async fn open_environment_settings_from_quick_access_command(
+    app: tauri::AppHandle,
+    environment_id: String,
+) -> Result<(), CommandError> {
+    show_main_exclusive(&app).map_err(|_err| {
+        CommandError::operation_unavailable("Failed to activate main application window.")
+    })?;
+    app.emit(
+        "environment://open-custom-sources",
+        serde_json::json!({ "environmentId": environment_id }),
+    )
+    .map_err(|_err| CommandError::operation_unavailable("Failed to open Environment Settings."))
 }
 
 #[tauri::command]

@@ -1,5 +1,7 @@
 import { invokeCommand } from '@/shared/infrastructure/tauri/invoke-client';
 import {
+  customEnvironmentKeySchema,
+  customEnvironmentSourceSchema,
   environmentMatrixPageSchema,
   environmentSchema,
   environmentSourceCandidatePageSchema,
@@ -118,5 +120,99 @@ export const environmentTrackerGateway = {
     return invokeCommand<number>('refresh_project_environment_sources', {
       input: { projectId },
     });
+  },
+
+  async listCustomSources(projectId: string, environmentId: string) {
+    const response = await invokeCommand<unknown>(
+      'list_custom_environment_sources',
+      { input: { environmentId, projectId } },
+    );
+    return customEnvironmentSourceSchema.array().parse(response);
+  },
+
+  async createCustomSource(input: {
+    environmentId: string;
+    keyNames: string[];
+    name: string;
+    projectId: string;
+  }) {
+    const response = await invokeCommand<unknown>(
+      'create_custom_environment_source',
+      { input },
+    );
+    return customEnvironmentSourceSchema.parse(response);
+  },
+
+  async renameCustomSource(input: {
+    environmentId: string;
+    name: string;
+    projectId: string;
+    sourceId: string;
+  }) {
+    const response = await invokeCommand<unknown>(
+      'rename_custom_environment_source',
+      { input },
+    );
+    return customEnvironmentSourceSchema.parse(response);
+  },
+
+  deleteCustomSource(
+    projectId: string,
+    environmentId: string,
+    sourceId: string,
+  ) {
+    return invokeCommand<void>('delete_custom_environment_source', {
+      input: { environmentId, projectId, sourceId },
+    });
+  },
+
+  async addCustomKey(input: {
+    environmentId: string;
+    name: string;
+    projectId: string;
+    sourceId: string;
+  }) {
+    const response = await invokeCommand<unknown>(
+      'add_custom_environment_key',
+      {
+        input,
+      },
+    );
+    return customEnvironmentKeySchema.parse(response);
+  },
+
+  deleteCustomKey(input: {
+    environmentId: string;
+    keyId: string;
+    projectId: string;
+    sourceId: string;
+  }) {
+    return invokeCommand<void>('delete_custom_environment_key', { input });
+  },
+
+  async copyCustomKey(input: {
+    keyId: string;
+    projectId: string;
+    targetEnvironmentId: string;
+    targetSourceId: string;
+  }) {
+    const response = await invokeCommand<unknown>(
+      'copy_custom_environment_key',
+      { input },
+    );
+    return customEnvironmentKeySchema.parse(response);
+  },
+
+  async copyCustomSource(input: {
+    projectId: string;
+    sourceId: string;
+    targetEnvironmentId: string;
+    targetName?: string;
+  }) {
+    const response = await invokeCommand<unknown>(
+      'copy_custom_environment_source',
+      { input },
+    );
+    return customEnvironmentSourceSchema.parse(response);
   },
 };

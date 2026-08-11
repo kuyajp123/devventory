@@ -95,6 +95,39 @@ pub(crate) struct EnvironmentSourceCandidatePage {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "snake_case")]
+pub(crate) enum EnvironmentSourceOrigin {
+    File,
+    Custom,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct CustomEnvironmentKey {
+    pub(crate) id: Uuid,
+    pub(crate) project_id: Uuid,
+    pub(crate) environment_id: Uuid,
+    pub(crate) source_id: Uuid,
+    pub(crate) name: String,
+    pub(crate) normalized_name: String,
+    pub(crate) created_at: String,
+    pub(crate) updated_at: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct CustomEnvironmentSource {
+    pub(crate) id: Uuid,
+    pub(crate) project_id: Uuid,
+    pub(crate) environment_id: Uuid,
+    pub(crate) name: String,
+    pub(crate) sort_order: u32,
+    pub(crate) keys: Vec<CustomEnvironmentKey>,
+    pub(crate) created_at: String,
+    pub(crate) updated_at: String,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
 pub(crate) enum EnvironmentMatrixCellState {
     Present,
     Duplicate,
@@ -107,7 +140,10 @@ pub(crate) enum EnvironmentMatrixCellState {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub(crate) struct EnvironmentMatrixSourceDetail {
-    pub(crate) relative_path: String,
+    pub(crate) source_id: Uuid,
+    pub(crate) source_name: String,
+    pub(crate) origin: EnvironmentSourceOrigin,
+    pub(crate) relative_path: Option<String>,
     pub(crate) line_number: Option<u32>,
     pub(crate) is_commented: bool,
 }
@@ -150,6 +186,30 @@ pub(crate) struct CreateEnvironment {
     pub(crate) project_id: Uuid,
     pub(crate) name: String,
     pub(crate) description: Option<String>,
+}
+
+#[derive(Debug, Clone)]
+pub(crate) struct CreateCustomEnvironmentSource {
+    pub(crate) project_id: Uuid,
+    pub(crate) environment_id: Uuid,
+    pub(crate) name: String,
+    pub(crate) key_names: Vec<String>,
+}
+
+#[derive(Debug, Clone)]
+pub(crate) struct CopyCustomEnvironmentKey {
+    pub(crate) project_id: Uuid,
+    pub(crate) key_id: Uuid,
+    pub(crate) target_environment_id: Uuid,
+    pub(crate) target_source_id: Uuid,
+}
+
+#[derive(Debug, Clone)]
+pub(crate) struct CopyCustomEnvironmentSource {
+    pub(crate) project_id: Uuid,
+    pub(crate) source_id: Uuid,
+    pub(crate) target_environment_id: Uuid,
+    pub(crate) target_name: Option<String>,
 }
 
 #[derive(Debug, Clone)]

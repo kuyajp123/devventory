@@ -70,15 +70,23 @@ impl SqliteDashboardRepository {
         let environment_coverage = sqlx::query_as::<_, EnvironmentCoverageRow>(
             "SELECT e.id, e.name,
                 (SELECT COUNT(*) FROM environment_key_definitions d WHERE d.project_id = e.project_id) AS known_keys,
-                COUNT(DISTINCT CASE WHEN o.is_commented = 0 THEN o.key_definition_id END) AS present_keys,
+                (SELECT COUNT(*) FROM (
+                    SELECT o.key_definition_id
+                    FROM environment_key_occurrences o
+                    WHERE o.project_id = e.project_id
+                      AND o.environment_id = e.id
+                      AND o.is_commented = 0
+                    UNION
+                    SELECT k.key_definition_id
+                    FROM custom_environment_keys k
+                    WHERE k.project_id = e.project_id
+                      AND k.environment_id = e.id
+                 )) AS present_keys,
                 (SELECT COUNT(*) FROM environment_sources s
                  WHERE s.project_id = e.project_id AND s.environment_id = e.id
                    AND s.parse_status IN ('missing', 'unreadable', 'parse_issue', 'unsupported_encoding')) AS unavailable_sources
              FROM environments e
-             LEFT JOIN environment_key_occurrences o
-               ON o.project_id = e.project_id AND o.environment_id = e.id
              WHERE e.project_id = ?
-             GROUP BY e.id, e.name, e.sort_order
              ORDER BY e.sort_order ASC, e.id ASC",
         )
         .bind(&project_id_text)

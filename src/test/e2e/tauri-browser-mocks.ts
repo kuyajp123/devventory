@@ -6,6 +6,10 @@ const LAST_OPENED_PROJECT_KEY = 'workspace.last_opened_project_id';
 
 interface MockDatabase {
   agentAccounts: Array<Record<string, unknown>>;
+  customEnvironmentSourcesByEnvironment: Record<
+    string,
+    Array<Record<string, unknown>>
+  >;
   environmentSourcesByEnvironment: Record<
     string,
     Array<Record<string, unknown>>
@@ -37,6 +41,8 @@ export function installTauriBrowserMocks() {
   const environmentsByProject = database.environmentsByProject;
   const environmentSourcesByEnvironment =
     database.environmentSourcesByEnvironment;
+  const customEnvironmentSourcesByEnvironment =
+    database.customEnvironmentSourcesByEnvironment;
   const managedAssets = database.managedAssets;
   const validationRulesByProject: Record<
     string,
@@ -69,6 +75,8 @@ export function installTauriBrowserMocks() {
   function persist() {
     database.environmentsByProject = environmentsByProject;
     database.environmentSourcesByEnvironment = environmentSourcesByEnvironment;
+    database.customEnvironmentSourcesByEnvironment =
+      customEnvironmentSourcesByEnvironment;
     database.variantIdsByAsset = Object.fromEntries(variantIdsByAsset);
     localStorage.setItem(MOCK_DATABASE_KEY, JSON.stringify(database));
   }
@@ -537,6 +545,7 @@ export function installTauriBrowserMocks() {
         environmentsByProject[input.projectId] ?? []
       ).filter((environment) => environment.id !== input.environmentId);
       delete environmentSourcesByEnvironment[input.environmentId];
+      delete customEnvironmentSourcesByEnvironment[input.environmentId];
       persist();
       return null;
     }
@@ -558,6 +567,150 @@ export function installTauriBrowserMocks() {
     if (command === 'list_environment_sources') {
       const input = commandArguments(args).input as { environmentId: string };
       return environmentSourcesByEnvironment[input.environmentId] ?? [];
+    }
+    if (command === 'list_custom_environment_sources') {
+      const input = commandArguments(args).input as { environmentId: string };
+      return customEnvironmentSourcesByEnvironment[input.environmentId] ?? [];
+    }
+    if (command === 'create_custom_environment_source') {
+      const input = commandArguments(args).input as {
+        environmentId: string;
+        keyNames: string[];
+        name: string;
+        projectId: string;
+      };
+      const sources =
+        customEnvironmentSourcesByEnvironment[input.environmentId] ?? [];
+      const source = customEnvironmentSourceResponse(input, sources.length);
+      sources.push(source);
+      customEnvironmentSourcesByEnvironment[input.environmentId] = sources;
+      persist();
+      return source;
+    }
+    if (command === 'rename_custom_environment_source') {
+      const input = commandArguments(args).input as {
+        environmentId: string;
+        name: string;
+        sourceId: string;
+      };
+      const sources =
+        customEnvironmentSourcesByEnvironment[input.environmentId] ?? [];
+      const source = sources.find(
+        (candidate) => candidate.id === input.sourceId,
+      );
+      if (!source) throw new Error('Missing mock custom source');
+      source.name = input.name;
+      source.updatedAt = '2026-08-11T00:00:00.000Z';
+      persist();
+      return source;
+    }
+    if (command === 'delete_custom_environment_source') {
+      const input = commandArguments(args).input as {
+        environmentId: string;
+        sourceId: string;
+      };
+      customEnvironmentSourcesByEnvironment[input.environmentId] = (
+        customEnvironmentSourcesByEnvironment[input.environmentId] ?? []
+      ).filter((source) => source.id !== input.sourceId);
+      persist();
+      return null;
+    }
+    if (command === 'add_custom_environment_key') {
+      const input = commandArguments(args).input as {
+        environmentId: string;
+        name: string;
+        projectId: string;
+        sourceId: string;
+      };
+      const source = findCustomSource(
+        customEnvironmentSourcesByEnvironment,
+        input.sourceId,
+      );
+      if (!source) throw new Error('Missing mock custom source');
+      const keys = source.keys as Array<Record<string, unknown>>;
+      const key = customEnvironmentKeyResponse(input, keys.length);
+      keys.push(key);
+      source.updatedAt = '2026-08-11T00:00:00.000Z';
+      persist();
+      return key;
+    }
+    if (command === 'delete_custom_environment_key') {
+      const input = commandArguments(args).input as {
+        keyId: string;
+        sourceId: string;
+      };
+      const source = findCustomSource(
+        customEnvironmentSourcesByEnvironment,
+        input.sourceId,
+      );
+      if (!source) throw new Error('Missing mock custom source');
+      source.keys = (source.keys as Array<Record<string, unknown>>).filter(
+        (key) => key.id !== input.keyId,
+      );
+      persist();
+      return null;
+    }
+    if (command === 'copy_custom_environment_key') {
+      const input = commandArguments(args).input as {
+        keyId: string;
+        projectId: string;
+        targetEnvironmentId: string;
+        targetSourceId: string;
+      };
+      const sourceKey = findCustomKey(
+        customEnvironmentSourcesByEnvironment,
+        input.keyId,
+      );
+      const targetSource = findCustomSource(
+        customEnvironmentSourcesByEnvironment,
+        input.targetSourceId,
+      );
+      if (!sourceKey || !targetSource)
+        throw new Error('Missing mock custom key');
+      const targetKeys = targetSource.keys as Array<Record<string, unknown>>;
+      const copied = customEnvironmentKeyResponse(
+        {
+          environmentId: input.targetEnvironmentId,
+          name: sourceKey.name as string,
+          projectId: input.projectId,
+          sourceId: input.targetSourceId,
+        },
+        targetKeys.length,
+      );
+      targetKeys.push(copied);
+      persist();
+      return copied;
+    }
+    if (command === 'copy_custom_environment_source') {
+      const input = commandArguments(args).input as {
+        projectId: string;
+        sourceId: string;
+        targetEnvironmentId: string;
+        targetName?: string;
+      };
+      const source = findCustomSource(
+        customEnvironmentSourcesByEnvironment,
+        input.sourceId,
+      );
+      if (!source) throw new Error('Missing mock custom source');
+      const targets =
+        customEnvironmentSourcesByEnvironment[input.targetEnvironmentId] ?? [];
+      const copy = customEnvironmentSourceResponse(
+        {
+          environmentId: input.targetEnvironmentId,
+          keyNames: (source.keys as Array<Record<string, unknown>>).map(
+            (key) => key.name as string,
+          ),
+          name: input.targetName ?? (source.name as string),
+          projectId: input.projectId,
+        },
+        targets.length,
+      );
+      targets.push(copy);
+      customEnvironmentSourcesByEnvironment[input.targetEnvironmentId] =
+        targets;
+      persist();
+      return copy;
     }
     if (command === 'add_environment_source') {
       const input = commandArguments(args).input as {
@@ -625,41 +778,88 @@ export function installTauriBrowserMocks() {
         projectId: string;
       };
       const environments = environmentsByProject[input.projectId] ?? [];
+      const customKeyNames = Array.from(
+        new Set(
+          Object.values(customEnvironmentSourcesByEnvironment)
+            .flat()
+            .filter((source) => source.projectId === input.projectId)
+            .flatMap((source) =>
+              (source.keys as Array<Record<string, unknown>>).map(
+                (key) => key.name as string,
+              ),
+            ),
+        ),
+      ).sort();
+      const customRows = customKeyNames.map((keyName) => ({
+        cells: environments.map((environment) => {
+          const details = (
+            customEnvironmentSourcesByEnvironment[environment.id as string] ??
+            []
+          ).flatMap((source) =>
+            (source.keys as Array<Record<string, unknown>>)
+              .filter((key) => key.name === keyName)
+              .map(() => ({
+                isCommented: false,
+                lineNumber: null,
+                origin: 'custom',
+                relativePath: null,
+                sourceId: source.id,
+                sourceName: source.name,
+              })),
+          );
+          return {
+            sourceDetails: details,
+            state:
+              details.length > 1
+                ? 'duplicate'
+                : details.length === 1
+                  ? 'present'
+                  : 'absent',
+            validation: { openIssues: [], rules: [] },
+          };
+        }),
+        keyName,
+      }));
+      const rows =
+        environments.length === 0
+          ? []
+          : [
+              {
+                cells: environments.map((environment) => {
+                  const source = (environmentSourcesByEnvironment[
+                    environment.id as string
+                  ] ?? [])[0] as Record<string, unknown> | undefined;
+                  return source
+                    ? {
+                        sourceDetails: [
+                          {
+                            isCommented: false,
+                            lineNumber: 1,
+                            origin: 'file',
+                            relativePath: source.relativePath,
+                            sourceId: source.id,
+                            sourceName: source.relativePath,
+                          },
+                        ],
+                        state: 'present',
+                        validation: { openIssues: [], rules: [] },
+                      }
+                    : {
+                        sourceDetails: [],
+                        state: 'absent',
+                        validation: { openIssues: [], rules: [] },
+                      };
+                }),
+                keyName: 'APP_MODE',
+              },
+              ...customRows,
+            ];
       return {
         environments,
         page: input.page,
         pageSize: input.pageSize,
-        rows:
-          environments.length === 0
-            ? []
-            : [
-                {
-                  cells: environments.map((environment) => {
-                    const source = (environmentSourcesByEnvironment[
-                      environment.id as string
-                    ] ?? [])[0] as Record<string, unknown> | undefined;
-                    return source
-                      ? {
-                          sourceDetails: [
-                            {
-                              isCommented: false,
-                              lineNumber: 1,
-                              relativePath: source.relativePath,
-                            },
-                          ],
-                          state: 'present',
-                          validation: { openIssues: [], rules: [] },
-                        }
-                      : {
-                          sourceDetails: [],
-                          state: 'absent',
-                          validation: { openIssues: [], rules: [] },
-                        };
-                  }),
-                  keyName: 'APP_MODE',
-                },
-              ],
-        totalItems: environments.length === 0 ? 0 : 1,
+        rows,
+        totalItems: rows.length,
         totalPages: environments.length === 0 ? 0 : 1,
       };
     }
@@ -992,6 +1192,7 @@ export function installTauriBrowserMocks() {
 function loadDatabase(): MockDatabase {
   const empty: MockDatabase = {
     agentAccounts: [],
+    customEnvironmentSourcesByEnvironment: {},
     environmentSourcesByEnvironment: {},
     environmentsByProject: {},
     inventoryScans: {},
@@ -1008,6 +1209,8 @@ function loadDatabase(): MockDatabase {
     const parsed = JSON.parse(stored) as Partial<MockDatabase>;
     return {
       agentAccounts: parsed.agentAccounts ?? [],
+      customEnvironmentSourcesByEnvironment:
+        parsed.customEnvironmentSourcesByEnvironment ?? {},
       inventoryScans: parsed.inventoryScans ?? {},
       environmentSourcesByEnvironment:
         parsed.environmentSourcesByEnvironment ?? {},
@@ -1060,6 +1263,82 @@ function environmentSourceResponse(
     sortOrder,
     updatedAt: '2026-08-05T00:00:00.000Z',
   };
+}
+
+function customEnvironmentSourceResponse(
+  input: {
+    environmentId: string;
+    keyNames: string[];
+    name: string;
+    projectId: string;
+  },
+  sortOrder: number,
+) {
+  const sourceId = `a5443f4c-f04c-4ccf-850b-fbe53d24fc${sortOrder
+    .toString()
+    .padStart(2, '0')}`;
+  return {
+    createdAt: '2026-08-11T00:00:00.000Z',
+    environmentId: input.environmentId,
+    id: sourceId,
+    keys: input.keyNames.map((name, index) =>
+      customEnvironmentKeyResponse(
+        {
+          environmentId: input.environmentId,
+          name,
+          projectId: input.projectId,
+          sourceId,
+        },
+        index,
+      ),
+    ),
+    name: input.name,
+    projectId: input.projectId,
+    sortOrder,
+    updatedAt: '2026-08-11T00:00:00.000Z',
+  };
+}
+
+function customEnvironmentKeyResponse(
+  input: {
+    environmentId: string;
+    name: string;
+    projectId: string;
+    sourceId: string;
+  },
+  index: number,
+) {
+  return {
+    createdAt: '2026-08-11T00:00:00.000Z',
+    environmentId: input.environmentId,
+    id: `b5443f4c-f04c-4ccf-850b-fbe53d24fc${index
+      .toString()
+      .padStart(2, '0')}`,
+    name: input.name,
+    normalizedName: input.name.toLocaleUpperCase(),
+    projectId: input.projectId,
+    sourceId: input.sourceId,
+    updatedAt: '2026-08-11T00:00:00.000Z',
+  };
+}
+
+function findCustomSource(
+  sourcesByEnvironment: Record<string, Array<Record<string, unknown>>>,
+  sourceId: string,
+) {
+  return Object.values(sourcesByEnvironment)
+    .flat()
+    .find((source) => source.id === sourceId);
+}
+
+function findCustomKey(
+  sourcesByEnvironment: Record<string, Array<Record<string, unknown>>>,
+  keyId: string,
+) {
+  return Object.values(sourcesByEnvironment)
+    .flat()
+    .flatMap((source) => source.keys as Array<Record<string, unknown>>)
+    .find((key) => key.id === keyId);
 }
 
 function validationIssueResponse(projectId: string, environmentId: string) {

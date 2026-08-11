@@ -5,11 +5,13 @@ use uuid::Uuid;
 
 use super::error::EnvironmentError;
 use super::model::{
-    Environment, EnvironmentMatrixCell, EnvironmentMatrixCellState,
-    EnvironmentMatrixCellValidation, EnvironmentMatrixPage, EnvironmentMatrixQuery,
-    EnvironmentMatrixRow, EnvironmentMatrixRuleKey, EnvironmentMatrixSourceDetail,
-    EnvironmentSource, EnvironmentSourceCandidate, EnvironmentSourceCandidatePage,
-    EnvironmentSourceCandidateQuery, EnvironmentSourceParseStatus,
+    CopyCustomEnvironmentKey, CopyCustomEnvironmentSource, CreateCustomEnvironmentSource,
+    CustomEnvironmentKey, CustomEnvironmentSource, Environment, EnvironmentMatrixCell,
+    EnvironmentMatrixCellState, EnvironmentMatrixCellValidation, EnvironmentMatrixPage,
+    EnvironmentMatrixQuery, EnvironmentMatrixRow, EnvironmentMatrixRuleKey,
+    EnvironmentMatrixSourceDetail, EnvironmentSource, EnvironmentSourceCandidate,
+    EnvironmentSourceCandidatePage, EnvironmentSourceCandidateQuery, EnvironmentSourceOrigin,
+    EnvironmentSourceParseStatus,
 };
 use super::parser::{ParsedEnvironmentSource, SafeParseIssue};
 
@@ -287,6 +289,272 @@ impl SqliteEnvironmentRepository {
         Ok(())
     }
 
+    pub(crate) async fn list_custom_sources(
+        &self,
+        project_id: Uuid,
+        environment_id: Uuid,
+    ) -> Result<Vec<CustomEnvironmentSource>, EnvironmentError> {
+        let source_rows = sqlx::query_as::<_, CustomSourceRow>(
+            "SELECT id, project_id, environment_id, name, sort_order, created_at, updated_at
+             FROM custom_environment_sources
+             WHERE project_id = ? AND environment_id = ?
+             ORDER BY sort_order ASC, lower(name) ASC, id ASC",
+        )
+        .bind(project_id.to_string())
+        .bind(environment_id.to_string())
+        .fetch_all(&self.pool)
+        .await?;
+        let key_rows = sqlx::query_as::<_, CustomKeyRow>(
+            "SELECT id, project_id, environment_id, source_id, name, normalized_name,
+                    created_at, updated_at
+             FROM custom_environment_keys
+             WHERE project_id = ? AND environment_id = ?
+             ORDER BY lower(name) ASC, id ASC",
+        )
+        .bind(project_id.to_string())
+        .bind(environment_id.to_string())
+        .fetch_all(&self.pool)
+        .await?;
+        assemble_custom_sources(source_rows, key_rows)
+    }
+
+    pub(crate) async fn custom_source(
+        &self,
+        project_id: Uuid,
+        environment_id: Uuid,
+        source_id: Uuid,
+    ) -> Result<CustomEnvironmentSource, EnvironmentError> {
+        self.list_custom_sources(project_id, environment_id)
+            .await?
+            .into_iter()
+            .find(|source| source.id == source_id)
+            .ok_or(EnvironmentError::CustomSourceNotFound)
+    }
+
+    pub(crate) async fn create_custom_source(
+        &self,
+        input: CreateCustomEnvironmentSource,
+    ) -> Result<CustomEnvironmentSource, EnvironmentError> {
+        self.environment(input.project_id, input.environment_id)
+            .await?;
+        let source_id = Uuid::new_v4();
+        let mut transaction = self.pool.begin().await?;
+        let sort_order: i64 = sqlx::query_scalar(
+            "SELECT COALESCE(MAX(sort_order) + 1, 0) FROM custom_environment_sources
+             WHERE project_id = ? AND environment_id = ?",
+        )
+        .bind(input.project_id.to_string())
+        .bind(input.environment_id.to_string())
+        .fetch_one(&mut *transaction)
+        .await?;
+        let result = sqlx::query(
+            "INSERT INTO custom_environment_sources (
+                id, project_id, environment_id, name, normalized_name, sort_order
+             ) VALUES (?, ?, ?, ?, ?, ?)",
+        )
+        .bind(source_id.to_string())
+        .bind(input.project_id.to_string())
+        .bind(input.environment_id.to_string())
+        .bind(&input.name)
+        .bind(normalize_source_name(&input.name))
+        .bind(sort_order)
+        .execute(&mut *transaction)
+        .await;
+        match result {
+            Ok(_) => {}
+            Err(error) if is_unique_violation(&error) => {
+                return Err(EnvironmentError::DuplicateCustomSource)
+            }
+            Err(error) => return Err(error.into()),
+        }
+        for name in &input.key_names {
+            insert_custom_key(
+                &mut transaction,
+                input.project_id,
+                input.environment_id,
+                source_id,
+                name,
+            )
+            .await?;
+        }
+        transaction.commit().await?;
+        self.custom_source(input.project_id, input.environment_id, source_id)
+            .await
+    }
+
+    pub(crate) async fn rename_custom_source(
+        &self,
+        project_id: Uuid,
+        environment_id: Uuid,
+        source_id: Uuid,
+        name: &str,
+    ) -> Result<CustomEnvironmentSource, EnvironmentError> {
+        let result = sqlx::query(
+            "UPDATE custom_environment_sources
+             SET name = ?, normalized_name = ?,
+                 updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
+             WHERE id = ? AND project_id = ? AND environment_id = ?",
+        )
+        .bind(name)
+        .bind(normalize_source_name(name))
+        .bind(source_id.to_string())
+        .bind(project_id.to_string())
+        .bind(environment_id.to_string())
+        .execute(&self.pool)
+        .await;
+        match result {
+            Ok(result) if result.rows_affected() == 0 => {
+                return Err(EnvironmentError::CustomSourceNotFound)
+            }
+            Ok(_) => {}
+            Err(error) if is_unique_violation(&error) => {
+                return Err(EnvironmentError::DuplicateCustomSource)
+            }
+            Err(error) => return Err(error.into()),
+        }
+        self.custom_source(project_id, environment_id, source_id)
+            .await
+    }
+
+    pub(crate) async fn delete_custom_source(
+        &self,
+        project_id: Uuid,
+        environment_id: Uuid,
+        source_id: Uuid,
+    ) -> Result<(), EnvironmentError> {
+        let mut transaction = self.pool.begin().await?;
+        let result = sqlx::query(
+            "DELETE FROM custom_environment_sources
+             WHERE id = ? AND project_id = ? AND environment_id = ?",
+        )
+        .bind(source_id.to_string())
+        .bind(project_id.to_string())
+        .bind(environment_id.to_string())
+        .execute(&mut *transaction)
+        .await?;
+        if result.rows_affected() == 0 {
+            return Err(EnvironmentError::CustomSourceNotFound);
+        }
+        cleanup_orphaned_definitions(&mut transaction, project_id).await?;
+        transaction.commit().await?;
+        Ok(())
+    }
+
+    pub(crate) async fn add_custom_key(
+        &self,
+        project_id: Uuid,
+        environment_id: Uuid,
+        source_id: Uuid,
+        name: &str,
+    ) -> Result<CustomEnvironmentKey, EnvironmentError> {
+        self.custom_source(project_id, environment_id, source_id)
+            .await?;
+        let mut transaction = self.pool.begin().await?;
+        let key_id = insert_custom_key(
+            &mut transaction,
+            project_id,
+            environment_id,
+            source_id,
+            name,
+        )
+        .await?;
+        transaction.commit().await?;
+        self.custom_key(project_id, key_id).await
+    }
+
+    pub(crate) async fn delete_custom_key(
+        &self,
+        project_id: Uuid,
+        environment_id: Uuid,
+        source_id: Uuid,
+        key_id: Uuid,
+    ) -> Result<(), EnvironmentError> {
+        let mut transaction = self.pool.begin().await?;
+        let result = sqlx::query(
+            "DELETE FROM custom_environment_keys
+             WHERE id = ? AND project_id = ? AND environment_id = ? AND source_id = ?",
+        )
+        .bind(key_id.to_string())
+        .bind(project_id.to_string())
+        .bind(environment_id.to_string())
+        .bind(source_id.to_string())
+        .execute(&mut *transaction)
+        .await?;
+        if result.rows_affected() == 0 {
+            return Err(EnvironmentError::CustomKeyNotFound);
+        }
+        cleanup_orphaned_definitions(&mut transaction, project_id).await?;
+        transaction.commit().await?;
+        Ok(())
+    }
+
+    pub(crate) async fn copy_custom_key(
+        &self,
+        input: CopyCustomEnvironmentKey,
+    ) -> Result<CustomEnvironmentKey, EnvironmentError> {
+        self.custom_source(
+            input.project_id,
+            input.target_environment_id,
+            input.target_source_id,
+        )
+        .await?;
+        let source_key = self.custom_key(input.project_id, input.key_id).await?;
+        self.add_custom_key(
+            input.project_id,
+            input.target_environment_id,
+            input.target_source_id,
+            &source_key.name,
+        )
+        .await
+    }
+
+    pub(crate) async fn copy_custom_source(
+        &self,
+        input: CopyCustomEnvironmentSource,
+    ) -> Result<CustomEnvironmentSource, EnvironmentError> {
+        let row = sqlx::query_as::<_, CustomSourceRow>(
+            "SELECT id, project_id, environment_id, name, sort_order, created_at, updated_at
+             FROM custom_environment_sources WHERE id = ? AND project_id = ?",
+        )
+        .bind(input.source_id.to_string())
+        .bind(input.project_id.to_string())
+        .fetch_optional(&self.pool)
+        .await?
+        .ok_or(EnvironmentError::CustomSourceNotFound)?;
+        let source = self
+            .custom_source(
+                input.project_id,
+                parse_uuid(&row.environment_id)?,
+                input.source_id,
+            )
+            .await?;
+        self.create_custom_source(CreateCustomEnvironmentSource {
+            project_id: input.project_id,
+            environment_id: input.target_environment_id,
+            name: input.target_name.unwrap_or(source.name),
+            key_names: source.keys.into_iter().map(|key| key.name).collect(),
+        })
+        .await
+    }
+
+    async fn custom_key(
+        &self,
+        project_id: Uuid,
+        key_id: Uuid,
+    ) -> Result<CustomEnvironmentKey, EnvironmentError> {
+        sqlx::query_as::<_, CustomKeyRow>(
+            "SELECT id, project_id, environment_id, source_id, name, normalized_name,
+                    created_at, updated_at
+             FROM custom_environment_keys WHERE id = ? AND project_id = ?",
+        )
+        .bind(key_id.to_string())
+        .bind(project_id.to_string())
+        .fetch_optional(&self.pool)
+        .await?
+        .ok_or(EnvironmentError::CustomKeyNotFound)?
+        .try_into()
+    }
+
     pub(crate) async fn source_candidates(
         &self,
         query: &EnvironmentSourceCandidateQuery,
@@ -429,10 +697,6 @@ impl SqliteEnvironmentRepository {
         let total_items = to_u64(count.build_query_scalar().fetch_one(&self.pool).await?)?;
         let definitions = self.matrix_definitions(query, &rule_keys_json).await?;
         let sources = self.sources_for_project(query.project_id).await?;
-        let source_by_id = sources
-            .iter()
-            .map(|source| (source.id, source))
-            .collect::<HashMap<_, _>>();
         let sources_by_environment = sources.iter().fold(
             HashMap::<Uuid, Vec<&EnvironmentSource>>::new(),
             |mut groups, source| {
@@ -475,7 +739,6 @@ impl SqliteEnvironmentRepository {
                                     .unwrap_or_default();
                                 matrix_cell(
                                     occurrences,
-                                    &source_by_id,
                                     sources_by_environment
                                         .get(&environment.id)
                                         .map(Vec::as_slice)
@@ -581,13 +844,37 @@ impl SqliteEnvironmentRepository {
             return Ok(Vec::new());
         }
         let mut builder = QueryBuilder::<Sqlite>::new(
-            "SELECT key_definition_id, environment_id, source_id, line_number, is_commented, is_duplicate
-             FROM environment_key_occurrences WHERE project_id = ",
+            "SELECT o.key_definition_id, o.environment_id, o.source_id,
+                    o.line_number, o.is_commented, o.is_duplicate,
+                    'file' AS origin, s.relative_path AS source_name,
+                    s.relative_path, s.sort_order
+             FROM environment_key_occurrences o
+             JOIN environment_sources s
+               ON s.project_id = o.project_id AND s.id = o.source_id
+             WHERE o.project_id = ",
         );
         builder.push_bind(project_id.to_string());
         builder.push(" AND key_definition_id IN (");
         let mut separated = builder.separated(", ");
-        for definition_id in definition_ids {
+        for definition_id in &definition_ids {
+            separated.push_bind(definition_id);
+        }
+        separated.push_unseparated(")");
+        builder.push(
+            " UNION ALL
+             SELECT k.key_definition_id, k.environment_id, k.source_id,
+                    NULL AS line_number, 0 AS is_commented, 0 AS is_duplicate,
+                    'custom' AS origin, s.name AS source_name,
+                    NULL AS relative_path, s.sort_order
+             FROM custom_environment_keys k
+             JOIN custom_environment_sources s
+               ON s.project_id = k.project_id AND s.id = k.source_id
+             WHERE k.project_id = ",
+        );
+        builder.push_bind(project_id.to_string());
+        builder.push(" AND k.key_definition_id IN (");
+        let mut separated = builder.separated(", ");
+        for definition_id in &definition_ids {
             separated.push_bind(definition_id);
         }
         separated.push_unseparated(")");
@@ -600,32 +887,39 @@ impl SqliteEnvironmentRepository {
 
 fn matrix_cell(
     occurrences: &[OccurrenceRow],
-    source_by_id: &HashMap<Uuid, &EnvironmentSource>,
     environment_sources: &[&EnvironmentSource],
 ) -> Result<EnvironmentMatrixCell, EnvironmentError> {
     let mut source_details = Vec::new();
     for occurrence in occurrences {
-        let source_id = occurrence.source_id()?;
-        if let Some(source) = source_by_id.get(&source_id) {
-            source_details.push((
-                source.sort_order,
-                EnvironmentMatrixSourceDetail {
-                    relative_path: source.relative_path.clone(),
-                    line_number: Some(
-                        u32::try_from(occurrence.line_number)
-                            .map_err(|_| EnvironmentError::InvalidPersistedData)?,
-                    ),
-                    is_commented: occurrence.is_commented,
-                },
-            ));
-        }
+        source_details.push((
+            u32::try_from(occurrence.sort_order)
+                .map_err(|_| EnvironmentError::InvalidPersistedData)?,
+            EnvironmentMatrixSourceDetail {
+                source_id: occurrence.source_id()?,
+                source_name: occurrence.source_name.clone(),
+                origin: EnvironmentSourceOrigin::try_from(occurrence.origin.as_str())
+                    .map_err(|_| EnvironmentError::InvalidPersistedData)?,
+                relative_path: occurrence.relative_path.clone(),
+                line_number: occurrence
+                    .line_number
+                    .map(u32::try_from)
+                    .transpose()
+                    .map_err(|_| EnvironmentError::InvalidPersistedData)?,
+                is_commented: occurrence.is_commented,
+            },
+        ));
     }
     source_details.sort_by(|left, right| {
         left.0
             .cmp(&right.0)
             .then(left.1.line_number.cmp(&right.1.line_number))
     });
-    let state = if occurrences.iter().any(|occurrence| occurrence.is_duplicate) {
+    let active_count = occurrences
+        .iter()
+        .filter(|occurrence| !occurrence.is_commented)
+        .count();
+    let state = if active_count > 1 || occurrences.iter().any(|occurrence| occurrence.is_duplicate)
+    {
         EnvironmentMatrixCellState::Duplicate
     } else if occurrences
         .iter()
@@ -676,14 +970,22 @@ fn push_matrix_keys(
     builder.push_bind(query.project_id.to_string());
     if let Some(environment_id) = query.environment_id {
         builder.push(
-            " AND EXISTS (
+            " AND (EXISTS (
                 SELECT 1 FROM environment_key_occurrences o
                 WHERE o.project_id = d.project_id
                   AND o.key_definition_id = d.id
                   AND o.environment_id = ",
         );
         builder.push_bind(environment_id.to_string());
-        builder.push(")");
+        builder.push(
+            ") OR EXISTS (
+                SELECT 1 FROM custom_environment_keys k
+                WHERE k.project_id = d.project_id
+                  AND k.key_definition_id = d.id
+                  AND k.environment_id = ",
+        );
+        builder.push_bind(environment_id.to_string());
+        builder.push("))");
     }
     builder.push(
         " UNION ALL
@@ -702,14 +1004,22 @@ fn push_matrix_keys(
     builder.push(" AND d.normalized_name = json_extract(rule.value, '$.normalizedName')");
     if let Some(environment_id) = query.environment_id {
         builder.push(
-            " AND EXISTS (
+            " AND (EXISTS (
                 SELECT 1 FROM environment_key_occurrences o
                 WHERE o.project_id = d.project_id
                   AND o.key_definition_id = d.id
                   AND o.environment_id = ",
         );
         builder.push_bind(environment_id.to_string());
-        builder.push(")");
+        builder.push(
+            ") OR EXISTS (
+                SELECT 1 FROM custom_environment_keys k
+                WHERE k.project_id = d.project_id
+                  AND k.key_definition_id = d.id
+                  AND k.environment_id = ",
+        );
+        builder.push_bind(environment_id.to_string());
+        builder.push("))");
     }
     builder.push("))");
 }
@@ -770,6 +1080,9 @@ async fn cleanup_orphaned_definitions(
          AND NOT EXISTS (
             SELECT 1 FROM environment_key_occurrences
             WHERE environment_key_occurrences.key_definition_id = environment_key_definitions.id
+         ) AND NOT EXISTS (
+            SELECT 1 FROM custom_environment_keys
+            WHERE custom_environment_keys.key_definition_id = environment_key_definitions.id
          )",
     )
     .bind(project_id.to_string())
@@ -822,6 +1135,46 @@ fn normalize_path(value: &str) -> String {
     #[cfg(not(windows))]
     {
         value.to_owned()
+    }
+}
+
+fn normalize_source_name(value: &str) -> String {
+    value.trim().to_ascii_lowercase()
+}
+
+fn normalize_key_name(value: &str) -> String {
+    value.trim().to_ascii_uppercase()
+}
+
+async fn insert_custom_key(
+    transaction: &mut sqlx::Transaction<'_, Sqlite>,
+    project_id: Uuid,
+    environment_id: Uuid,
+    source_id: Uuid,
+    name: &str,
+) -> Result<Uuid, EnvironmentError> {
+    let normalized_name = normalize_key_name(name);
+    let definition_id =
+        find_or_create_key_definition(transaction, project_id, name, &normalized_name).await?;
+    let key_id = Uuid::new_v4();
+    let result = sqlx::query(
+        "INSERT INTO custom_environment_keys (
+            id, project_id, environment_id, source_id, key_definition_id, name, normalized_name
+         ) VALUES (?, ?, ?, ?, ?, ?, ?)",
+    )
+    .bind(key_id.to_string())
+    .bind(project_id.to_string())
+    .bind(environment_id.to_string())
+    .bind(source_id.to_string())
+    .bind(definition_id)
+    .bind(name)
+    .bind(normalized_name)
+    .execute(&mut **transaction)
+    .await;
+    match result {
+        Ok(_) => Ok(key_id),
+        Err(error) if is_unique_violation(&error) => Err(EnvironmentError::DuplicateCustomKey),
+        Err(error) => Err(error.into()),
     }
 }
 
@@ -949,9 +1302,95 @@ struct OccurrenceRow {
     key_definition_id: String,
     environment_id: String,
     source_id: String,
-    line_number: i64,
+    line_number: Option<i64>,
     is_commented: bool,
     is_duplicate: bool,
+    origin: String,
+    source_name: String,
+    relative_path: Option<String>,
+    sort_order: i64,
+}
+
+impl TryFrom<&str> for EnvironmentSourceOrigin {
+    type Error = ();
+
+    fn try_from(value: &str) -> Result<Self, Self::Error> {
+        match value {
+            "file" => Ok(Self::File),
+            "custom" => Ok(Self::Custom),
+            _ => Err(()),
+        }
+    }
+}
+
+#[derive(Debug, FromRow)]
+struct CustomSourceRow {
+    id: String,
+    project_id: String,
+    environment_id: String,
+    name: String,
+    sort_order: i64,
+    created_at: String,
+    updated_at: String,
+}
+
+#[derive(Debug, FromRow)]
+struct CustomKeyRow {
+    id: String,
+    project_id: String,
+    environment_id: String,
+    source_id: String,
+    name: String,
+    normalized_name: String,
+    created_at: String,
+    updated_at: String,
+}
+
+impl TryFrom<CustomKeyRow> for CustomEnvironmentKey {
+    type Error = EnvironmentError;
+
+    fn try_from(row: CustomKeyRow) -> Result<Self, Self::Error> {
+        Ok(Self {
+            id: parse_uuid(&row.id)?,
+            project_id: parse_uuid(&row.project_id)?,
+            environment_id: parse_uuid(&row.environment_id)?,
+            source_id: parse_uuid(&row.source_id)?,
+            name: row.name,
+            normalized_name: row.normalized_name,
+            created_at: row.created_at,
+            updated_at: row.updated_at,
+        })
+    }
+}
+
+fn assemble_custom_sources(
+    rows: Vec<CustomSourceRow>,
+    key_rows: Vec<CustomKeyRow>,
+) -> Result<Vec<CustomEnvironmentSource>, EnvironmentError> {
+    let mut keys_by_source = key_rows.into_iter().try_fold(
+        HashMap::<Uuid, Vec<CustomEnvironmentKey>>::new(),
+        |mut groups, row| -> Result<_, EnvironmentError> {
+            let source_id = parse_uuid(&row.source_id)?;
+            groups.entry(source_id).or_default().push(row.try_into()?);
+            Ok(groups)
+        },
+    )?;
+    rows.into_iter()
+        .map(|row| {
+            let id = parse_uuid(&row.id)?;
+            Ok(CustomEnvironmentSource {
+                id,
+                project_id: parse_uuid(&row.project_id)?,
+                environment_id: parse_uuid(&row.environment_id)?,
+                name: row.name,
+                sort_order: u32::try_from(row.sort_order)
+                    .map_err(|_| EnvironmentError::InvalidPersistedData)?,
+                keys: keys_by_source.remove(&id).unwrap_or_default(),
+                created_at: row.created_at,
+                updated_at: row.updated_at,
+            })
+        })
+        .collect()
 }
 
 impl OccurrenceRow {

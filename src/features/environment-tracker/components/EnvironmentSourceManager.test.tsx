@@ -11,6 +11,7 @@ vi.mock('../services/environment-tracker.gateway', () => ({
     addSource: vi.fn(),
     delete: vi.fn(),
     deleteSource: vi.fn(),
+    listCustomSources: vi.fn(),
     listSources: vi.fn(),
     reorderSources: vi.fn(),
     sourceCandidates: vi.fn(),
@@ -24,6 +25,9 @@ describe('EnvironmentSourceManager', () => {
     vi.mocked(environmentTrackerGateway.listSources)
       .mockResolvedValueOnce([])
       .mockResolvedValue([parseIssueSource]);
+    vi.mocked(environmentTrackerGateway.listCustomSources).mockResolvedValue(
+      [],
+    );
     vi.mocked(environmentTrackerGateway.sourceCandidates).mockResolvedValue({
       items: [],
       page: 1,
@@ -38,6 +42,40 @@ describe('EnvironmentSourceManager', () => {
     vi.mocked(environmentTrackerGateway.delete).mockResolvedValue(undefined);
   });
 
+  it('counts configured file and custom sources together', async () => {
+    vi.mocked(environmentTrackerGateway.listSources)
+      .mockReset()
+      .mockResolvedValue([parseIssueSource]);
+    vi.mocked(environmentTrackerGateway.listCustomSources).mockResolvedValue([
+      {
+        createdAt: '2026-08-11T00:00:00.000Z',
+        environmentId: environment.id,
+        id: '39f15e31-e7b1-47db-b027-c8707551d1d2',
+        keys: [],
+        name: 'Credential registry',
+        projectId: environment.projectId,
+        sortOrder: 0,
+        updatedAt: '2026-08-11T00:00:00.000Z',
+      },
+    ]);
+
+    renderWithProviders(
+      <EnvironmentSourceManager
+        environment={environment}
+        environments={[environment]}
+        onOpenChange={vi.fn()}
+        projectId={environment.projectId}
+      />,
+    );
+
+    const configuredSources = await screen.findByRole('button', {
+      name: /Configured Sources/,
+    });
+    await waitFor(() =>
+      expect(configuredSources).toHaveTextContent(/Configured Sources\s*2/),
+    );
+  });
+
   it('renames the environment inline under General Settings', async () => {
     const user = userEvent.setup();
     const onEnvironmentChange = vi.fn();
@@ -49,6 +87,7 @@ describe('EnvironmentSourceManager', () => {
     renderWithProviders(
       <EnvironmentSourceManager
         environment={environment}
+        environments={[environment]}
         onEnvironmentChange={onEnvironmentChange}
         onOpenChange={vi.fn()}
         projectId={environment.projectId}
@@ -92,6 +131,7 @@ describe('EnvironmentSourceManager', () => {
     renderWithProviders(
       <EnvironmentSourceManager
         environment={environment}
+        environments={[environment]}
         onOpenChange={onOpenChange}
         onStartDeleteEnvironment={onStartDeleteEnvironment}
         projectId={environment.projectId}
@@ -121,6 +161,7 @@ describe('EnvironmentSourceManager', () => {
     renderWithProviders(
       <EnvironmentSourceManager
         environment={environment}
+        environments={[environment]}
         onOpenChange={vi.fn()}
         projectId={environment.projectId}
       />,
@@ -168,6 +209,7 @@ describe('EnvironmentSourceManager', () => {
     renderWithProviders(
       <EnvironmentSourceManager
         environment={environment}
+        environments={[environment]}
         onOpenChange={vi.fn()}
         projectId={environment.projectId}
       />,

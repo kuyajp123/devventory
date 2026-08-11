@@ -33,7 +33,7 @@ import {
   IconSettings,
 } from '@tabler/icons-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { NavLink, useLocation } from 'react-router';
+import { NavLink, useLocation, useNavigate } from 'react-router';
 import { EnvironmentFormModal } from '../components/EnvironmentFormModal';
 import { EnvironmentKeyDetails } from '../components/EnvironmentKeyDetails';
 import { EnvironmentMatrix } from '../components/EnvironmentMatrix';
@@ -48,6 +48,7 @@ import { InspectEnvironmentMatrix } from '../components/InspectEnvironmentMatrix
 import { usePendingEnvironmentDeletion } from '../hooks/use-pending-environment-deletion';
 import {
   useCreateEnvironmentMutation,
+  useCustomEnvironmentSourcesQuery,
   useEnvironmentInspectMatrixQuery,
   useEnvironmentMatrixQuery,
   useEnvironmentSourcesQuery,
@@ -56,7 +57,11 @@ import {
   useRefreshProjectEnvironmentsMutation,
   useReorderEnvironmentsMutation,
 } from '../hooks/use-environments';
-import type { Environment, EnvironmentFormValues } from '../models/environment';
+import type {
+  Environment,
+  EnvironmentFormValues,
+  EnvironmentInspectableSource,
+} from '../models/environment';
 
 const MATRIX_PAGE_SIZE = 50;
 type TrackerView = 'compare' | 'inspect';
@@ -64,6 +69,7 @@ type EnvironmentWorkspaceTab = 'environments' | 'rules' | 'issues';
 
 export function EnvironmentTrackerPage() {
   const location = useLocation();
+  const navigate = useNavigate();
   const {
     activeProject,
     activeProjectId: projectId,
@@ -79,6 +85,7 @@ export function EnvironmentTrackerPage() {
   const [editing, setEditing] = useState<'new' | null>(null);
   const [sourceEnvironment, setSourceEnvironment] =
     useState<Environment | null>(null);
+  const [sourceOrigin, setSourceOrigin] = useState<'file' | 'custom'>('file');
   const previousProjectId = useRef(projectId);
   const matrixContainerRef = useRef<HTMLDivElement>(null);
   const activeTab: EnvironmentWorkspaceTab = location.pathname.endsWith(
@@ -143,6 +150,44 @@ export function EnvironmentTrackerPage() {
     activeTab === 'environments' && view === 'inspect'
       ? (selectedEnvironment?.id ?? '')
       : '',
+  );
+  const requestedCustomEnvironmentId = (
+    location.state as { customEnvironmentSettingsId?: string } | null
+  )?.customEnvironmentSettingsId;
+  const requestedCustomEnvironment = requestedCustomEnvironmentId
+    ? environmentItems.find(
+        (environment) => environment.id === requestedCustomEnvironmentId,
+      )
+    : undefined;
+  const managedSourceEnvironment =
+    sourceEnvironment ?? requestedCustomEnvironment ?? null;
+  const managedSourceOrigin = requestedCustomEnvironment
+    ? 'custom'
+    : sourceOrigin;
+  const selectedCustomSources = useCustomEnvironmentSourcesQuery(
+    projectId ?? '',
+    activeTab === 'environments' && view === 'inspect'
+      ? (selectedEnvironment?.id ?? '')
+      : '',
+  );
+  const inspectSources = useMemo<EnvironmentInspectableSource[]>(
+    () => [
+      ...(selectedSources.data ?? []).map((source) => ({
+        id: source.id,
+        label: source.relativePath,
+        origin: 'file' as const,
+        parseStatus: source.parseStatus,
+        sortOrder: source.sortOrder,
+      })),
+      ...(selectedCustomSources.data ?? []).map((source, index) => ({
+        id: source.id,
+        label: source.name,
+        origin: 'custom' as const,
+        parseStatus: 'parsed' as const,
+        sortOrder: (selectedSources.data?.length ?? 0) + index,
+      })),
+    ],
+    [selectedCustomSources.data, selectedSources.data],
   );
   const createEnvironment = useCreateEnvironmentMutation(projectId ?? '');
   const reorder = useReorderEnvironmentsMutation(projectId ?? '');
@@ -214,7 +259,7 @@ export function EnvironmentTrackerPage() {
   const isSaving = createEnvironment.isPending;
 
   const handleDefinitionClick = useCallback(
-    (relativePath: string) => {
+    (sourceId: string) => {
       const selection = selectionStore.getSelection();
       if (!selection) return;
 
@@ -222,11 +267,12 @@ export function EnvironmentTrackerPage() {
       if (!container) return;
 
       let cellId: string | null = null;
+      const source =
+        view === 'inspect'
+          ? inspectSources.find((candidate) => candidate.id === sourceId)
+          : undefined;
 
-      if (view === 'inspect' && selectedSources.data) {
-        const source = selectedSources.data.find(
-          (s) => s.relativePath === relativePath,
-        );
+      if (view === 'inspect') {
         if (source) {
           cellId = `${selection.keyName}:${source.id}`;
         }
@@ -249,11 +295,23 @@ export function EnvironmentTrackerPage() {
 
       if (view === 'inspect') {
         selectionStore.setSelection((prev) =>
-          prev ? { ...prev, selectedSourcePath: relativePath } : prev,
+          prev
+            ? {
+                ...prev,
+                selectedSource: source
+                  ? {
+                      id: source.id,
+                      label: source.label,
+                      origin: source.origin,
+                    }
+                  : undefined,
+                selectedSourcePath: sourceId,
+              }
+            : prev,
         );
       }
     },
-    [selectionStore, view, selectedSources.data],
+    [selectionStore, view, inspectSources],
   );
 
   const activeMatrix = view === 'compare' ? compareMatrix : inspectMatrix;
@@ -598,15 +656,18 @@ export function EnvironmentTrackerPage() {
                       onSelect={selectionStore.setSelection}
                       selectionStore={selectionStore}
                     />
-                  ) : selectedEnvironment && selectedSources.data ? (
+                  ) : selectedEnvironment &&
+                    selectedSources.data &&
+                    selectedCustomSources.data ? (
                     <InspectEnvironmentMatrix
                       environment={selectedEnvironment}
                       matrix={matrixData}
                       onSelect={selectionStore.setSelection}
                       selectionStore={selectionStore}
-                      sources={selectedSources.data}
+                      sources={inspectSources}
                     />
-                  ) : selectedSources.isPending ? (
+                  ) : selectedSources.isPending ||
+                    selectedCustomSources.isPending ? (
                     <div className="flex flex-1 items-center justify-center bg-surface">
                       <Spinner aria-label="Loading environment sources" />
                     </div>
@@ -677,10 +738,15 @@ export function EnvironmentTrackerPage() {
         onSubmit={saveEnvironment}
       />
       <EnvironmentSourceManager
-        environment={sourceEnvironment}
-        key={`${projectId}:${sourceEnvironment?.id ?? 'none'}`}
+        environment={managedSourceEnvironment}
+        environments={environmentItems}
+        initialSourceOrigin={managedSourceOrigin}
+        key={`${projectId}:${managedSourceEnvironment?.id ?? 'none'}:${managedSourceOrigin}`}
         onEnvironmentChange={(updatedEnvironment) => {
           setSourceEnvironment(updatedEnvironment);
+          if (requestedCustomEnvironmentId) {
+            void navigate(location.pathname, { replace: true, state: null });
+          }
           selectionStore.setSelection((currentSelection) =>
             currentSelection?.environment.id === updatedEnvironment.id
               ? {
@@ -692,10 +758,19 @@ export function EnvironmentTrackerPage() {
         }}
         onStartDeleteEnvironment={(environment) => {
           setSourceEnvironment(null);
+          if (requestedCustomEnvironmentId) {
+            void navigate(location.pathname, { replace: true, state: null });
+          }
           pendingDeletion.startPendingDeletion(environment);
         }}
         onOpenChange={(isOpen) => {
-          if (!isOpen) setSourceEnvironment(null);
+          if (!isOpen) {
+            setSourceEnvironment(null);
+            setSourceOrigin('file');
+            if (requestedCustomEnvironmentId) {
+              void navigate(location.pathname, { replace: true, state: null });
+            }
+          }
         }}
         projectId={projectId ?? ''}
       />

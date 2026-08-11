@@ -44,6 +44,7 @@ vi.mock('../services/environment-tracker.gateway', () => ({
     delete: vi.fn(),
     deleteSource: vi.fn(),
     list: vi.fn(),
+    listCustomSources: vi.fn(),
     listSources: vi.fn(),
     matrix: vi.fn(),
     refreshEnvironment: vi.fn(),
@@ -77,6 +78,9 @@ describe('EnvironmentTrackerPage', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.mocked(environmentTrackerGateway.list).mockResolvedValue([]);
+    vi.mocked(environmentTrackerGateway.listCustomSources).mockResolvedValue(
+      [],
+    );
     vi.mocked(environmentTrackerGateway.listSources).mockResolvedValue([]);
     vi.mocked(environmentTrackerGateway.matrix).mockResolvedValue({
       environments: [],
@@ -166,7 +170,10 @@ describe('EnvironmentTrackerPage', () => {
                 {
                   isCommented: false,
                   lineNumber: 1,
+                  origin: 'file',
                   relativePath: '.env.local',
+                  sourceId: '4b2cc20c-9360-44b8-85d3-d5f089582d6e',
+                  sourceName: '.env.local',
                 },
               ],
               validation: { openIssues: [], rules: [] },
@@ -244,12 +251,18 @@ describe('EnvironmentTrackerPage', () => {
                 {
                   isCommented: false,
                   lineNumber: 4,
+                  origin: 'file',
                   relativePath: '.env.local',
+                  sourceId: '4b2cc20c-9360-44b8-85d3-d5f089582d6e',
+                  sourceName: '.env.local',
                 },
                 {
                   isCommented: false,
                   lineNumber: 17,
+                  origin: 'file',
                   relativePath: '.env.security-test.local',
+                  sourceId: '56794b0d-d130-4be4-8479-607f3aad826c',
+                  sourceName: '.env.security-test.local',
                 },
               ],
               validation: { openIssues: [], rules: [] },

@@ -245,8 +245,18 @@ impl SqliteValidationRepository {
              FROM environment_key_occurrences o
              JOIN environment_key_definitions d
                ON d.project_id = o.project_id AND d.id = o.key_definition_id
-             WHERE o.project_id = ? ORDER BY o.source_id ASC, o.line_number ASC, o.id ASC",
+             WHERE o.project_id = ?
+             UNION ALL
+             SELECT k.key_definition_id, k.environment_id, k.source_id, d.name AS key_name,
+                    k.name AS observed_name, d.normalized_name AS normalized_key,
+                    NULL AS line_number, 0 AS is_commented, 0 AS is_duplicate
+             FROM custom_environment_keys k
+             JOIN environment_key_definitions d
+               ON d.project_id = k.project_id AND d.id = k.key_definition_id
+             WHERE k.project_id = ?
+             ORDER BY source_id ASC, line_number ASC",
         )
+        .bind(project_id.to_string())
         .bind(project_id.to_string())
         .fetch_all(&self.pool)
         .await?
@@ -848,7 +858,7 @@ struct ValidationOccurrenceRow {
     key_name: String,
     observed_name: String,
     normalized_key: String,
-    line_number: i64,
+    line_number: Option<i64>,
     is_commented: bool,
     is_duplicate: bool,
 }
@@ -864,7 +874,7 @@ impl TryFrom<ValidationOccurrenceRow> for ValidationOccurrence {
             key_name: row.key_name,
             observed_name: row.observed_name,
             normalized_key: row.normalized_key,
-            line_number: parse_u32(row.line_number)?,
+            line_number: row.line_number.map(parse_u32).transpose()?,
             is_commented: row.is_commented,
             is_duplicate: row.is_duplicate,
         })

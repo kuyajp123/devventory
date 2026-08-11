@@ -31,6 +31,13 @@ export const environmentKeys = {
     ['environment-tracker', projectId, 'source-candidates', filters] as const,
   sources: (projectId: string, environmentId: string) =>
     ['environment-tracker', projectId, 'sources', environmentId] as const,
+  customSources: (projectId: string, environmentId: string) =>
+    [
+      'environment-tracker',
+      projectId,
+      'custom-sources',
+      environmentId,
+    ] as const,
 };
 
 function useProjectInvalidation(projectId: string) {
@@ -86,6 +93,18 @@ export function useEnvironmentSourcesQuery(
     queryKey: environmentKeys.sources(projectId, environmentId),
     queryFn: () =>
       environmentTrackerGateway.listSources(projectId, environmentId),
+  });
+}
+
+export function useCustomEnvironmentSourcesQuery(
+  projectId: string,
+  environmentId: string,
+) {
+  return useQuery({
+    enabled: Boolean(projectId && environmentId),
+    queryKey: environmentKeys.customSources(projectId, environmentId),
+    queryFn: () =>
+      environmentTrackerGateway.listCustomSources(projectId, environmentId),
   });
 }
 
@@ -212,6 +231,91 @@ export function useRefreshProjectEnvironmentsMutation(projectId: string) {
   const invalidate = useProjectInvalidation(projectId);
   return useMutation({
     mutationFn: () => environmentTrackerGateway.refreshProject(projectId),
+    onSuccess: invalidate,
+  });
+}
+
+export function useCreateCustomEnvironmentSourceMutation(projectId: string) {
+  const invalidate = useProjectInvalidation(projectId);
+  return useMutation({
+    mutationFn: (input: {
+      environmentId: string;
+      keyNames: string[];
+      name: string;
+    }) => environmentTrackerGateway.createCustomSource({ ...input, projectId }),
+    onSuccess: invalidate,
+  });
+}
+
+export function useRenameCustomEnvironmentSourceMutation(projectId: string) {
+  const invalidate = useProjectInvalidation(projectId);
+  return useMutation({
+    mutationFn: (input: {
+      environmentId: string;
+      name: string;
+      sourceId: string;
+    }) => environmentTrackerGateway.renameCustomSource({ ...input, projectId }),
+    onSuccess: invalidate,
+  });
+}
+
+export function useDeleteCustomEnvironmentSourceMutation(projectId: string) {
+  const invalidate = useProjectInvalidation(projectId);
+  return useMutation({
+    mutationFn: (input: { environmentId: string; sourceId: string }) =>
+      environmentTrackerGateway.deleteCustomSource(
+        projectId,
+        input.environmentId,
+        input.sourceId,
+      ),
+    onSuccess: invalidate,
+  });
+}
+
+export function useAddCustomEnvironmentKeyMutation(projectId: string) {
+  const invalidate = useProjectInvalidation(projectId);
+  return useMutation({
+    mutationFn: (input: {
+      environmentId: string;
+      name: string;
+      sourceId: string;
+    }) => environmentTrackerGateway.addCustomKey({ ...input, projectId }),
+    onSuccess: invalidate,
+  });
+}
+
+export function useDeleteCustomEnvironmentKeyMutation(projectId: string) {
+  const invalidate = useProjectInvalidation(projectId);
+  return useMutation({
+    mutationFn: (input: {
+      environmentId: string;
+      keyId: string;
+      sourceId: string;
+    }) => environmentTrackerGateway.deleteCustomKey({ ...input, projectId }),
+    onSuccess: invalidate,
+  });
+}
+
+export function useCopyCustomEnvironmentKeyMutation(projectId: string) {
+  const invalidate = useProjectInvalidation(projectId);
+  return useMutation({
+    mutationFn: (input: {
+      keyId: string;
+      targetEnvironmentId: string;
+      targetSourceId: string;
+    }) => environmentTrackerGateway.copyCustomKey({ ...input, projectId }),
+    onSuccess: invalidate,
+  });
+}
+
+export function useCopyCustomEnvironmentSourceMutation(projectId: string) {
+  const invalidate = useProjectInvalidation(projectId);
+  return useMutation({
+    mutationFn: (input: {
+      sourceId: string;
+      targetEnvironmentId: string;
+      targetName?: string;
+    }) => environmentTrackerGateway.copyCustomSource({ ...input, projectId }),
     onSuccess: invalidate,
   });
 }

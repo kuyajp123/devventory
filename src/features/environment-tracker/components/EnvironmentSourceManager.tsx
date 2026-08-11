@@ -51,6 +51,7 @@ import {
   useDeleteEnvironmentSourceMutation,
   useEnvironmentSourceCandidatesQuery,
   useEnvironmentSourcesQuery,
+  useCustomEnvironmentSourcesQuery,
   useReorderEnvironmentSourcesMutation,
   useUpdateEnvironmentMutation,
 } from '../hooks/use-environments';
@@ -60,6 +61,7 @@ import {
   type EnvironmentSource,
 } from '../models/environment';
 import { EnvironmentSourceIssuePopover } from './EnvironmentSourceIssuePopover';
+import { CustomEnvironmentSourcesPanel } from './CustomEnvironmentSourcesPanel';
 import {
   EnvironmentDangerZoneSection,
   EnvironmentGeneralSection,
@@ -72,6 +74,8 @@ type AddSourceSubTab = 'indexed' | 'manual';
 
 interface EnvironmentSourceManagerProps {
   environment: Environment | null;
+  environments: Environment[];
+  initialSourceOrigin?: 'file' | 'custom';
   onEnvironmentChange?: (environment: Environment) => void;
   onOpenChange: (isOpen: boolean) => void;
   onStartDeleteEnvironment?: (environment: Environment) => void;
@@ -80,6 +84,8 @@ interface EnvironmentSourceManagerProps {
 
 export function EnvironmentSourceManager({
   environment,
+  environments,
+  initialSourceOrigin = 'file',
   onEnvironmentChange,
   onOpenChange,
   onStartDeleteEnvironment,
@@ -87,6 +93,10 @@ export function EnvironmentSourceManager({
 }: EnvironmentSourceManagerProps) {
   const environmentId = environment?.id ?? '';
   const sources = useEnvironmentSourcesQuery(projectId, environmentId);
+  const customSources = useCustomEnvironmentSourcesQuery(
+    projectId,
+    environmentId,
+  );
   const addSource = useAddEnvironmentSourceMutation(projectId);
   const deleteSource = useDeleteEnvironmentSourceMutation(projectId);
   const reorderSources = useReorderEnvironmentSourcesMutation(projectId);
@@ -94,6 +104,9 @@ export function EnvironmentSourceManager({
 
   const [activeSection, setActiveSection] = useState<ConfigSection>('sources');
   const [addSourceTab, setAddSourceTab] = useState<AddSourceSubTab>('indexed');
+  const [sourceOriginTab, setSourceOriginTab] = useState<'file' | 'custom'>(
+    initialSourceOrigin,
+  );
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(1);
   const [relativePath, setRelativePath] = useState('');
@@ -252,9 +265,9 @@ export function EnvironmentSourceManager({
                 />
                 Configured Sources
               </span>
-              {sources.data && (
+              {sources.data && customSources.data && (
                 <span className="font-mono text-[10px] text-muted">
-                  {sources.data.length}
+                  {sources.data.length + customSources.data.length}
                 </span>
               )}
             </button>
@@ -323,13 +336,26 @@ export function EnvironmentSourceManager({
                     read or stored.
                   </p>
                 </div>
-                {sources.isPending && (
+                <Tabs
+                  aria-label="Environment source origins"
+                  onSelectionChange={(key) =>
+                    setSourceOriginTab(key as 'file' | 'custom')
+                  }
+                  selectedKey={sourceOriginTab}
+                  variant="secondary"
+                >
+                  <Tabs.List>
+                    <Tabs.Tab id="file">File sources</Tabs.Tab>
+                    <Tabs.Tab id="custom">Custom sources</Tabs.Tab>
+                  </Tabs.List>
+                </Tabs>
+                {sourceOriginTab === 'file' && sources.isPending && (
                   <Spinner
                     aria-label="Loading configuration sources"
                     size="sm"
                   />
                 )}
-                {sources.isError && (
+                {sourceOriginTab === 'file' && sources.isError && (
                   <Alert role="alert" status="danger">
                     <Alert.Indicator />
                     <Alert.Content>
@@ -340,44 +366,53 @@ export function EnvironmentSourceManager({
                     </Alert.Content>
                   </Alert>
                 )}
-                {sources.data?.length === 0 && (
+                {sourceOriginTab === 'file' && sources.data?.length === 0 && (
                   <div className="rounded-md border border-dashed border-divider p-6 text-center text-xs text-muted">
                     No configuration sources configured yet. Go to{' '}
                     <strong className="text-foreground">Add Source</strong> to
                     attach files.
                   </div>
                 )}
-                {sources.data && sources.data.length > 0 && (
-                  <DndContext
-                    collisionDetection={closestCenter}
-                    onDragEnd={reorder}
-                    sensors={sensors}
-                  >
-                    <SortableContext
-                      items={sourceIds}
-                      strategy={verticalListSortingStrategy}
+                {sourceOriginTab === 'file' &&
+                  sources.data &&
+                  sources.data.length > 0 && (
+                    <DndContext
+                      collisionDetection={closestCenter}
+                      onDragEnd={reorder}
+                      sensors={sensors}
                     >
-                      <ul className="space-y-2">
-                        {sources.data.map((source) => (
-                          <SortableSource
-                            isIssueOpen={source.id === openIssueSourceId}
-                            key={source.id}
-                            onIssueOpenChange={(isOpen) => {
-                              setOpenIssueSourceId((currentId) =>
-                                isOpen
-                                  ? source.id
-                                  : currentId === source.id
-                                    ? null
-                                    : currentId,
-                              );
-                            }}
-                            onRemove={() => remove(source.id)}
-                            source={source}
-                          />
-                        ))}
-                      </ul>
-                    </SortableContext>
-                  </DndContext>
+                      <SortableContext
+                        items={sourceIds}
+                        strategy={verticalListSortingStrategy}
+                      >
+                        <ul className="space-y-2">
+                          {sources.data.map((source) => (
+                            <SortableSource
+                              isIssueOpen={source.id === openIssueSourceId}
+                              key={source.id}
+                              onIssueOpenChange={(isOpen) => {
+                                setOpenIssueSourceId((currentId) =>
+                                  isOpen
+                                    ? source.id
+                                    : currentId === source.id
+                                      ? null
+                                      : currentId,
+                                );
+                              }}
+                              onRemove={() => remove(source.id)}
+                              source={source}
+                            />
+                          ))}
+                        </ul>
+                      </SortableContext>
+                    </DndContext>
+                  )}
+                {sourceOriginTab === 'custom' && environment && (
+                  <CustomEnvironmentSourcesPanel
+                    environment={environment}
+                    environments={environments}
+                    projectId={projectId}
+                  />
                 )}
               </section>
             )}

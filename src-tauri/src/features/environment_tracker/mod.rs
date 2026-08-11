@@ -8,7 +8,7 @@ mod service;
 mod workspace;
 
 #[cfg(test)]
-pub(crate) use model::CreateEnvironment;
+pub(crate) use model::{CreateCustomEnvironmentSource, CreateEnvironment};
 pub(crate) use repository::SqliteEnvironmentRepository;
 pub(crate) use service::EnvironmentService;
 pub(crate) use workspace::EnvironmentWorkspaceService;

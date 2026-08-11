@@ -118,6 +118,59 @@ describe('environmentTrackerGateway', () => {
       environmentTrackerGateway.listSources(projectId, environmentId),
     ).rejects.toThrow();
   });
+
+  it('creates metadata-only custom sources and validates their keys', async () => {
+    mockIPC((command, args) => {
+      expect(command).toBe('create_custom_environment_source');
+      expect(args).toEqual({
+        input: {
+          environmentId,
+          keyNames: ['devventory-firebase-adminsdk.json'],
+          name: 'Firebase Credentials',
+          projectId,
+        },
+      });
+      return customSourceResponse();
+    });
+
+    await expect(
+      environmentTrackerGateway.createCustomSource({
+        environmentId,
+        keyNames: ['devventory-firebase-adminsdk.json'],
+        name: 'Firebase Credentials',
+        projectId,
+      }),
+    ).resolves.toMatchObject({
+      keys: [{ name: 'devventory-firebase-adminsdk.json' }],
+      name: 'Firebase Credentials',
+    });
+  });
+
+  it('copies a custom key to an explicitly selected target source', async () => {
+    const keyId = '78657c9e-3bdf-4bd2-a38c-ff9e24096875';
+    const targetSourceId = '26a169cf-6ccc-45ce-94e4-2982343c6317';
+    mockIPC((command, args) => {
+      expect(command).toBe('copy_custom_environment_key');
+      expect(args).toEqual({
+        input: {
+          keyId,
+          projectId,
+          targetEnvironmentId: environmentId,
+          targetSourceId,
+        },
+      });
+      return customKeyResponse({ id: keyId, sourceId: targetSourceId });
+    });
+
+    await expect(
+      environmentTrackerGateway.copyCustomKey({
+        keyId,
+        projectId,
+        targetEnvironmentId: environmentId,
+        targetSourceId,
+      }),
+    ).resolves.toMatchObject({ sourceId: targetSourceId });
+  });
 });
 
 function sourceResponse(extra: Record<string, unknown> = {}) {
@@ -147,6 +200,33 @@ function environmentResponse() {
     description: null,
     id: environmentId,
     name: 'Production',
+    projectId,
+    sortOrder: 0,
+    updatedAt: '2026-08-05T00:00:00.000Z',
+  };
+}
+
+function customKeyResponse(extra: Record<string, unknown> = {}) {
+  return {
+    createdAt: '2026-08-05T00:00:00.000Z',
+    environmentId,
+    id: '78657c9e-3bdf-4bd2-a38c-ff9e24096875',
+    name: 'devventory-firebase-adminsdk.json',
+    normalizedName: 'DEVVENTORY-FIREBASE-ADMINSDK.JSON',
+    projectId,
+    sourceId: 'f5443f4c-f04c-4ccf-850b-fbe53d24fcba',
+    updatedAt: '2026-08-05T00:00:00.000Z',
+    ...extra,
+  };
+}
+
+function customSourceResponse() {
+  return {
+    createdAt: '2026-08-05T00:00:00.000Z',
+    environmentId,
+    id: 'f5443f4c-f04c-4ccf-850b-fbe53d24fcba',
+    keys: [customKeyResponse()],
+    name: 'Firebase Credentials',
     projectId,
     sortOrder: 0,
     updatedAt: '2026-08-05T00:00:00.000Z',

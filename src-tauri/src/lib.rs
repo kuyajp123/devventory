@@ -18,9 +18,12 @@ use features::asset_library::commands::{
 };
 use features::dashboard::commands::get_project_dashboard;
 use features::environment_tracker::commands::{
-    add_environment_source, create_environment, delete_environment, delete_environment_source,
-    get_environment_matrix, list_environment_source_candidates, list_environment_sources,
-    list_environments, refresh_environment, refresh_project_environment_sources,
+    add_custom_environment_key, add_environment_source, copy_custom_environment_key,
+    copy_custom_environment_source, create_custom_environment_source, create_environment,
+    delete_custom_environment_key, delete_custom_environment_source, delete_environment,
+    delete_environment_source, get_environment_matrix, list_custom_environment_sources,
+    list_environment_source_candidates, list_environment_sources, list_environments,
+    refresh_environment, refresh_project_environment_sources, rename_custom_environment_source,
     reorder_environment_sources, reorder_environments, update_environment,
 };
 use features::file_inventory::commands::{
@@ -51,10 +54,10 @@ use app::notification_session::{
     open_agent_unread_from_quick_access,
 };
 use app::quick_access::{
-    hide_quick_access_command, open_main_window_from_quick_access_command,
-    set_quick_access_prevent_auto_hide_command, show_main_exclusive, show_quick_access_exclusive,
-    toggle_quick_access_exclusive, QuickAccessState, QUICK_ACCESS_WINDOW_LABEL,
-    TRAY_SINGLE_CLICK_DELAY_MS,
+    hide_quick_access_command, open_environment_settings_from_quick_access_command,
+    open_main_window_from_quick_access_command, set_quick_access_prevent_auto_hide_command,
+    show_main_exclusive, show_quick_access_exclusive, toggle_quick_access_exclusive,
+    QuickAccessState, QUICK_ACCESS_WINDOW_LABEL, TRAY_SINGLE_CLICK_DELAY_MS,
 };
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -305,6 +308,14 @@ pub fn run() {
             add_environment_source,
             delete_environment_source,
             reorder_environment_sources,
+            list_custom_environment_sources,
+            create_custom_environment_source,
+            rename_custom_environment_source,
+            delete_custom_environment_source,
+            add_custom_environment_key,
+            delete_custom_environment_key,
+            copy_custom_environment_key,
+            copy_custom_environment_source,
             list_environment_source_candidates,
             get_environment_matrix,
             refresh_environment,
@@ -321,6 +332,7 @@ pub fn run() {
             export_environment_manifest,
             hide_quick_access_command,
             open_main_window_from_quick_access_command,
+            open_environment_settings_from_quick_access_command,
             set_quick_access_prevent_auto_hide_command,
             get_agent_reminder_unread_state,
             acknowledge_agent_unread_reminders,

@@ -13,7 +13,7 @@ import {
   type EnvironmentMatrixCellValidation,
   type EnvironmentMatrixPage,
   type EnvironmentMatrixSourceDetail,
-  type EnvironmentSource,
+  type EnvironmentInspectableSource,
 } from '../models/environment';
 import type { EnvironmentKeySelection } from './EnvironmentKeyDetails';
 import { CopyableKeyName } from './CopyableKeyName';
@@ -45,7 +45,7 @@ export function InspectEnvironmentMatrix({
   matrix: EnvironmentMatrixPage;
   onSelect: (selection: EnvironmentKeySelection) => void;
   selectionStore: EnvironmentMatrixSelectionStore;
-  sources: EnvironmentSource[];
+  sources: EnvironmentInspectableSource[];
 }) {
   const environmentIndex = useMemo(
     () => matrix.environments.findIndex((item) => item.id === environment.id),
@@ -61,11 +61,9 @@ export function InspectEnvironmentMatrix({
           size={ICON_SIZE.emptyState}
           stroke={ICON_STROKE}
         />
-        <h2 className="mt-4 text-lg font-semibold">
-          No source files to inspect
-        </h2>
+        <h2 className="mt-4 text-lg font-semibold">No sources to inspect</h2>
         <p className="mt-2 text-sm text-muted">
-          Add a configuration source to {environment.name} before opening the
+          Add a file or custom source to {environment.name} before opening the
           source breakdown.
         </p>
       </EmptyState>
@@ -143,12 +141,18 @@ export function InspectEnvironmentMatrix({
                     >
                       <div className="min-w-0">
                         <p className="truncate font-mono text-sm font-semibold">
-                          {source.relativePath}
+                          {source.label}
                         </p>
-                        <p className="truncate text-xs font-normal text-muted">
-                          {sourceStatusLabel(source.parseStatus)} · Display{' '}
-                          {source.sortOrder + 1}
-                        </p>
+                        {source.origin === 'custom' ? (
+                          <p className="truncate text-xs font-normal text-muted">
+                            Custom metadata source
+                          </p>
+                        ) : (
+                          <p className="truncate text-xs font-normal text-muted">
+                            {sourceStatusLabel(source.parseStatus)} · Display{' '}
+                            {source.sortOrder + 1}
+                          </p>
+                        )}
                       </div>
                     </Table.Column>
                   ))}
@@ -182,8 +186,7 @@ export function InspectEnvironmentMatrix({
                           ) : null}
                         </Table.Cell>
                         {sources.map((source) => {
-                          const details =
-                            detailsBySource.get(source.relativePath) ?? [];
+                          const details = detailsBySource.get(source.id) ?? [];
                           return (
                             <Table.Cell
                               className={`${ENVIRONMENT_COLUMN_CLASS} p-1 align-middle`}
@@ -232,14 +235,14 @@ const SourceMatrixCell = memo(function SourceMatrixCell({
   environment: Environment;
   keyName: string;
   onSelect: (selection: EnvironmentKeySelection) => void;
-  source: EnvironmentSource;
+  source: EnvironmentInspectableSource;
   sourceDetails: EnvironmentMatrixSourceDetail[];
   validation: EnvironmentMatrixCellValidation;
 }) {
   const isSelected = useEnvironmentMatrixCellSelection(
     keyName,
     environment.id,
-    source.relativePath,
+    source.id,
   );
   const active = sourceDetails.filter((detail) => !detail.isCommented);
   const commented = sourceDetails.filter((detail) => detail.isCommented);
@@ -252,7 +255,7 @@ const SourceMatrixCell = memo(function SourceMatrixCell({
 
   return (
     <button
-      aria-label={`${keyName} in ${source.relativePath}: ${status}${
+      aria-label={`${keyName} in ${source.label}: ${status}${
         validationLabel ? `. ${validationLabel}` : ''
       }`}
       aria-pressed={isSelected}
@@ -267,7 +270,12 @@ const SourceMatrixCell = memo(function SourceMatrixCell({
         onSelect({
           environment,
           keyName,
-          selectedSourcePath: source.relativePath,
+          selectedSource: {
+            id: source.id,
+            label: source.label,
+            origin: source.origin,
+          },
+          selectedSourcePath: source.id,
           sourceDetails: allDetails,
           validation,
         })
@@ -297,7 +305,7 @@ const SourceMatrixCellStatus = memo(function SourceMatrixCellStatus({
   summary,
 }: {
   activeCount: number;
-  source: EnvironmentSource;
+  source: EnvironmentInspectableSource;
   status: string;
   summary: string | null;
 }) {
@@ -323,11 +331,11 @@ function groupDetailsBySource(
   const grouped = new Map<string, EnvironmentMatrixSourceDetail[]>();
 
   for (const detail of details) {
-    const sourceDetails = grouped.get(detail.relativePath);
+    const sourceDetails = grouped.get(detail.sourceId);
     if (sourceDetails) {
       sourceDetails.push(detail);
     } else {
-      grouped.set(detail.relativePath, [detail]);
+      grouped.set(detail.sourceId, [detail]);
     }
   }
 
@@ -335,10 +343,14 @@ function groupDetailsBySource(
 }
 
 function sourceCellStatus(
-  source: EnvironmentSource,
+  source: EnvironmentInspectableSource,
   active: number,
   commented: number,
 ): string {
+  if (source.origin === 'custom') {
+    if (active > 1) return 'Duplicate';
+    return active === 1 ? 'Present' : 'Absent';
+  }
   if (active > 1) return `${active} active definitions`;
   if (active === 1) return 'Active';
   if (commented > 0) return 'Commented';
@@ -373,7 +385,7 @@ function sourceCellSummary(
   return null;
 }
 
-function sourceCellTone(source: EnvironmentSource, active: number) {
+function sourceCellTone(source: EnvironmentInspectableSource, active: number) {
   if (active > 0)
     return active > 1 ? ('warning' as const) : ('success' as const);
   if (
@@ -387,10 +399,12 @@ function sourceCellTone(source: EnvironmentSource, active: number) {
 }
 
 function sourceCellDataStatus(
-  source: EnvironmentSource,
+  source: EnvironmentInspectableSource,
   active: number,
 ): string {
   if (active > 1) return 'duplicate';
-  if (active === 1) return 'active';
-  return source.parseStatus;
+  if (active === 1) return source.origin === 'custom' ? 'present' : 'active';
+  return source.origin === 'custom'
+    ? 'absent'
+    : (source.parseStatus ?? 'absent');
 }

@@ -5,12 +5,16 @@ use crate::features::validation_center::events::emit_validation_changed;
 use crate::shared::errors::command::CommandError;
 
 use super::dto::{
-    AddEnvironmentSourceInput, CreateEnvironmentInput, EnvironmentIdInput,
-    EnvironmentMatrixQueryInput, EnvironmentOrderInput, EnvironmentSourceCandidateQueryInput,
-    EnvironmentSourceIdInput, EnvironmentSourceOrderInput, ProjectInput, UpdateEnvironmentInput,
+    AddEnvironmentSourceInput, CopyCustomEnvironmentKeyInput, CopyCustomEnvironmentSourceInput,
+    CreateCustomEnvironmentSourceInput, CreateEnvironmentInput, CustomEnvironmentKeyIdInput,
+    CustomEnvironmentKeyInput, EnvironmentIdInput, EnvironmentMatrixQueryInput,
+    EnvironmentOrderInput, EnvironmentSourceCandidateQueryInput, EnvironmentSourceIdInput,
+    EnvironmentSourceOrderInput, ProjectInput, RenameCustomEnvironmentSourceInput,
+    UpdateEnvironmentInput,
 };
 use super::model::{
-    Environment, EnvironmentMatrixPage, EnvironmentSource, EnvironmentSourceCandidatePage,
+    CustomEnvironmentKey, CustomEnvironmentSource, Environment, EnvironmentMatrixPage,
+    EnvironmentSource, EnvironmentSourceCandidatePage,
 };
 
 #[tauri::command]
@@ -146,6 +150,131 @@ pub(crate) async fn reorder_environment_sources(
         .map_err(CommandError::from)?;
     revalidate_after_change(&app, &state, project_id).await;
     Ok(())
+}
+
+#[tauri::command]
+pub(crate) async fn list_custom_environment_sources(
+    state: State<'_, AppState>,
+    input: EnvironmentIdInput,
+) -> Result<Vec<CustomEnvironmentSource>, CommandError> {
+    let (project_id, environment_id) = input.parse().map_err(CommandError::from)?;
+    state
+        .environment_service()
+        .list_custom_sources(project_id, environment_id)
+        .await
+        .map_err(Into::into)
+}
+
+#[tauri::command]
+pub(crate) async fn create_custom_environment_source(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    input: CreateCustomEnvironmentSourceInput,
+) -> Result<CustomEnvironmentSource, CommandError> {
+    let source = state
+        .environment_service()
+        .create_custom_source(input.try_into().map_err(CommandError::from)?)
+        .await
+        .map_err(CommandError::from)?;
+    revalidate_after_change(&app, &state, source.project_id).await;
+    Ok(source)
+}
+
+#[tauri::command]
+pub(crate) async fn rename_custom_environment_source(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    input: RenameCustomEnvironmentSourceInput,
+) -> Result<CustomEnvironmentSource, CommandError> {
+    let (project_id, environment_id, source_id, name) =
+        input.parse().map_err(CommandError::from)?;
+    let source = state
+        .environment_service()
+        .rename_custom_source(project_id, environment_id, source_id, name)
+        .await
+        .map_err(CommandError::from)?;
+    revalidate_after_change(&app, &state, project_id).await;
+    Ok(source)
+}
+
+#[tauri::command]
+pub(crate) async fn delete_custom_environment_source(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    input: EnvironmentSourceIdInput,
+) -> Result<(), CommandError> {
+    let (project_id, environment_id, source_id) = input.parse().map_err(CommandError::from)?;
+    state
+        .environment_service()
+        .delete_custom_source(project_id, environment_id, source_id)
+        .await
+        .map_err(CommandError::from)?;
+    revalidate_after_change(&app, &state, project_id).await;
+    Ok(())
+}
+
+#[tauri::command]
+pub(crate) async fn add_custom_environment_key(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    input: CustomEnvironmentKeyInput,
+) -> Result<CustomEnvironmentKey, CommandError> {
+    let (project_id, environment_id, source_id, name) =
+        input.parse().map_err(CommandError::from)?;
+    let key = state
+        .environment_service()
+        .add_custom_key(project_id, environment_id, source_id, name)
+        .await
+        .map_err(CommandError::from)?;
+    revalidate_after_change(&app, &state, project_id).await;
+    Ok(key)
+}
+
+#[tauri::command]
+pub(crate) async fn delete_custom_environment_key(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    input: CustomEnvironmentKeyIdInput,
+) -> Result<(), CommandError> {
+    let (project_id, environment_id, source_id, key_id) =
+        input.parse().map_err(CommandError::from)?;
+    state
+        .environment_service()
+        .delete_custom_key(project_id, environment_id, source_id, key_id)
+        .await
+        .map_err(CommandError::from)?;
+    revalidate_after_change(&app, &state, project_id).await;
+    Ok(())
+}
+
+#[tauri::command]
+pub(crate) async fn copy_custom_environment_key(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    input: CopyCustomEnvironmentKeyInput,
+) -> Result<CustomEnvironmentKey, CommandError> {
+    let key = state
+        .environment_service()
+        .copy_custom_key(input.try_into().map_err(CommandError::from)?)
+        .await
+        .map_err(CommandError::from)?;
+    revalidate_after_change(&app, &state, key.project_id).await;
+    Ok(key)
+}
+
+#[tauri::command]
+pub(crate) async fn copy_custom_environment_source(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    input: CopyCustomEnvironmentSourceInput,
+) -> Result<CustomEnvironmentSource, CommandError> {
+    let source = state
+        .environment_service()
+        .copy_custom_source(input.try_into().map_err(CommandError::from)?)
+        .await
+        .map_err(CommandError::from)?;
+    revalidate_after_change(&app, &state, source.project_id).await;
+    Ok(source)
 }
 
 #[tauri::command]

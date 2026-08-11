@@ -12,3 +12,4 @@ export { LegacyProjectRedirect } from './pages/LegacyProjectRedirect';
 export { ProjectOnboardingPage } from './pages/ProjectOnboardingPage';
 export { ActiveProjectProvider } from './providers/ActiveProjectProvider';
 export { resolveInitialProjectId } from './providers/resolve-initial-project-id';
+export { projectSelectionGateway } from './services/project-selection.gateway';

@@ -1,6 +1,7 @@
 import { Button, Chip } from '@heroui/react';
 import {
   IconAlertTriangle,
+  IconDatabase,
   IconFileCode,
   IconInfoCircle,
   IconX,
@@ -10,6 +11,7 @@ import { ICON_SIZE, ICON_STROKE } from '@/shared/constants/icon.constants';
 import { SemanticStatusChip } from '@/shared/ui';
 import type {
   Environment,
+  EnvironmentSourceOrigin,
   EnvironmentMatrixCellValidation,
   EnvironmentMatrixSourceDetail,
 } from '../models/environment';
@@ -18,6 +20,11 @@ import { EnvironmentValidationDetails } from './EnvironmentValidationDetails';
 export interface EnvironmentKeySelection {
   environment: Environment;
   keyName: string;
+  selectedSource?: {
+    id: string;
+    label: string;
+    origin: EnvironmentSourceOrigin;
+  };
   selectedSourcePath?: string;
   sourceDetails: EnvironmentMatrixSourceDetail[];
   validation: EnvironmentMatrixCellValidation;
@@ -67,19 +74,27 @@ function EnvironmentKeyDetailsContent({
     () => selection.sourceDetails.filter((detail) => detail.isCommented),
     [selection.sourceDetails],
   );
-  const effectiveSelectedSourcePath =
-    selection.selectedSourcePath ?? selectedDefinitionPath;
+  const selectedSourceId =
+    selection.selectedSource?.id ??
+    selection.selectedSourcePath ??
+    selectedDefinitionPath;
   const selectedSourceDetails = useMemo(
     () =>
-      effectiveSelectedSourcePath
+      selectedSourceId
         ? selection.sourceDetails.filter(
-            (detail) => detail.relativePath === effectiveSelectedSourcePath,
+            (detail) => detail.sourceId === selectedSourceId,
           )
         : selection.sourceDetails,
-    [effectiveSelectedSourcePath, selection.sourceDetails],
+    [selectedSourceId, selection.sourceDetails],
   );
+  const selectedSourceOrigin =
+    selection.selectedSource?.origin ?? selectedSourceDetails[0]?.origin;
+  const effectiveSelectedSourcePath = selectedSourceId
+    ? (selection.selectedSource?.label ??
+      sourceDetailLabel(selectedSourceDetails[0]))
+    : null;
   const status = effectiveSelectedSourcePath
-    ? sourceStatus(selectedSourceDetails)
+    ? sourceStatus(selectedSourceDetails, selectedSourceOrigin)
     : environmentStatus(activeDetails.length, commentedDetails.length);
 
   useEffect(() => {
@@ -92,9 +107,9 @@ function EnvironmentKeyDetailsContent({
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [onClose]);
 
-  function handleDefinitionClick(relativePath: string) {
-    setSelectedDefinitionPath(relativePath);
-    onDefinitionClick?.(relativePath);
+  function handleDefinitionClick(sourceId: string) {
+    setSelectedDefinitionPath(sourceId);
+    onDefinitionClick?.(sourceId);
   }
 
   return (
@@ -146,7 +161,7 @@ function EnvironmentKeyDetailsContent({
             {effectiveSelectedSourcePath
               ? sourceExplanation(
                   selectedSourceDetails,
-                  effectiveSelectedSourcePath,
+                  sourceDetailLabel(selectedSourceDetails[0]),
                 )
               : environmentExplanation(
                   activeDetails.length,
@@ -170,12 +185,12 @@ function EnvironmentKeyDetailsContent({
           {selection.sourceDetails.length > 0 ? (
             <ul className="mt-3 space-y-2">
               {selection.sourceDetails.map((detail, index) => {
-                const isSelected =
-                  effectiveSelectedSourcePath === detail.relativePath;
+                const isSelected = selectedSourceId === detail.sourceId;
+                const sourceLabel = sourceDetailLabel(detail);
 
                 return (
                   <li
-                    key={`${detail.relativePath}:${detail.lineNumber ?? 'unknown'}:${index}`}
+                    key={`${detail.sourceId}:${detail.lineNumber ?? 'metadata'}:${index}`}
                   >
                     <button
                       aria-pressed={isSelected}
@@ -188,35 +203,63 @@ function EnvironmentKeyDetailsContent({
                           ? 'cursor-pointer hover:border-foreground/25 hover:bg-surface-secondary'
                           : 'cursor-default'
                       }`}
-                      data-definition-path={detail.relativePath}
+                      data-definition-path={sourceLabel}
                       data-selected={isSelected ? 'true' : undefined}
-                      onClick={() => handleDefinitionClick(detail.relativePath)}
+                      onClick={() => handleDefinitionClick(detail.sourceId)}
                       type="button"
                     >
                       <div className="flex items-start gap-3">
-                        <IconFileCode
-                          aria-hidden="true"
-                          className="mt-0.5 shrink-0 text-muted"
-                          size={ICON_SIZE.button}
-                          stroke={ICON_STROKE}
-                        />
+                        {detail.origin === 'custom' ? (
+                          <IconDatabase
+                            aria-hidden="true"
+                            className="mt-0.5 shrink-0 text-muted"
+                            size={ICON_SIZE.button}
+                            stroke={ICON_STROKE}
+                          />
+                        ) : (
+                          <IconFileCode
+                            aria-hidden="true"
+                            className="mt-0.5 shrink-0 text-muted"
+                            size={ICON_SIZE.button}
+                            stroke={ICON_STROKE}
+                          />
+                        )}
                         <div className="min-w-0 flex-1">
                           <p className="truncate font-mono text-sm">
-                            {detail.relativePath}
+                            {sourceLabel}
                           </p>
                           <p className="mt-1 text-xs text-muted">
-                            {detail.lineNumber
-                              ? `Line ${detail.lineNumber}`
-                              : 'Line unavailable'}
+                            {detail.origin === 'custom'
+                              ? 'Custom metadata source'
+                              : detail.lineNumber
+                                ? `Line ${detail.lineNumber}`
+                                : 'Line unavailable'}
                           </p>
                         </div>
                         <SemanticStatusChip
                           dataStatus={
-                            detail.isCommented ? 'commented' : 'active'
+                            detail.isCommented
+                              ? 'commented'
+                              : detail.origin === 'custom'
+                                ? 'present'
+                                : 'active'
                           }
-                          label={detail.isCommented ? 'Commented' : 'Active'}
+                          label={
+                            detail.isCommented
+                              ? 'Commented'
+                              : detail.origin === 'custom'
+                                ? 'Present'
+                                : 'Active'
+                          }
                           tone={detail.isCommented ? 'neutral' : 'success'}
                         />
+                        {detail.origin === 'custom' ? (
+                          <SemanticStatusChip
+                            dataStatus="custom"
+                            label="Custom"
+                            tone="neutral"
+                          />
+                        ) : null}
                       </div>
                     </button>
                   </li>
@@ -255,9 +298,16 @@ function environmentStatus(active: number, commented: number): string {
   return 'Absent';
 }
 
-function sourceStatus(details: EnvironmentMatrixSourceDetail[]): string {
+function sourceStatus(
+  details: EnvironmentMatrixSourceDetail[],
+  origin?: EnvironmentSourceOrigin,
+): string {
   const active = details.filter((detail) => !detail.isCommented).length;
   const commented = details.length - active;
+  if (origin === 'custom') {
+    if (active > 1) return 'Duplicate';
+    return active === 1 ? 'Present' : 'Absent';
+  }
   if (active > 1) return `${active} active definitions in this file`;
   if (active === 1) return 'Active';
   if (commented > 0) return 'Commented';
@@ -300,4 +350,8 @@ function sourceExplanation(
   if (commented > 0)
     return `${sourcePath} contains only commented definitions.`;
   return `${sourcePath} does not contain this key.`;
+}
+
+function sourceDetailLabel(detail?: EnvironmentMatrixSourceDetail): string {
+  return detail?.relativePath ?? detail?.sourceName ?? 'source';
 }
