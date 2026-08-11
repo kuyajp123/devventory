@@ -2,8 +2,8 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use tauri::{AppHandle, Manager};
 use tracing::{info, warn};
 
-use crate::features::settings::repository::SettingsRepository;
 use super::state::AppState;
+use crate::features::settings::repository::SettingsRepository;
 
 #[derive(Debug)]
 pub(crate) struct ApplicationLifecycleState {
@@ -44,7 +44,7 @@ impl ApplicationLifecycleState {
     }
 }
 
-pub(crate) fn activate_main_window(app: &AppHandle) {
+pub(crate) fn activate_main_window(app: &AppHandle) -> Result<(), String> {
     if let Some(window) = app.get_webview_window("main") {
         if window.is_minimized().unwrap_or(false) {
             let _ = window.unminimize();
@@ -52,9 +52,12 @@ pub(crate) fn activate_main_window(app: &AppHandle) {
         if !window.is_visible().unwrap_or(false) {
             let _ = window.show();
         }
-        let _ = window.set_focus();
+        window.set_focus().map_err(|e| e.to_string())?;
+        Ok(())
     } else {
-        warn!("Failed to get main webview window during activation");
+        let err_msg = "Failed to get main webview window during activation".to_string();
+        warn!("{}", err_msg);
+        Err(err_msg)
     }
 }
 

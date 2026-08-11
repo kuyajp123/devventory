@@ -5,8 +5,8 @@ use crate::app::state::AppState;
 use crate::shared::errors::command::CommandError;
 
 use super::dto::{
-    BackgroundStartupPreferencesDto, BackgroundStartupPreferencesInput,
-    NotificationPreferencesDto, NotificationPreferencesInput,
+    BackgroundStartupPreferencesDto, BackgroundStartupPreferencesInput, NotificationPreferencesDto,
+    NotificationPreferencesInput,
 };
 use super::repository::SettingsRepository;
 

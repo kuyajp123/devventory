@@ -23,8 +23,8 @@ use crate::features::validation_center::{
 use crate::shared::database::{initialize_database, Database, DatabasePaths};
 use crate::shared::errors::AppError;
 
-use std::sync::Arc;
 use crate::app::lifecycle::ApplicationLifecycleState;
+use std::sync::Arc;
 
 #[derive(Debug)]
 pub(crate) struct AppState {

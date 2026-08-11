@@ -2,6 +2,7 @@ mod app;
 mod features;
 mod shared;
 
+use std::sync::Arc;
 use tauri::Manager;
 
 use app::state::AppState;
@@ -45,6 +46,13 @@ use features::validation_center::commands::{
     set_validation_issue_status,
 };
 
+use app::quick_access::{
+    hide_quick_access_command, open_main_window_from_quick_access_command,
+    set_quick_access_prevent_auto_hide_command, show_main_exclusive, show_quick_access_exclusive,
+    toggle_quick_access_exclusive, QuickAccessState, QUICK_ACCESS_WINDOW_LABEL,
+    TRAY_SINGLE_CLICK_DELAY_MS,
+};
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     shared::telemetry::initialize();
@@ -53,7 +61,7 @@ pub fn run() {
         .plugin(tauri_plugin_single_instance::init(|app, argv, _cwd| {
             let is_autostart = argv.iter().any(|arg| arg == "--autostart");
             if !is_autostart {
-                app::lifecycle::activate_main_window(app);
+                let _ = show_main_exclusive(app);
             } else {
                 tracing::info!("Secondary autostart launch ignored while instance running");
             }
@@ -66,8 +74,30 @@ pub fn run() {
             Some(vec!["--autostart"]),
         ))
         .on_window_event(|window, event| {
-            if let tauri::WindowEvent::CloseRequested { api, .. } = event {
-                app::lifecycle::handle_close_requested(window.app_handle(), window, api);
+            if window.label() == "main" {
+                if let tauri::WindowEvent::CloseRequested { api, .. } = event {
+                    app::lifecycle::handle_close_requested(window.app_handle(), window, api);
+                }
+            } else if window.label() == QUICK_ACCESS_WINDOW_LABEL {
+                match event {
+                    tauri::WindowEvent::CloseRequested { api, .. } => {
+                        let state = window.app_handle().try_state::<AppState>();
+                        let is_quitting = state
+                            .map(|s| s.lifecycle_state().is_quitting())
+                            .unwrap_or(false);
+                        if !is_quitting {
+                            api.prevent_close();
+                            app::quick_access::hide_quick_access(window.app_handle());
+                        }
+                    }
+                    tauri::WindowEvent::Focused(focused) => {
+                        app::quick_access::handle_quick_access_focus_changed(
+                            window.app_handle(),
+                            *focused,
+                        );
+                    }
+                    _ => {}
+                }
             }
         })
         .setup(|app| {
@@ -78,11 +108,36 @@ pub fn run() {
                 is_autostart_launch,
             ))?;
             app.manage(state);
+            app.manage(QuickAccessState::new());
 
-            let open_item = tauri::menu::MenuItem::with_id(
+            let quick_panel_builder = tauri::WebviewWindowBuilder::new(
+                app,
+                QUICK_ACCESS_WINDOW_LABEL,
+                tauri::WebviewUrl::App("index.html".into()),
+            )
+            .title("Devventory Quick Access")
+            .inner_size(360.0, 260.0)
+            .decorations(false)
+            .always_on_top(true)
+            .resizable(false)
+            .skip_taskbar(true)
+            .visible(false);
+
+            if let Err(err) = quick_panel_builder.build() {
+                tracing::error!(error = %err, "Failed to create quick-panel WebviewWindow during setup");
+            }
+
+            let open_main_item = tauri::menu::MenuItem::with_id(
                 app,
                 "open_devventory",
                 "Open Devventory",
+                true,
+                None::<&str>,
+            )?;
+            let open_quick_item = tauri::menu::MenuItem::with_id(
+                app,
+                "open_quick_access",
+                "Open Quick Access",
                 true,
                 None::<&str>,
             )?;
@@ -96,20 +151,75 @@ pub fn run() {
             )?;
             let menu = tauri::menu::Menu::with_items(
                 app,
-                &[&open_item, &separator_item, &quit_item],
+                &[&open_main_item, &open_quick_item, &separator_item, &quit_item],
             )?;
 
             let tray_result = tauri::tray::TrayIconBuilder::with_id("main")
                 .menu(&menu)
+                .show_menu_on_left_click(false)
                 .on_menu_event(|app, event| match event.id.as_ref() {
-                    "open_devventory" => app::lifecycle::activate_main_window(app),
+                    "open_devventory" => {
+                        let _ = show_main_exclusive(app);
+                    }
+                    "open_quick_access" => {
+                        show_quick_access_exclusive(app);
+                    }
                     "quit_devventory" => app::lifecycle::request_quit(app),
                     _ => {}
                 })
-                .on_tray_icon_event(|tray, event| {
-                    if let tauri::tray::TrayIconEvent::DoubleClick { .. } = event {
-                        app::lifecycle::activate_main_window(tray.app_handle());
+                .on_tray_icon_event(|tray, event| match event {
+                    tauri::tray::TrayIconEvent::Click {
+                        button: tauri::tray::MouseButton::Left,
+                        button_state: tauri::tray::MouseButtonState::Up,
+                        ..
+                    } => {
+                        let app_handle = tray.app_handle().clone();
+                        let state = app_handle.try_state::<QuickAccessState>();
+                        if let Some(state) = state {
+                            if state.should_suppress_tray_single_click() {
+                                state.invalidate_click_generation();
+                                return;
+                            }
+
+                            let gen = state.next_click_generation();
+                            let app_clone = app_handle.clone();
+                            let handle = tauri::async_runtime::spawn(async move {
+                                tokio::time::sleep(std::time::Duration::from_millis(
+                                    TRAY_SINGLE_CLICK_DELAY_MS,
+                                ))
+                                .await;
+                                if let Some(st) = app_clone.try_state::<QuickAccessState>() {
+                                    if st.current_click_generation() == gen {
+                                        toggle_quick_access_exclusive(&app_clone);
+                                    }
+                                }
+                            });
+                            let state_arc = state.inner();
+                            let state_clone = Arc::new(state_arc);
+                            tauri::async_runtime::block_on(async move {
+                                state_clone.set_pending_click(handle).await;
+                            });
+                        } else {
+                            toggle_quick_access_exclusive(&app_handle);
+                        }
                     }
+                    tauri::tray::TrayIconEvent::DoubleClick {
+                        button: tauri::tray::MouseButton::Left,
+                        ..
+                    } => {
+                        let app_handle = tray.app_handle();
+                        if let Some(state) = app_handle.try_state::<QuickAccessState>() {
+                            state.record_tray_double_click();
+                            state.invalidate_click_generation();
+                            let state_arc = state.inner();
+                            let state_clone = Arc::new(state_arc);
+                            tauri::async_runtime::block_on(async move {
+                                state_clone.cancel_pending_click().await;
+                            });
+                        }
+                        let _ = show_main_exclusive(app_handle);
+                    }
+                    _ => {}
                 })
                 .build(app);
 
@@ -128,10 +238,10 @@ pub fn run() {
             app_state.start_agent_reminder_runtime(app_handle.clone());
 
             if !is_autostart_launch {
-                app::lifecycle::activate_main_window(&app_handle);
+                let _ = app::lifecycle::activate_main_window(&app_handle);
             } else if !is_tray_available {
                 tracing::warn!("Autostart launch without usable tray icon; falling back to showing main window");
-                app::lifecycle::activate_main_window(&app_handle);
+                let _ = app::lifecycle::activate_main_window(&app_handle);
             } else {
                 tracing::info!("Devventory started silently in background via autostart");
             }
@@ -204,7 +314,10 @@ pub fn run() {
             run_project_validation,
             set_validation_issue_status,
             preview_environment_manifest,
-            export_environment_manifest
+            export_environment_manifest,
+            hide_quick_access_command,
+            open_main_window_from_quick_access_command,
+            set_quick_access_prevent_auto_hide_command
         ])
         .run(tauri::generate_context!())
         .expect("error while running Devventory");

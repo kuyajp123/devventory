@@ -5,8 +5,7 @@ use crate::shared::errors::command::CommandError;
 
 use super::dto::{
     CreateProjectInput, ProjectDto, ScanProjectRootInput, ValidateProjectRootInput,
-    ValidateProjectSubdirectoryInput, ValidatedProjectRootDto,
-    ValidatedProjectSubdirectoryDto,
+    ValidateProjectSubdirectoryInput, ValidatedProjectRootDto, ValidatedProjectSubdirectoryDto,
 };
 use super::model::InitialScanSummary;
 use crate::features::file_inventory::ScanType;

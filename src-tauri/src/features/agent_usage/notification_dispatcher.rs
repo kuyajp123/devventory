@@ -4,11 +4,11 @@ use tauri_plugin_notification::NotificationExt;
 use tracing::{error, info};
 use uuid::Uuid;
 
-use crate::features::settings::repository::{SettingsRepository, SqliteSettingsRepository};
 use super::{
     model::{AgentReminder, ReminderBatch, ReminderOutcome},
     service::AgentUsageService,
 };
+use crate::features::settings::repository::{SettingsRepository, SqliteSettingsRepository};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum MainWindowContext {
@@ -95,7 +95,9 @@ impl NotificationDispatcher {
                 }
                 // Frontend bridge will render toast and post acknowledge_reminders
             }
-            MainWindowContext::Focused | MainWindowContext::Background | MainWindowContext::Unknown => {
+            MainWindowContext::Focused
+            | MainWindowContext::Background
+            | MainWindowContext::Unknown => {
                 if prefs.system_enabled {
                     // System Notification delivery
                     Self::dispatch_native_system_notification(app, service, batch).await;
@@ -167,10 +169,16 @@ pub(crate) fn format_notification_content(reminders: &[AgentReminder]) -> (Strin
         let when = r.reset_at.format("%b %e, %k:%M").to_string();
         let detail = match r.kind {
             super::model::ReminderKind::ResetReached => {
-                format!("{} · {} · {} — Reset time has been reached.", platform, r.identifier, r.quota_label)
+                format!(
+                    "{} · {} · {} — Reset time has been reached.",
+                    platform, r.identifier, r.quota_label
+                )
             }
             super::model::ReminderKind::ResetDay => {
-                format!("{} · {} · {} — Resets today.", platform, r.identifier, r.quota_label)
+                format!(
+                    "{} · {} · {} — Resets today.",
+                    platform, r.identifier, r.quota_label
+                )
             }
             super::model::ReminderKind::BeforeReset => {
                 let diff_hours = (r.reset_at - r.scheduled_for).num_hours().max(1);

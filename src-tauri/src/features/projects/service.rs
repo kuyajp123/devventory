@@ -38,7 +38,8 @@ impl ProjectService {
         root_path: &str,
         target_path: &str,
     ) -> Result<String, ProjectError> {
-        self.filesystem.validate_subdirectory(root_path, target_path)
+        self.filesystem
+            .validate_subdirectory(root_path, target_path)
     }
 
     pub(crate) fn preview_scan(

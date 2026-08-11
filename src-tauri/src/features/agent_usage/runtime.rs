@@ -1,12 +1,12 @@
+use chrono::Duration as ChronoDuration;
 use std::sync::Arc;
 use std::time::Duration;
-use chrono::Duration as ChronoDuration;
 use tauri::AppHandle;
 use tokio::sync::watch;
 use tracing::{error, info};
 
-use crate::features::settings::repository::SqliteSettingsRepository;
 use super::{notification_dispatcher::NotificationDispatcher, service::AgentUsageService};
+use crate::features::settings::repository::SqliteSettingsRepository;
 
 #[derive(Debug, Clone)]
 pub(crate) struct AgentReminderRuntime {
@@ -55,7 +55,10 @@ impl AgentReminderRuntime {
         service: &AgentUsageService,
         settings_repo: &SqliteSettingsRepository,
     ) {
-        match service.claim_due_reminders(ChronoDuration::minutes(2)).await {
+        match service
+            .claim_due_reminders(ChronoDuration::minutes(2))
+            .await
+        {
             Ok(batch) => {
                 if !batch.reminders.is_empty() {
                     info!(

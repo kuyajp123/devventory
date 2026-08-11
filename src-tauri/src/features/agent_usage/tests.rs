@@ -163,10 +163,7 @@ async fn account_and_quota_persistence_is_global_and_cascades_intentionally() {
     let future_5h = Utc::now() + Duration::hours(48);
     let future_weekly = Utc::now() + Duration::days(7);
 
-    for (label, reset_at) in [
-        ("5-hour", future_5h),
-        ("Weekly", future_weekly),
-    ] {
+    for (label, reset_at) in [("5-hour", future_5h), ("Weekly", future_weekly)] {
         repository
             .save_quota(SaveQuotaWindow {
                 id: None,
@@ -379,8 +376,8 @@ async fn migration_0011_preserves_legacy_delivered_reminders() {
 
 #[test]
 fn format_notification_content_individual_and_burst() {
-    use super::notification_dispatcher::format_notification_content;
     use super::model::AgentReminder;
+    use super::notification_dispatcher::format_notification_content;
 
     let now = Utc::now();
     let r1 = AgentReminder {
@@ -398,7 +395,9 @@ fn format_notification_content_individual_and_burst() {
 
     let (title1, body1) = format_notification_content(std::slice::from_ref(&r1));
     assert_eq!(title1, "Devventory");
-    assert!(body1.contains("antigravity · paul@example.com · Weekly — Reset time has been reached."));
+    assert!(
+        body1.contains("antigravity · paul@example.com · Weekly — Reset time has been reached.")
+    );
 
     let r2 = AgentReminder {
         id: Uuid::new_v4(),

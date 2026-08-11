@@ -2,10 +2,13 @@ use chrono::{DateTime, Utc};
 use serde::Deserialize;
 use uuid::Uuid;
 
-use super::{error::AgentUsageError, model::{
+use super::{
+    error::AgentUsageError,
+    model::{
         AgentPlatform, ReminderPreferences, SaveAgentAccount, SaveQuotaWindow, SignInMethod,
         TrackingMode, TrackingSource,
-    }};
+    },
+};
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -111,7 +114,6 @@ impl AgentQuotaIdInput {
         Ok((parse_uuid(&self.account_id)?, parse_uuid(&self.quota_id)?))
     }
 }
-
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]

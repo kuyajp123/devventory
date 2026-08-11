@@ -4,8 +4,7 @@ use tauri_plugin_notification::NotificationExt;
 use uuid::Uuid;
 
 use crate::{
-    app::state::AppState,
-    features::settings::repository::SettingsRepository,
+    app::state::AppState, features::settings::repository::SettingsRepository,
     shared::errors::command::CommandError,
 };
 
@@ -14,7 +13,9 @@ use super::{
         AcknowledgeRemindersInput, AgentAccountInput, AgentQuotaIdInput, AgentQuotaInput,
         AgentRecordIdInput,
     },
-    model::{AgentAccount, AgentPlatform, AgentQuotaWindow, AgentReminder, ReminderBatch, ReminderKind},
+    model::{
+        AgentAccount, AgentPlatform, AgentQuotaWindow, AgentReminder, ReminderBatch, ReminderKind,
+    },
     notification_dispatcher::{get_main_window_context, MainWindowContext},
 };
 
@@ -136,7 +137,8 @@ pub(crate) async fn test_normal_notification(
             .map_err(|_| CommandError::operation_unavailable("In-app notification emit failed"))?;
         Ok("Delivered as in-app notification".to_owned())
     } else if prefs.system_enabled {
-        let (title, body) = super::notification_dispatcher::format_notification_content(&synthetic_batch.reminders);
+        let (title, body) =
+            super::notification_dispatcher::format_notification_content(&synthetic_batch.reminders);
         app.notification()
             .builder()
             .title(&title)
@@ -150,9 +152,7 @@ pub(crate) async fn test_normal_notification(
 }
 
 #[tauri::command]
-pub(crate) async fn test_system_channel_directly(
-    app: AppHandle,
-) -> Result<String, CommandError> {
+pub(crate) async fn test_system_channel_directly(app: AppHandle) -> Result<String, CommandError> {
     if !cfg!(debug_assertions) {
         return Err(CommandError::not_found("Diagnostic command disabled"));
     }

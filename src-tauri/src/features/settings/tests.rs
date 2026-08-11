@@ -13,7 +13,10 @@ async fn setup_test_repository() -> (SqliteSettingsRepository, TempDir) {
     let temp_dir = TempDir::new().unwrap();
     let paths = DatabasePaths::new(temp_dir.path());
     let init = initialize_database(&paths).await.unwrap();
-    (SqliteSettingsRepository::new(init.database.pool().clone()), temp_dir)
+    (
+        SqliteSettingsRepository::new(init.database.pool().clone()),
+        temp_dir,
+    )
 }
 
 #[tokio::test]
@@ -70,7 +73,10 @@ async fn save_and_get_notification_preferences_persists_atomic_keys() {
 async fn get_background_startup_preferences_returns_canonical_defaults_when_empty() {
     let (repository, _temp) = setup_test_repository().await;
 
-    let prefs = repository.get_background_startup_preferences().await.unwrap();
+    let prefs = repository
+        .get_background_startup_preferences()
+        .await
+        .unwrap();
     assert_eq!(prefs, BackgroundStartupPreferences::default());
     assert!(prefs.keep_running_when_closed);
     assert!(!prefs.start_with_windows);
@@ -89,7 +95,10 @@ async fn save_and_get_background_startup_preferences_persists_atomic_keys() {
         .await
         .unwrap();
 
-    let fetched = repository.get_background_startup_preferences().await.unwrap();
+    let fetched = repository
+        .get_background_startup_preferences()
+        .await
+        .unwrap();
     assert_eq!(fetched, new_prefs);
 
     let keep_running_setting = repository

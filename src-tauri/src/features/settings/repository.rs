@@ -146,12 +146,20 @@ impl SettingsRepository for SqliteSettingsRepository {
         .await?;
         self.upsert(
             NOTIFICATIONS_IN_APP_ENABLED_KEY,
-            if prefs.in_app_enabled { "true" } else { "false" },
+            if prefs.in_app_enabled {
+                "true"
+            } else {
+                "false"
+            },
         )
         .await?;
         self.upsert(
             NOTIFICATIONS_SYSTEM_ENABLED_KEY,
-            if prefs.system_enabled { "true" } else { "false" },
+            if prefs.system_enabled {
+                "true"
+            } else {
+                "false"
+            },
         )
         .await?;
         Ok(())

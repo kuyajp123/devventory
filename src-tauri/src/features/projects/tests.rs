@@ -71,16 +71,24 @@ fn validate_subdirectory_returns_relative_path_and_rejects_outside_paths() {
     assert_eq!(root_res.expect("exact root"), ".");
 
     // Valid nested returns "src/components/"
-    let nested_res = filesystem.validate_subdirectory(root_str, nested.to_str().expect("UTF-8 path"));
+    let nested_res =
+        filesystem.validate_subdirectory(root_str, nested.to_str().expect("UTF-8 path"));
     assert_eq!(nested_res.expect("nested path"), "src/components/");
 
     // Outside path returns error
-    let outside_res = filesystem.validate_subdirectory(root_str, outside.to_str().expect("UTF-8 path"));
-    assert!(matches!(outside_res, Err(ProjectError::WatchedLocationOutsideRoot)));
+    let outside_res =
+        filesystem.validate_subdirectory(root_str, outside.to_str().expect("UTF-8 path"));
+    assert!(matches!(
+        outside_res,
+        Err(ProjectError::WatchedLocationOutsideRoot)
+    ));
 
     // Relative parent traversal escape returns error
     let escape_res = filesystem.validate_subdirectory(root_str, "../outside");
-    assert!(matches!(escape_res, Err(ProjectError::WatchedLocationOutsideRoot)));
+    assert!(matches!(
+        escape_res,
+        Err(ProjectError::WatchedLocationOutsideRoot)
+    ));
 }
 
 #[tokio::test]
