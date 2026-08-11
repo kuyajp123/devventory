@@ -247,7 +247,16 @@ describe('FileInventoryPage', () => {
     await user.click(await screen.findByRole('button', { name: 'All files' }));
     expect((await screen.findAllByText('src/main.ts'))[0]).toBeVisible();
 
+    expect(screen.queryByRole('button', { name: /Category/ })).toBeNull();
+    expect(screen.queryByRole('button', { name: /Status/ })).toBeNull();
+    expect(screen.queryByRole('textbox', { name: 'Extension' })).toBeNull();
+
     await user.type(screen.getByLabelText('Search file name or path'), 'main');
+    await user.click(
+      screen.getByRole('button', {
+        name: 'Toggle advanced file filters',
+      }),
+    );
     await user.click(screen.getByRole('button', { name: /Category/ }));
     await user.click(screen.getByRole('option', { name: 'Source' }));
     await user.click(screen.getByRole('button', { name: 'Apply filters' }));

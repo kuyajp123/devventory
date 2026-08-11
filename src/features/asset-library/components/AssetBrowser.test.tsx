@@ -60,7 +60,7 @@ describe('AssetBrowser', () => {
     });
   });
 
-  it('exposes every asset filter and opens selected file information', async () => {
+  it('keeps advanced asset filters collapsed until the user expands them', async () => {
     const user = userEvent.setup();
     renderWithProviders(<AssetBrowser projectId={projectId} />);
 
@@ -69,6 +69,16 @@ describe('AssetBrowser', () => {
         name: 'Search name or relative path',
       }),
     ).toBeVisible();
+    expect(screen.queryByRole('button', { name: /Category/ })).toBeNull();
+    expect(screen.queryByRole('button', { name: /Origin/ })).toBeNull();
+    expect(screen.queryByRole('button', { name: /Favorites/ })).toBeNull();
+    expect(screen.queryByRole('textbox', { name: 'Extension' })).toBeNull();
+    expect(screen.queryByRole('textbox', { name: 'Tag' })).toBeNull();
+
+    await user.click(
+      screen.getByRole('button', { name: 'Toggle advanced asset filters' }),
+    );
+
     expect(screen.getByRole('button', { name: /Category/ })).toBeVisible();
     expect(screen.getByRole('button', { name: /Origin/ })).toBeVisible();
     expect(screen.getByRole('button', { name: /Favorites/ })).toBeVisible();
@@ -92,6 +102,9 @@ describe('AssetBrowser', () => {
         name: 'Search name or relative path',
       }),
       'branding',
+    );
+    await user.click(
+      screen.getByRole('button', { name: 'Toggle advanced asset filters' }),
     );
     await user.type(screen.getByRole('textbox', { name: 'Extension' }), 'png');
     await user.type(screen.getByRole('textbox', { name: 'Tag' }), 'brand');

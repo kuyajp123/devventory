@@ -6,7 +6,7 @@ import {
   type AgentAccount,
   type AgentQuota,
 } from '../models/agent-usage';
-import { availabilityProgressColor } from '../models/agent-usage-status';
+import { remainingPercentProgressColor } from '../models/agent-usage-status';
 import { quotaUsageLabel } from '../models/agent-usage-view';
 import { AgentAvailabilityBadge } from './AgentAvailabilityBadge';
 
@@ -99,7 +99,10 @@ function QuotaWindow({
       <ProgressBar
         aria-label={`${quota.label} quota remaining for ${account.identifier}`}
         aria-valuetext={quotaUsageLabel(quota)}
-        color={availabilityProgressColor(quota.status)}
+        color={remainingPercentProgressColor(
+          quota.remainingPercent,
+          quota.usageIsStale,
+        )}
         maxValue={100}
         minValue={0}
         size="sm"

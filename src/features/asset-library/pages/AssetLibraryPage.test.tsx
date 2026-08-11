@@ -108,7 +108,7 @@ describe('AssetLibraryPage', () => {
       screen.getByRole('searchbox', { name: 'Search name or relative path' }),
       'logo',
     );
-    await user.click(screen.getByRole('button', { name: 'Apply filters' }));
+    await user.click(screen.getByRole('button', { name: 'Search' }));
 
     expect(assetLibraryGateway.list).toHaveBeenLastCalledWith(
       projectMocks.projectId,

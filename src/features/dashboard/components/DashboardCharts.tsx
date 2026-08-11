@@ -11,6 +11,7 @@ import {
   XAxis,
   YAxis,
 } from 'recharts';
+import { validationSeverityColor } from '../models/dashboard-chart-colors';
 import type { ProjectDashboard } from '../models/dashboard';
 
 const CATEGORY_COLORS = [
@@ -98,11 +99,14 @@ export function DashboardCharts({ data }: { data: ProjectDashboard }) {
                     width={28}
                   />
                   <Tooltip />
-                  <Bar
-                    dataKey="count"
-                    fill="var(--danger)"
-                    isAnimationActive={false}
-                  />
+                  <Bar dataKey="count" isAnimationActive={false}>
+                    {data.validationSeverities.map((item) => (
+                      <Cell
+                        fill={validationSeverityColor(item.severity)}
+                        key={item.severity}
+                      />
+                    ))}
+                  </Bar>
                 </BarChart>
               </ResponsiveContainer>
             </div>

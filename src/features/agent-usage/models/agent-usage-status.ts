@@ -41,8 +41,12 @@ export const AGENT_AVAILABILITY_PRESENTATION = {
   }
 >;
 
-export function availabilityProgressColor(
-  status: AgentAvailability,
-): 'accent' | 'danger' | 'default' | 'success' | 'warning' {
-  return AGENT_AVAILABILITY_PRESENTATION[status].color;
+export function remainingPercentProgressColor(
+  remainingPercent: number | null,
+  usageIsStale: boolean,
+): 'danger' | 'default' | 'success' | 'warning' {
+  if (remainingPercent === null || usageIsStale) return 'default';
+  if (remainingPercent < 20) return 'danger';
+  if (remainingPercent < 30) return 'warning';
+  return 'success';
 }
