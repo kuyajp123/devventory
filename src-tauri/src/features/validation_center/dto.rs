@@ -282,12 +282,17 @@ fn normalize_optional(
 }
 
 fn valid_key_name(value: &str) -> bool {
-    let mut characters = value.chars();
-    let Some(first) = characters.next() else {
+    let trimmed = value.trim();
+    if trimmed.is_empty() || trimmed.chars().count() > MAX_KEY_LENGTH {
         return false;
-    };
-    (first == '_' || first.is_ascii_alphabetic())
-        && characters.all(|character| character == '_' || character.is_ascii_alphanumeric())
+    }
+    if trimmed.contains("..") || trimmed.starts_with('/') || trimmed.ends_with('/') {
+        return false;
+    }
+    trimmed.chars().all(|character| {
+        let code_point = character as u32;
+        code_point > 31 && code_point != 127
+    })
 }
 
 #[cfg(test)]
@@ -301,7 +306,23 @@ mod tests {
         for value in [
             serde_json::json!({
                 "projectId": project_id,
-                "keyName": "INVALID-NAME",
+                "keyName": "",
+                "ruleType": "required",
+                "severity": "error",
+                "enabled": true,
+                "environmentIds": [environment_id]
+            }),
+            serde_json::json!({
+                "projectId": project_id,
+                "keyName": "   ",
+                "ruleType": "required",
+                "severity": "error",
+                "enabled": true,
+                "environmentIds": [environment_id]
+            }),
+            serde_json::json!({
+                "projectId": project_id,
+                "keyName": "../etc/passwd",
                 "ruleType": "required",
                 "severity": "error",
                 "enabled": true,
@@ -322,6 +343,37 @@ mod tests {
                 SaveValidationRule::try_from(input),
                 Err(ValidationError::InvalidInput)
             ));
+        }
+    }
+
+    #[test]
+    fn rule_input_accepts_custom_key_names() {
+        let project_id = Uuid::new_v4();
+        let environment_id = Uuid::new_v4();
+        for value in [
+            "DATABASE_URL",
+            "SUPABASE_SERVICE_ROLE_KEY",
+            "NEXT_PUBLIC_API_URL",
+            "SERVICE-ACCOUNT.json",
+            "service-account.json",
+            "service-account.prod.json",
+            "devventory-firebase-adminsdk.json",
+            "google-services.json",
+            "signing-key.p12",
+        ] {
+            let input: SaveValidationRuleInput = serde_json::from_value(serde_json::json!({
+                "projectId": project_id,
+                "keyName": value,
+                "ruleType": "required",
+                "severity": "error",
+                "enabled": true,
+                "environmentIds": [environment_id]
+            }))
+            .expect("input shape");
+            assert!(
+                SaveValidationRule::try_from(input).is_ok(),
+                "expected {value} to be accepted"
+            );
         }
     }
 }

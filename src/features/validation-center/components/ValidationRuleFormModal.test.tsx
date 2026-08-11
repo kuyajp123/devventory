@@ -7,6 +7,58 @@ import type { ValidationRule } from '../models/validation';
 import { ValidationRuleFormModal } from './ValidationRuleFormModal';
 
 describe('ValidationRuleFormModal', () => {
+  it('accepts custom key names with dots and hyphens', async () => {
+    const user = userEvent.setup();
+    const onSubmit = vi.fn(async () => undefined);
+    renderWithProviders(
+      <ValidationRuleFormModal
+        environments={[environment]}
+        isOpen
+        isSaving={false}
+        onOpenChange={vi.fn()}
+        onSubmit={onSubmit}
+        rule={null}
+      />,
+    );
+
+    const keyInput = screen.getByLabelText('Environment key');
+    await user.type(keyInput, 'service-account.json');
+    await user.click(screen.getByRole('checkbox', { name: 'Development' }));
+    await user.click(screen.getByRole('button', { name: 'Create rule' }));
+
+    await waitFor(() =>
+      expect(onSubmit).toHaveBeenCalledWith(
+        expect.objectContaining({ keyName: 'service-account.json' }),
+      ),
+    );
+    expect(
+      screen.queryByText(/letters, numbers, and underscores/),
+    ).not.toBeInTheDocument();
+  });
+
+  it('rejects empty key names', async () => {
+    const user = userEvent.setup();
+    const onSubmit = vi.fn(async () => undefined);
+    renderWithProviders(
+      <ValidationRuleFormModal
+        environments={[environment]}
+        isOpen
+        isSaving={false}
+        onOpenChange={vi.fn()}
+        onSubmit={onSubmit}
+        rule={null}
+      />,
+    );
+
+    await user.click(screen.getByRole('checkbox', { name: 'Development' }));
+    await user.click(screen.getByRole('button', { name: 'Create rule' }));
+
+    expect(onSubmit).not.toHaveBeenCalled();
+    expect(
+      screen.getByText('Enter an environment key name.'),
+    ).toBeInTheDocument();
+  });
+
   it('resets every field when switching between create and edit sessions', async () => {
     const user = userEvent.setup();
     const onSubmit = vi.fn(async () => undefined);

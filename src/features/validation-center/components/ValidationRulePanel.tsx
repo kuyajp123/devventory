@@ -1,3 +1,6 @@
+import type { Environment } from '@/features/environment-tracker';
+import { ICON_SIZE, ICON_STROKE } from '@/shared/constants/icon.constants';
+import { ConfirmDialog, SemanticStatusChip } from '@/shared/ui';
 import {
   closestCenter,
   DndContext,
@@ -23,14 +26,13 @@ import {
   IconEdit,
   IconGripVertical,
   IconPlus,
-  IconTrash,
+  IconSearch,
   IconToggleLeft,
   IconToggleRight,
+  IconTrash,
+  IconX,
 } from '@tabler/icons-react';
 import { useMemo, useState } from 'react';
-import type { Environment } from '@/features/environment-tracker';
-import { ICON_SIZE, ICON_STROKE } from '@/shared/constants/icon.constants';
-import { ConfirmDialog, SemanticStatusChip } from '@/shared/ui';
 import type { ValidationRule } from '../models/validation';
 
 interface ValidationRulePanelProps {
@@ -58,6 +60,7 @@ export function ValidationRulePanel({
 }: ValidationRulePanelProps) {
   const [optimisticOrder, setOptimisticOrder] = useState<string[] | null>(null);
   const [deletingRule, setDeletingRule] = useState<ValidationRule | null>(null);
+  const [search, setSearch] = useState('');
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
     useSensor(KeyboardSensor, {
@@ -79,6 +82,16 @@ export function ValidationRulePanel({
     return optimisticOrder.map((ruleId) => rulesById.get(ruleId)!);
   }, [optimisticOrder, rules]);
 
+  const filteredRules = useMemo(() => {
+    const query = search.trim().toLocaleLowerCase();
+    if (!query) return orderedRules;
+    return orderedRules.filter((rule) =>
+      rule.keyName.toLocaleLowerCase().includes(query),
+    );
+  }, [orderedRules, search]);
+
+  const isSearchActive = search.trim().length > 0;
+
   function persistOrder(nextRules: ValidationRule[]) {
     const previousOrder = optimisticOrder;
     const nextOrder = nextRules.map((rule) => rule.id);
@@ -90,6 +103,7 @@ export function ValidationRulePanel({
   }
 
   function move(ruleId: string, offset: -1 | 1) {
+    if (isSearchActive) return;
     const oldIndex = orderedRules.findIndex((rule) => rule.id === ruleId);
     const newIndex = oldIndex + offset;
     if (oldIndex < 0 || newIndex < 0 || newIndex >= orderedRules.length) return;
@@ -97,6 +111,7 @@ export function ValidationRulePanel({
   }
 
   function handleDragEnd(event: DragEndEvent) {
+    if (isSearchActive) return;
     if (!event.over || event.active.id === event.over.id) return;
     const oldIndex = orderedRules.findIndex(
       (rule) => rule.id === event.active.id,
@@ -111,7 +126,7 @@ export function ValidationRulePanel({
   return (
     <Card className="flex h-full min-h-0 flex-col overflow-hidden border border-divider bg-surface rounded-[4px] shadow-none">
       <Card.Header className="flex flex-row items-center justify-between gap-3 border-b border-divider px-4 py-3">
-        <div>
+        <div className="min-w-0 flex-1">
           <Card.Title className="text-sm font-semibold">
             Validation rules
           </Card.Title>
@@ -119,19 +134,51 @@ export function ValidationRulePanel({
             Required, optional, and forbidden key placement by environment.
           </Card.Description>
         </div>
-        <Button
-          isDisabled={environments.length === 0}
-          onPress={onCreate}
-          size="sm"
-          variant="primary"
-        >
-          <IconPlus
-            aria-hidden="true"
-            size={ICON_SIZE.button}
-            stroke={ICON_STROKE}
-          />
-          Add rule
-        </Button>
+        <div className="flex items-center gap-2">
+          <div className="relative w-74">
+            <span
+              aria-hidden="true"
+              className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-muted"
+            >
+              <IconSearch size={ICON_SIZE.small} stroke={ICON_STROKE} />
+            </span>
+            <input
+              aria-label="Search validation rules"
+              className="h-8 w-full rounded border border-divider bg-surface-secondary pl-8 pr-7 text-xs text-foreground placeholder:text-muted focus:border-accent focus:outline-none disabled:opacity-50"
+              disabled={isLoading || orderedRules.length === 0}
+              placeholder="Search rules..."
+              type="search"
+              value={search}
+              onChange={(event) => setSearch(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === 'Escape') setSearch('');
+              }}
+            />
+            {search && (
+              <button
+                aria-label="Clear search"
+                className="absolute right-2 top-1/2 -translate-y-1/2 text-muted hover:text-foreground"
+                onClick={() => setSearch('')}
+                type="button"
+              >
+                <IconX size={14} stroke={ICON_STROKE} />
+              </button>
+            )}
+          </div>
+          <Button
+            isDisabled={environments.length === 0}
+            onPress={onCreate}
+            size="sm"
+            variant="primary"
+          >
+            <IconPlus
+              aria-hidden="true"
+              size={ICON_SIZE.button}
+              stroke={ICON_STROKE}
+            />
+            Add rule
+          </Button>
+        </div>
       </Card.Header>
       <Card.Content className="min-h-0 flex-1 overflow-auto p-0">
         {isLoading ? (
@@ -156,6 +203,28 @@ export function ValidationRulePanel({
               are not treated as unexpected.
             </p>
           </EmptyState>
+        ) : filteredRules.length === 0 ? (
+          <div className="flex flex-col items-center gap-3 p-6 text-center">
+            <IconSearch
+              aria-hidden="true"
+              className="text-muted"
+              size={ICON_SIZE.emptyState}
+              stroke={ICON_STROKE}
+            />
+            <p className="text-xs text-muted">
+              No validation rules match{' '}
+              <span className="font-mono text-foreground">{search.trim()}</span>
+              .
+            </p>
+            <Button onPress={() => setSearch('')} size="sm" variant="secondary">
+              <IconX
+                aria-hidden="true"
+                size={ICON_SIZE.small}
+                stroke={ICON_STROKE}
+              />
+              Clear search
+            </Button>
+          </div>
         ) : (
           <DndContext
             collisionDetection={closestCenter}
@@ -163,11 +232,11 @@ export function ValidationRulePanel({
             sensors={sensors}
           >
             <SortableContext
-              items={orderedRules.map((rule) => rule.id)}
+              items={filteredRules.map((rule) => rule.id)}
               strategy={verticalListSortingStrategy}
             >
               <div className="divide-y divide-divider" role="list">
-                {orderedRules.map((rule, index) => (
+                {filteredRules.map((rule, index) => (
                   <SortableRule
                     environmentNames={rule.environmentIds.map(
                       (id) =>
@@ -176,9 +245,9 @@ export function ValidationRulePanel({
                         )?.name ?? 'Removed environment',
                     )}
                     index={index}
-                    isBusy={isReordering}
+                    isBusy={isReordering || isSearchActive}
                     isFirst={index === 0}
-                    isLast={index === orderedRules.length - 1}
+                    isLast={index === filteredRules.length - 1}
                     key={rule.id}
                     onDelete={() => setDeletingRule(rule)}
                     onEdit={() => onEdit(rule)}
@@ -192,6 +261,13 @@ export function ValidationRulePanel({
             </SortableContext>
           </DndContext>
         )}
+        {isSearchActive &&
+          orderedRules.length > 0 &&
+          filteredRules.length > 0 && (
+            <div className="border-t border-divider px-4 py-2 text-[10px] text-muted">
+              {filteredRules.length} of {orderedRules.length} rules
+            </div>
+          )}
       </Card.Content>
       <ConfirmDialog
         body={

@@ -114,7 +114,7 @@ export function ValidationRuleFormModal({
                   name={field.name}
                   onBlur={field.onBlur}
                   onChange={field.onChange}
-                  placeholder="DATABASE_URL"
+                  placeholder="DATABASE_URL or service-account.json"
                   ref={field.ref}
                   value={field.value}
                 />

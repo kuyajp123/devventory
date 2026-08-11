@@ -16,6 +16,29 @@ import {
   type ValidationSeverity,
 } from '@/shared/models/validation';
 
+const logicalKeyName = (maximum: number, message: string) =>
+  z
+    .string()
+    .trim()
+    .min(1, message)
+    .max(maximum)
+    .refine(
+      (value) =>
+        Array.from(value).every((character) => {
+          const codePoint = character.codePointAt(0) ?? 0;
+          return codePoint > 31 && codePoint !== 127;
+        }),
+      { message: 'Control characters are not allowed.' },
+    )
+    .refine(
+      (value) =>
+        !value.includes('..') && !value.startsWith('/') && !value.endsWith('/'),
+      {
+        message:
+          'Key name must not contain path traversal or raw path separators.',
+      },
+    );
+
 export {
   environmentHealthSchema,
   validationIssueSchema,
@@ -90,15 +113,7 @@ export const validationRuleFormSchema = z.object({
     .array(z.string().uuid())
     .min(1, 'Select at least one environment.')
     .max(100),
-  keyName: z
-    .string()
-    .trim()
-    .min(1, 'Enter an environment key name.')
-    .max(255)
-    .regex(
-      /^[A-Za-z_][A-Za-z0-9_]*$/,
-      'Use letters, numbers, and underscores, starting with a letter or underscore.',
-    ),
+  keyName: logicalKeyName(255, 'Enter an environment key name.'),
   ruleType: validationRuleTypeSchema,
   severity: validationSeveritySchema,
 });
