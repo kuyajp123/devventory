@@ -6,7 +6,7 @@ use crate::app::state::AppState;
 #[tokio::test]
 async fn reports_the_existing_frontend_health_message_when_storage_is_ready() {
     let temp = TempDir::new().expect("temporary directory should be created");
-    let state = AppState::initialize(temp.path())
+    let state = AppState::initialize(temp.path(), false)
         .await
         .expect("application state should initialize");
 

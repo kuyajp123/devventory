@@ -23,6 +23,9 @@ use crate::features::validation_center::{
 use crate::shared::database::{initialize_database, Database, DatabasePaths};
 use crate::shared::errors::AppError;
 
+use std::sync::Arc;
+use crate::app::lifecycle::ApplicationLifecycleState;
+
 #[derive(Debug)]
 pub(crate) struct AppState {
     database: Database,
@@ -33,10 +36,14 @@ pub(crate) struct AppState {
     validation_service: ValidationService,
     inventory_runtime: InventoryRuntime,
     agent_reminder_runtime: AgentReminderRuntime,
+    lifecycle_state: Arc<ApplicationLifecycleState>,
 }
 
 impl AppState {
-    pub(crate) async fn initialize(data_directory: impl AsRef<Path>) -> Result<Self, AppError> {
+    pub(crate) async fn initialize(
+        data_directory: impl AsRef<Path>,
+        is_autostart_launch: bool,
+    ) -> Result<Self, AppError> {
         let initialization = initialize_database(&DatabasePaths::new(data_directory)).await?;
 
         if let Some(snapshot) = initialization.pre_migration_backup {
@@ -110,7 +117,12 @@ impl AppState {
             file_inventory_service,
             inventory_runtime: InventoryRuntime::new(),
             agent_reminder_runtime: AgentReminderRuntime::new(),
+            lifecycle_state: Arc::new(ApplicationLifecycleState::new(is_autostart_launch)),
         })
+    }
+
+    pub(crate) fn lifecycle_state(&self) -> Arc<ApplicationLifecycleState> {
+        self.lifecycle_state.clone()
     }
 
     pub(crate) fn start_agent_reminder_runtime(&self, app: AppHandle) {

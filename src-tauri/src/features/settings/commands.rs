@@ -67,24 +67,109 @@ pub(crate) async fn save_notification_preferences(
 
 #[tauri::command]
 pub(crate) async fn get_background_startup_preferences(
+    _app: tauri::AppHandle,
     state: State<'_, AppState>,
 ) -> Result<BackgroundStartupPreferencesDto, CommandError> {
     let repository = state.settings_repository();
-    let domain = repository
+    #[allow(unused_mut)]
+    let mut domain = repository
         .get_background_startup_preferences()
         .await
         .map_err(Into::<CommandError>::into)?;
+
+    #[cfg(not(debug_assertions))]
+    {
+        use tauri_plugin_autostart::ManagerExt;
+        if let Ok(autostart_mgr) = _app.autostart() {
+            if let Ok(actual_enabled) = autostart_mgr.is_enabled() {
+                if domain.start_with_windows != actual_enabled {
+                    tracing::info!(
+                        saved = domain.start_with_windows,
+                        actual = actual_enabled,
+                        "Reconciling background startup preference with OS autostart registration"
+                    );
+                    domain.start_with_windows = actual_enabled;
+                    let _ = repository
+                        .save_background_startup_preferences(domain.clone())
+                        .await;
+                }
+            }
+        }
+    }
+
     Ok(domain.into())
 }
 
 #[tauri::command]
 pub(crate) async fn save_background_startup_preferences(
+    _app: tauri::AppHandle,
     state: State<'_, AppState>,
     input: BackgroundStartupPreferencesInput,
 ) -> Result<(), CommandError> {
     let repository = state.settings_repository();
+    let current = repository
+        .get_background_startup_preferences()
+        .await
+        .map_err(Into::<CommandError>::into)?;
+
+    let target: super::model::BackgroundStartupPreferences = input.into();
+
+    if current.start_with_windows != target.start_with_windows {
+        #[cfg(not(debug_assertions))]
+        {
+            use tauri_plugin_autostart::ManagerExt;
+            let autostart_mgr = _app.autostart().map_err(|err| {
+                CommandError::operation_unavailable(format!(
+                    "Autostart plugin unavailable: {}",
+                    err
+                ))
+            })?;
+
+            if target.start_with_windows {
+                autostart_mgr.enable().map_err(|err| {
+                    CommandError::operation_unavailable(format!(
+                        "Failed to enable OS autostart: {}",
+                        err
+                    ))
+                })?;
+
+                if let Err(err) = repository
+                    .save_background_startup_preferences(target.clone())
+                    .await
+                {
+                    let _ = autostart_mgr.disable();
+                    return Err(err.into());
+                }
+            } else {
+                autostart_mgr.disable().map_err(|err| {
+                    CommandError::operation_unavailable(format!(
+                        "Failed to disable OS autostart: {}",
+                        err
+                    ))
+                })?;
+
+                if let Err(err) = repository
+                    .save_background_startup_preferences(target.clone())
+                    .await
+                {
+                    let _ = autostart_mgr.enable();
+                    return Err(err.into());
+                }
+            }
+            return Ok(());
+        }
+
+        #[cfg(debug_assertions)]
+        {
+            tracing::info!(
+                requested = target.start_with_windows,
+                "Debug build: skipping native OS autostart mutation, saving setting in database only"
+            );
+        }
+    }
+
     repository
-        .save_background_startup_preferences(input.into())
+        .save_background_startup_preferences(target)
         .await
         .map_err(Into::into)
 }

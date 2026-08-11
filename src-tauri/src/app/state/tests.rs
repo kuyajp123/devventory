@@ -27,7 +27,7 @@ async fn create_legacy_database(paths: &DatabasePaths) {
 #[tokio::test]
 async fn initializes_feature_repositories_over_the_managed_database() {
     let temp = TempDir::new().expect("temporary directory should be created");
-    let state = AppState::initialize(temp.path())
+    let state = AppState::initialize(temp.path(), false)
         .await
         .expect("application state should initialize");
 
@@ -51,7 +51,7 @@ async fn records_the_snapshot_created_for_an_existing_database() {
     let paths = DatabasePaths::new(temp.path());
     create_legacy_database(&paths).await;
 
-    let state = AppState::initialize(temp.path())
+    let state = AppState::initialize(temp.path(), false)
         .await
         .expect("application state should initialize");
     let backup = sqlx::query_as::<_, (String, i64, i64)>(

@@ -50,18 +50,91 @@ pub fn run() {
     shared::telemetry::initialize();
 
     tauri::Builder::default()
+        .plugin(tauri_plugin_single_instance::init(|app, argv, _cwd| {
+            let is_autostart = argv.iter().any(|arg| arg == "--autostart");
+            if !is_autostart {
+                app::lifecycle::activate_main_window(app);
+            } else {
+                tracing::info!("Secondary autostart launch ignored while instance running");
+            }
+        }))
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_notification::init())
+        .plugin(tauri_plugin_autostart::init(
+            tauri_plugin_autostart::MacosLauncher::AppleScript,
+            Some(vec!["--autostart"]),
+        ))
+        .on_window_event(|window, event| {
+            if let tauri::WindowEvent::CloseRequested { api, .. } = event {
+                app::lifecycle::handle_close_requested(window.app_handle(), window, api);
+            }
+        })
         .setup(|app| {
+            let is_autostart_launch = std::env::args().any(|arg| arg == "--autostart");
             let data_directory = app.path().app_local_data_dir()?;
-            let state = tauri::async_runtime::block_on(AppState::initialize(data_directory))?;
+            let state = tauri::async_runtime::block_on(AppState::initialize(
+                data_directory,
+                is_autostart_launch,
+            ))?;
             app.manage(state);
+
+            let open_item = tauri::menu::MenuItem::with_id(
+                app,
+                "open_devventory",
+                "Open Devventory",
+                true,
+                None::<&str>,
+            )?;
+            let separator_item = tauri::menu::PredefinedMenuItem::separator(app)?;
+            let quit_item = tauri::menu::MenuItem::with_id(
+                app,
+                "quit_devventory",
+                "Quit Devventory",
+                true,
+                None::<&str>,
+            )?;
+            let menu = tauri::menu::Menu::with_items(
+                app,
+                &[&open_item, &separator_item, &quit_item],
+            )?;
+
+            let tray_result = tauri::tray::TrayIconBuilder::with_id("main")
+                .menu(&menu)
+                .on_menu_event(|app, event| match event.id.as_ref() {
+                    "open_devventory" => app::lifecycle::activate_main_window(app),
+                    "quit_devventory" => app::lifecycle::request_quit(app),
+                    _ => {}
+                })
+                .on_tray_icon_event(|tray, event| {
+                    if let tauri::tray::TrayIconEvent::DoubleClick { .. } = event {
+                        app::lifecycle::activate_main_window(tray.app_handle());
+                    }
+                })
+                .build(app);
+
+            let is_tray_available = tray_result.is_ok();
+            if let Err(ref err) = tray_result {
+                tracing::error!(error = %err, "Failed to create system tray icon");
+            }
+
+            let app_state = app.state::<AppState>();
+            app_state.lifecycle_state().set_tray_available(is_tray_available);
+
             let app_handle = app.handle().clone();
             tauri::async_runtime::block_on(
-                app.state::<AppState>().start_inventory_runtime(app_handle.clone()),
+                app_state.start_inventory_runtime(app_handle.clone()),
             )?;
-            app.state::<AppState>().start_agent_reminder_runtime(app_handle);
+            app_state.start_agent_reminder_runtime(app_handle.clone());
+
+            if !is_autostart_launch {
+                app::lifecycle::activate_main_window(&app_handle);
+            } else if !is_tray_available {
+                tracing::warn!("Autostart launch without usable tray icon; falling back to showing main window");
+                app::lifecycle::activate_main_window(&app_handle);
+            } else {
+                tracing::info!("Devventory started silently in background via autostart");
+            }
 
             tracing::info!("Devventory application state initialized");
             Ok(())

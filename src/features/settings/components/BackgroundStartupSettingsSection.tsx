@@ -9,7 +9,7 @@ import {
 export function BackgroundStartupSettingsSection() {
   const { data: preferences, isLoading } =
     useBackgroundStartupPreferencesQuery();
-  const { mutate: updatePreferences } =
+  const { isPending, mutate: updatePreferences } =
     useUpdateBackgroundStartupPreferencesMutation();
 
   if (isLoading || !preferences) {
@@ -53,6 +53,7 @@ export function BackgroundStartupSettingsSection() {
             </p>
           </div>
           <Switch
+            isDisabled={isPending}
             isSelected={preferences.keepRunningWhenClosed}
             onChange={(selected) =>
               updatePreferences({
@@ -83,6 +84,7 @@ export function BackgroundStartupSettingsSection() {
             </p>
           </div>
           <Switch
+            isDisabled={isPending}
             isSelected={preferences.startWithWindows}
             onChange={(selected) =>
               updatePreferences({
