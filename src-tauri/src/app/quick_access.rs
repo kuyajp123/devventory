@@ -184,6 +184,7 @@ pub(crate) fn hide_quick_access(app: &AppHandle) {
             warn!(error = %err, "Failed to hide Quick Access window");
         }
     }
+    super::notification_session::refresh_unread_surfaces(app);
 }
 
 pub(crate) fn show_main_exclusive(app: &AppHandle) -> Result<(), String> {
@@ -216,6 +217,7 @@ pub(crate) fn show_quick_access_exclusive(app: &AppHandle) {
 
     if show_res.is_ok() {
         hide_main_window(app);
+        super::notification_session::refresh_unread_surfaces(app);
     } else {
         warn!(
             error = ?show_res.err(),

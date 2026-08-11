@@ -8,6 +8,9 @@ mod repository;
 pub(crate) mod runtime;
 mod service;
 
+pub(crate) use model::AgentReminder;
+#[cfg(test)]
+pub(crate) use model::{AgentPlatform, ReminderKind};
 pub(crate) use repository::SqliteAgentUsageRepository;
 pub(crate) use runtime::AgentReminderRuntime;
 pub(crate) use service::AgentUsageService;

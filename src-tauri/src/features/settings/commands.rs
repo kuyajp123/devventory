@@ -1,4 +1,4 @@
-use tauri::State;
+use tauri::{AppHandle, State};
 use uuid::Uuid;
 
 use crate::app::state::AppState;
@@ -55,14 +55,22 @@ pub(crate) async fn get_notification_preferences(
 
 #[tauri::command]
 pub(crate) async fn save_notification_preferences(
+    app: AppHandle,
     state: State<'_, AppState>,
     input: NotificationPreferencesInput,
 ) -> Result<(), CommandError> {
     let repository = state.settings_repository();
+    let preferences: super::model::NotificationPreferences = input.into();
     repository
-        .save_notification_preferences(input.into())
+        .save_notification_preferences(preferences.clone())
         .await
-        .map_err(Into::into)
+        .map_err(Into::<CommandError>::into)?;
+
+    crate::app::notification_session::set_session_unread_enabled(
+        &app,
+        preferences.allows_session_unread(),
+    );
+    Ok(())
 }
 
 #[tauri::command]

@@ -1,4 +1,4 @@
-import { mockIPC } from '@tauri-apps/api/mocks';
+import { mockIPC, mockWindows } from '@tauri-apps/api/mocks';
 import type { Project } from '@/features/projects';
 
 const MOCK_DATABASE_KEY = 'devventory.e2e.database';
@@ -29,6 +29,7 @@ const scanSummary = {
 };
 
 export function installTauriBrowserMocks() {
+  mockWindows('main');
   const database = loadDatabase();
   const agentAccounts = database.agentAccounts;
   const projects = database.projects;

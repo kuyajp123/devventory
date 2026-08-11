@@ -85,8 +85,9 @@ export function AgentUsagePage() {
 
   // Process incoming notification navigation intent
   useEffect(() => {
+    if (!accounts.data) return;
     const intent = navigationIntentStore.getAndClearIntent();
-    if (!intent || !accounts.data) return;
+    if (!intent) return;
 
     if (intent.type === 'individual') {
       const targetAccount = accounts.data.find(

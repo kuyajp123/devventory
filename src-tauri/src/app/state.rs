@@ -24,6 +24,7 @@ use crate::shared::database::{initialize_database, Database, DatabasePaths};
 use crate::shared::errors::AppError;
 
 use crate::app::lifecycle::ApplicationLifecycleState;
+use crate::app::notification_session::NotificationSessionState;
 use std::sync::Arc;
 
 #[derive(Debug)]
@@ -36,6 +37,7 @@ pub(crate) struct AppState {
     validation_service: ValidationService,
     inventory_runtime: InventoryRuntime,
     agent_reminder_runtime: AgentReminderRuntime,
+    notification_session_state: Arc<NotificationSessionState>,
     lifecycle_state: Arc<ApplicationLifecycleState>,
 }
 
@@ -73,6 +75,9 @@ impl AppState {
         }
 
         let database = initialization.database;
+        let notification_preferences = SqliteSettingsRepository::new(database.pool().clone())
+            .get_notification_preferences()
+            .await?;
         let agent_usage_service =
             AgentUsageService::new(SqliteAgentUsageRepository::new(database.pool().clone()));
         let project_service = ProjectService::new(
@@ -117,12 +122,19 @@ impl AppState {
             file_inventory_service,
             inventory_runtime: InventoryRuntime::new(),
             agent_reminder_runtime: AgentReminderRuntime::new(),
+            notification_session_state: Arc::new(NotificationSessionState::new(
+                notification_preferences.allows_session_unread(),
+            )),
             lifecycle_state: Arc::new(ApplicationLifecycleState::new(is_autostart_launch)),
         })
     }
 
     pub(crate) fn lifecycle_state(&self) -> Arc<ApplicationLifecycleState> {
         self.lifecycle_state.clone()
+    }
+
+    pub(crate) fn notification_session_state(&self) -> Arc<NotificationSessionState> {
+        self.notification_session_state.clone()
     }
 
     pub(crate) fn start_agent_reminder_runtime(&self, app: AppHandle) {

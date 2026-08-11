@@ -419,3 +419,76 @@ fn format_notification_content_individual_and_burst() {
         "2 Agent Usage reminders are ready. antigravity and codex have quota updates."
     );
 }
+
+#[test]
+fn notification_delivery_plan_matches_focus_and_channel_policy() {
+    use super::notification_dispatcher::{
+        resolve_delivery_plan, DeliveryPlan, NotificationSurfaceContext,
+    };
+    use crate::features::settings::model::NotificationPreferences;
+
+    let all_channels = NotificationPreferences {
+        enabled: true,
+        in_app_enabled: true,
+        system_enabled: true,
+    };
+    assert_eq!(
+        resolve_delivery_plan(&all_channels, NotificationSurfaceContext::MainFocused),
+        DeliveryPlan::InAppToast
+    );
+    assert_eq!(
+        resolve_delivery_plan(
+            &all_channels,
+            NotificationSurfaceContext::QuickAccessVisible
+        ),
+        DeliveryPlan::UnreadAndSystem
+    );
+    assert_eq!(
+        resolve_delivery_plan(&all_channels, NotificationSurfaceContext::Background),
+        DeliveryPlan::UnreadAndSystem
+    );
+
+    let in_app_only = NotificationPreferences {
+        enabled: true,
+        in_app_enabled: true,
+        system_enabled: false,
+    };
+    assert_eq!(
+        resolve_delivery_plan(&in_app_only, NotificationSurfaceContext::MainFocused),
+        DeliveryPlan::InAppToast
+    );
+    assert_eq!(
+        resolve_delivery_plan(&in_app_only, NotificationSurfaceContext::QuickAccessVisible),
+        DeliveryPlan::UnreadOnly
+    );
+    assert_eq!(
+        resolve_delivery_plan(&in_app_only, NotificationSurfaceContext::Background),
+        DeliveryPlan::UnreadOnly
+    );
+
+    let system_only = NotificationPreferences {
+        enabled: true,
+        in_app_enabled: false,
+        system_enabled: true,
+    };
+    for context in [
+        NotificationSurfaceContext::MainFocused,
+        NotificationSurfaceContext::QuickAccessVisible,
+        NotificationSurfaceContext::Background,
+    ] {
+        assert_eq!(
+            resolve_delivery_plan(&system_only, context),
+            DeliveryPlan::SystemOnly
+        );
+    }
+
+    let disabled = NotificationPreferences {
+        enabled: false,
+        in_app_enabled: true,
+        system_enabled: true,
+    };
+    assert_eq!(
+        resolve_delivery_plan(&disabled, NotificationSurfaceContext::Background),
+        DeliveryPlan::Suppressed
+    );
+}

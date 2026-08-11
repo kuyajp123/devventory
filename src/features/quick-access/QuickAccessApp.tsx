@@ -1,22 +1,42 @@
 import {
   IconExternalLink,
+  IconBell,
   IconGauge,
   IconKey,
   IconX,
 } from '@tabler/icons-react';
 import { getCurrentWindow } from '@tauri-apps/api/window';
-import { useCallback, useEffect, useRef } from 'react';
+import { listen } from '@tauri-apps/api/event';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
+  type UnreadReminderState,
+  unreadReminderStateSchema,
+} from './models/unread-reminder';
+import {
+  getAgentReminderUnreadState,
   hideQuickAccess,
+  openAgentUnreadFromQuickAccess,
   openMainWindowFromQuickAccess,
   setQuickAccessPreventAutoHide,
 } from './services/quick-access.gateway';
 
 const DRAG_PROTECTION_TIMEOUT_MS = 10_000;
+const UNREAD_PULSE_DURATION_MS = 5_000;
+const UNREAD_CHANGED_EVENT = 'agent-reminders:unread-changed';
+const EMPTY_UNREAD_STATE: UnreadReminderState = {
+  count: 0,
+  pulse: false,
+  revision: 0,
+};
 
 export function QuickAccessApp() {
   const dragProtectionActive = useRef(false);
   const dragProtectionTimeout = useRef<number | null>(null);
+  const latestUnreadRevision = useRef(EMPTY_UNREAD_STATE.revision);
+  const unreadPulseTimeout = useRef<number | null>(null);
+  const [unreadState, setUnreadState] =
+    useState<UnreadReminderState>(EMPTY_UNREAD_STATE);
+  const [isUnreadPulsing, setIsUnreadPulsing] = useState(false);
 
   const handleOpenMain = useCallback(() => {
     void openMainWindowFromQuickAccess();
@@ -25,6 +45,73 @@ export function QuickAccessApp() {
   const handleClose = useCallback(() => {
     void hideQuickAccess();
   }, []);
+
+  const handleOpenUnread = useCallback(() => {
+    void openAgentUnreadFromQuickAccess();
+  }, []);
+
+  const applyUnreadState = useCallback(
+    (next: UnreadReminderState, acceptEqualRevision = true) => {
+      if (
+        next.revision < latestUnreadRevision.current ||
+        (!acceptEqualRevision && next.revision === latestUnreadRevision.current)
+      ) {
+        return;
+      }
+
+      latestUnreadRevision.current = next.revision;
+      setUnreadState(next);
+
+      if (!next.pulse || next.count === 0) {
+        setIsUnreadPulsing(false);
+        if (unreadPulseTimeout.current !== null) {
+          window.clearTimeout(unreadPulseTimeout.current);
+          unreadPulseTimeout.current = null;
+        }
+        return;
+      }
+
+      setIsUnreadPulsing(true);
+      if (unreadPulseTimeout.current !== null) {
+        window.clearTimeout(unreadPulseTimeout.current);
+      }
+      unreadPulseTimeout.current = window.setTimeout(() => {
+        unreadPulseTimeout.current = null;
+        setIsUnreadPulsing(false);
+      }, UNREAD_PULSE_DURATION_MS);
+    },
+    [],
+  );
+
+  useEffect(() => {
+    let isDisposed = false;
+    const unlistenPromise = listen<unknown>(UNREAD_CHANGED_EVENT, (event) => {
+      const result = unreadReminderStateSchema.safeParse(event.payload);
+      if (result.success) {
+        applyUnreadState(result.data);
+      }
+    });
+
+    void unlistenPromise
+      .catch(() => undefined)
+      .then(() => getAgentReminderUnreadState())
+      .then((state) => {
+        if (!isDisposed) applyUnreadState(state, false);
+      })
+      .catch(() => {
+        // The Quick Access shell remains usable if the session state is unavailable.
+      });
+
+    return () => {
+      isDisposed = true;
+      void unlistenPromise
+        .then((unlisten) => unlisten())
+        .catch(() => undefined);
+      if (unreadPulseTimeout.current !== null) {
+        window.clearTimeout(unreadPulseTimeout.current);
+      }
+    };
+  }, [applyUnreadState]);
 
   const releaseDragProtection = useCallback(() => {
     if (dragProtectionTimeout.current !== null) {
@@ -91,6 +178,17 @@ export function QuickAccessApp() {
           className="flex items-center gap-1 cursor-default"
           onMouseDown={(e) => e.stopPropagation()}
         >
+          {unreadState.count > 0 && (
+            <button
+              aria-label={`Open ${unreadState.count} unread Agent Usage ${unreadState.count === 1 ? 'reminder' : 'reminders'}`}
+              className={`flex h-7 items-center gap-1 rounded border border-accent/40 bg-accent/10 px-2 font-mono text-[10px] font-semibold text-accent transition-colors hover:bg-accent/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent ${isUnreadPulsing ? 'animate-pulse' : ''}`}
+              onClick={handleOpenUnread}
+              type="button"
+            >
+              <IconBell aria-hidden="true" className="h-3.5 w-3.5" />
+              <span>{unreadState.count}</span>
+            </button>
+          )}
           <button
             aria-label="Open Devventory main window"
             className="flex h-7 w-7 items-center justify-center rounded text-muted-foreground transition-colors hover:bg-content2 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"

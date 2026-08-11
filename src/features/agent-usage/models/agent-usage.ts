@@ -112,6 +112,24 @@ export const reminderBatchSchema = z
   .strict();
 export type ReminderBatch = z.infer<typeof reminderBatchSchema>;
 
+export const inAppDeliveryPayloadSchema = z
+  .object({
+    batch: reminderBatchSchema,
+    dispatchId: z.string().uuid(),
+  })
+  .strict();
+
+export const notificationNavigationIntentSchema = z.discriminatedUnion('type', [
+  z
+    .object({
+      accountId: z.string().uuid(),
+      quotaWindowId: z.string().uuid(),
+      type: z.literal('individual'),
+    })
+    .strict(),
+  z.object({ type: z.literal('burst') }).strict(),
+]);
+
 export type ReminderOutcome =
   | { id: string; status: 'delivered' }
   | { id: string; status: 'suppressed'; reason?: string }

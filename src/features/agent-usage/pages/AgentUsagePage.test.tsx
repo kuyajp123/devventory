@@ -5,6 +5,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { TauriCommandError } from '@/shared/infrastructure/tauri/tauri-error';
 import { renderWithProviders } from '@/test/render';
 import { agentUsageGateway } from '../services/agent-usage.gateway';
+import { navigationIntentStore } from '../services/navigation-intent.store';
 import { AgentUsagePage } from './AgentUsagePage';
 
 function renderAgentUsagePage() {
@@ -35,6 +36,33 @@ describe('AgentUsagePage', () => {
     vi.mocked(agentUsageGateway.saveQuota).mockResolvedValue(quotaResponse());
     vi.mocked(agentUsageGateway.deleteAccount).mockResolvedValue(undefined);
     vi.mocked(agentUsageGateway.deleteQuota).mockResolvedValue(undefined);
+    navigationIntentStore.clear();
+  });
+
+  it('preserves a targeted reminder intent until account data is ready', async () => {
+    let resolveAccounts:
+      ((accounts: ReturnType<typeof accountResponse>[]) => void) | undefined;
+    vi.mocked(agentUsageGateway.listAccounts).mockReturnValue(
+      new Promise((resolve) => {
+        resolveAccounts = resolve;
+      }),
+    );
+    navigationIntentStore.setIntent({
+      accountId: '30af17bd-2dd6-4b89-a5e7-8517191815a7',
+      quotaWindowId: 'e49c4e06-a95f-481d-a456-9dd066591067',
+      type: 'individual',
+    });
+
+    renderAgentUsagePage();
+    await waitFor(() =>
+      expect(agentUsageGateway.listAccounts).toHaveBeenCalled(),
+    );
+    expect(navigationIntentStore.peekIntent()).not.toBeNull();
+
+    resolveAccounts?.([accountResponse()]);
+
+    await screen.findByText('paul+codex@example.com');
+    await waitFor(() => expect(navigationIntentStore.peekIntent()).toBeNull());
   });
 
   it('renders the full account identifier and availability without project context', async () => {

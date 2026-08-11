@@ -46,6 +46,10 @@ use features::validation_center::commands::{
     set_validation_issue_status,
 };
 
+use app::notification_session::{
+    acknowledge_agent_unread_reminders, get_agent_reminder_unread_state,
+    open_agent_unread_from_quick_access,
+};
 use app::quick_access::{
     hide_quick_access_command, open_main_window_from_quick_access_command,
     set_quick_access_prevent_auto_hide_command, show_main_exclusive, show_quick_access_exclusive,
@@ -317,7 +321,10 @@ pub fn run() {
             export_environment_manifest,
             hide_quick_access_command,
             open_main_window_from_quick_access_command,
-            set_quick_access_prevent_auto_hide_command
+            set_quick_access_prevent_auto_hide_command,
+            get_agent_reminder_unread_state,
+            acknowledge_agent_unread_reminders,
+            open_agent_unread_from_quick_access
         ])
         .run(tauri::generate_context!())
         .expect("error while running Devventory");

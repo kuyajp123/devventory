@@ -136,3 +136,25 @@ fn dto_conversions_preserve_fields() {
     assert!(!domain_bg.keep_running_when_closed);
     assert!(domain_bg.start_with_windows);
 }
+
+#[test]
+fn unread_session_is_allowed_only_when_master_and_in_app_are_enabled() {
+    assert!(NotificationPreferences {
+        enabled: true,
+        in_app_enabled: true,
+        system_enabled: false,
+    }
+    .allows_session_unread());
+    assert!(!NotificationPreferences {
+        enabled: false,
+        in_app_enabled: true,
+        system_enabled: true,
+    }
+    .allows_session_unread());
+    assert!(!NotificationPreferences {
+        enabled: true,
+        in_app_enabled: false,
+        system_enabled: true,
+    }
+    .allows_session_unread());
+}

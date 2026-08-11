@@ -46,4 +46,10 @@ export const agentUsageGateway = {
       input: { batchToken, outcomes },
     });
   },
+
+  acknowledgeUnreadReminders(reminderIds: string[]) {
+    return invokeCommand<void>('acknowledge_agent_unread_reminders', {
+      input: { reminderIds },
+    });
+  },
 };

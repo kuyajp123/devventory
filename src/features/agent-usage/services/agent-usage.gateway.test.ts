@@ -50,6 +50,21 @@ describe('agentUsageGateway', () => {
       }),
     ).resolves.toMatchObject({ label: 'Weekly', remainingPercent: null });
   });
+
+  it('acknowledges only the unread reminder IDs selected by the caller', async () => {
+    const reminderIds = [
+      '22222222-2222-4222-8222-222222222222',
+      '77777777-7777-4777-8777-777777777777',
+    ];
+    mockIPC((command, args) => {
+      expect(command).toBe('acknowledge_agent_unread_reminders');
+      expect(args).toEqual({ input: { reminderIds } });
+    });
+
+    await expect(
+      agentUsageGateway.acknowledgeUnreadReminders(reminderIds),
+    ).resolves.toBeUndefined();
+  });
 });
 
 function quotaResponse() {

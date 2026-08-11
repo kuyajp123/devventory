@@ -5,6 +5,12 @@ pub(crate) struct NotificationPreferences {
     pub(crate) system_enabled: bool,
 }
 
+impl NotificationPreferences {
+    pub(crate) const fn allows_session_unread(&self) -> bool {
+        self.enabled && self.in_app_enabled
+    }
+}
+
 impl Default for NotificationPreferences {
     fn default() -> Self {
         Self {

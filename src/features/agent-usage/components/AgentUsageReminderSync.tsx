@@ -6,39 +6,58 @@ import { useAcknowledgeRemindersMutation } from '../hooks/use-agent-usage';
 import {
   PLATFORM_LABELS,
   type AgentReminder,
-  type ReminderBatch,
   type ReminderOutcome,
+  inAppDeliveryPayloadSchema,
+  notificationNavigationIntentSchema,
 } from '../models/agent-usage';
+import { agentUsageGateway } from '../services/agent-usage.gateway';
 import { navigationIntentStore } from '../services/navigation-intent.store';
-
-interface InAppDeliveryPayload {
-  dispatchId: string;
-  batch: ReminderBatch;
-}
 
 export function AgentUsageReminderSync() {
   const navigate = useNavigate();
   const acknowledgeMutation = useAcknowledgeRemindersMutation();
 
   useEffect(() => {
-    const unlistenPromise = listen<InAppDeliveryPayload>(
+    async function acknowledgeAndNavigate(reminders: AgentReminder[]) {
+      try {
+        await agentUsageGateway.acknowledgeUnreadReminders(
+          reminders.map((reminder) => reminder.id),
+        );
+
+        if (reminders.length === 1) {
+          navigationIntentStore.setIntent({
+            accountId: reminders[0].accountId,
+            quotaWindowId: reminders[0].quotaWindowId,
+            type: 'individual',
+          });
+        } else {
+          navigationIntentStore.setIntent({ type: 'burst' });
+        }
+        navigate('/agent-usage');
+      } catch {
+        toast.danger('The reminder could not be opened. Please try again.');
+      }
+    }
+
+    const inAppUnlistenPromise = listen<unknown>(
       'agent-reminders:in-app',
       async (event) => {
-        const payload = event.payload;
-        const batch = payload?.batch;
-        if (!batch?.reminders || batch.reminders.length === 0) return;
+        const parsed = inAppDeliveryPayloadSchema.safeParse(event.payload);
+        if (!parsed.success || parsed.data.batch.reminders.length === 0) return;
+        const { batch } = parsed.data;
 
         const outcomes: ReminderOutcome[] = [];
 
         if (batch.reminders.length === 1) {
           const r = batch.reminders[0];
           try {
-            navigationIntentStore.setIntent({
-              accountId: r.accountId,
-              quotaWindowId: r.quotaWindowId,
-              type: 'individual',
-            });
             toast.warning(reminderMessage(r), {
+              actionProps: {
+                children: 'View quota',
+                onPress: () => {
+                  void acknowledgeAndNavigate([r]);
+                },
+              },
               timeout: 8000,
             });
             outcomes.push({ id: r.id, status: 'delivered' });
@@ -54,8 +73,13 @@ export function AgentUsageReminderSync() {
           const count = batch.reminders.length;
           const summaryText = `${count} Agent Usage reminders are ready.`;
           try {
-            navigationIntentStore.setIntent({ type: 'burst' });
             toast.warning(summaryText, {
+              actionProps: {
+                children: 'View reminders',
+                onPress: () => {
+                  void acknowledgeAndNavigate(batch.reminders);
+                },
+              },
               timeout: 8000,
             });
             for (const r of batch.reminders) {
@@ -81,8 +105,21 @@ export function AgentUsageReminderSync() {
       },
     );
 
+    const navigationUnlistenPromise = listen<unknown>(
+      'agent-reminders:navigate',
+      (event) => {
+        const parsed = notificationNavigationIntentSchema.safeParse(
+          event.payload,
+        );
+        if (!parsed.success) return;
+        navigationIntentStore.setIntent(parsed.data);
+        navigate('/agent-usage');
+      },
+    );
+
     return () => {
-      void unlistenPromise.then((unlisten) => unlisten());
+      void inAppUnlistenPromise.then((unlisten) => unlisten());
+      void navigationUnlistenPromise.then((unlisten) => unlisten());
     };
   }, [acknowledgeMutation, navigate]);
 

@@ -9,12 +9,61 @@ use super::{
     service::AgentUsageService,
 };
 use crate::features::settings::repository::{SettingsRepository, SqliteSettingsRepository};
+use crate::{
+    app::notification_session::record_unread_reminders,
+    features::settings::model::NotificationPreferences,
+};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum MainWindowContext {
     Focused,
     Background,
     Unknown,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum NotificationSurfaceContext {
+    MainFocused,
+    QuickAccessVisible,
+    Background,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum DeliveryPlan {
+    Suppressed,
+    InAppToast,
+    UnreadOnly,
+    UnreadAndSystem,
+    SystemOnly,
+}
+
+impl DeliveryPlan {
+    const fn creates_unread(self) -> bool {
+        matches!(
+            self,
+            Self::InAppToast | Self::UnreadOnly | Self::UnreadAndSystem
+        )
+    }
+}
+
+pub(crate) fn resolve_delivery_plan(
+    preferences: &NotificationPreferences,
+    context: NotificationSurfaceContext,
+) -> DeliveryPlan {
+    if !preferences.enabled || (!preferences.in_app_enabled && !preferences.system_enabled) {
+        return DeliveryPlan::Suppressed;
+    }
+
+    if context == NotificationSurfaceContext::MainFocused && preferences.in_app_enabled {
+        return DeliveryPlan::InAppToast;
+    }
+
+    match (preferences.in_app_enabled, preferences.system_enabled) {
+        (true, true) => DeliveryPlan::UnreadAndSystem,
+        (true, false) => DeliveryPlan::UnreadOnly,
+        (false, true) => DeliveryPlan::SystemOnly,
+        (false, false) => DeliveryPlan::Suppressed,
+    }
 }
 
 pub(crate) fn get_main_window_context(app: &AppHandle) -> MainWindowContext {
@@ -29,6 +78,22 @@ pub(crate) fn get_main_window_context(app: &AppHandle) -> MainWindowContext {
         MainWindowContext::Focused
     } else {
         MainWindowContext::Background
+    }
+}
+
+pub(crate) fn get_notification_surface_context(app: &AppHandle) -> NotificationSurfaceContext {
+    if get_main_window_context(app) == MainWindowContext::Focused {
+        return NotificationSurfaceContext::MainFocused;
+    }
+
+    let is_quick_access_visible = app
+        .get_webview_window(crate::app::quick_access::QUICK_ACCESS_WINDOW_LABEL)
+        .map(|window| window.is_visible().unwrap_or(false))
+        .unwrap_or(false);
+    if is_quick_access_visible {
+        NotificationSurfaceContext::QuickAccessVisible
+    } else {
+        NotificationSurfaceContext::Background
     }
 }
 
@@ -68,8 +133,8 @@ impl NotificationDispatcher {
             }
         };
 
-        // Master OFF or both channels OFF -> Policy Suppressed
-        if !prefs.enabled || (!prefs.in_app_enabled && !prefs.system_enabled) {
+        let plan = resolve_delivery_plan(&prefs, get_notification_surface_context(app));
+        if plan == DeliveryPlan::Suppressed {
             let outcomes = batch
                 .reminders
                 .iter()
@@ -81,38 +146,36 @@ impl NotificationDispatcher {
             return;
         }
 
-        let context = get_main_window_context(app);
+        if plan.creates_unread() {
+            record_unread_reminders(app, &batch.reminders);
+        }
 
-        match context {
-            MainWindowContext::Focused if prefs.in_app_enabled => {
+        match plan {
+            DeliveryPlan::InAppToast => {
                 // In-App delivery when main window is focused
                 let payload = InAppDeliveryPayload {
                     dispatch_id: Uuid::new_v4(),
                     batch,
                 };
-                if let Err(err) = app.emit("agent-reminders:in-app", &payload) {
+                if let Err(err) = app.emit_to("main", "agent-reminders:in-app", &payload) {
                     error!(error = %err, "failed to emit agent-reminders:in-app event");
                 }
                 // Frontend bridge will render toast and post acknowledge_reminders
             }
-            MainWindowContext::Focused
-            | MainWindowContext::Background
-            | MainWindowContext::Unknown => {
-                if prefs.system_enabled {
-                    // System Notification delivery
-                    Self::dispatch_native_system_notification(app, service, batch).await;
-                } else {
-                    // System OFF and not eligible for In-App -> Suppress
-                    let outcomes = batch
-                        .reminders
-                        .iter()
-                        .map(|r| ReminderOutcome::Suppressed { id: r.id })
-                        .collect();
-                    let _ = service
-                        .acknowledge_reminders(batch.batch_token, outcomes)
-                        .await;
-                }
+            DeliveryPlan::UnreadOnly => {
+                let outcomes = batch
+                    .reminders
+                    .iter()
+                    .map(|reminder| ReminderOutcome::Delivered { id: reminder.id })
+                    .collect();
+                let _ = service
+                    .acknowledge_reminders(batch.batch_token, outcomes)
+                    .await;
             }
+            DeliveryPlan::UnreadAndSystem | DeliveryPlan::SystemOnly => {
+                Self::dispatch_native_system_notification(app, service, batch).await;
+            }
+            DeliveryPlan::Suppressed => unreachable!("suppressed batches return before delivery"),
         }
     }
 
