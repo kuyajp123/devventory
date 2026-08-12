@@ -23,10 +23,11 @@ test('creates metadata-only custom keys and shows them in the unified matrix', a
   ).toBeVisible();
   await expect(page.getByLabel(/value/i)).toHaveCount(0);
 
+  await page.getByRole('button', { name: 'New custom source' }).click();
   await page.getByLabel('Source name').fill('Deployment secrets');
   await page.getByLabel('Initial custom key').fill('signing-key.p12');
   await page.getByRole('button', { name: 'Add key' }).click();
-  await page.getByRole('button', { name: 'Create custom source' }).click();
+  await page.getByRole('button', { name: 'Create source' }).click();
 
   const settings = page.getByRole('dialog', {
     name: /Environment settings/,

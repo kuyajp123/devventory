@@ -34,22 +34,22 @@ test('adds a project through the selector and restores it after reload', async (
   await expect(
     page.getByRole('list', { name: 'Built-in exclusions' }),
   ).toContainText('node_modules/');
-  await expect(page.getByLabel('Additional exclusions')).toHaveValue('');
-  await page.getByLabel('Additional exclusions').fill('generated/');
-  await page.getByRole('button', { name: 'Choose folder' }).click();
+  await page.getByRole('button', { name: 'Choose root folder' }).click();
 
   await expect(
-    page.getByText('Folder validated', { exact: true }),
+    page.getByText('Validated', { exact: true }).first(),
   ).toBeVisible();
-  await expect(page.getByLabel('Selected project root')).toHaveValue(
-    'C:\\workspace\\browser-project',
-  );
+  await expect(
+    page.getByText('C:\\workspace\\browser-project', { exact: true }),
+  ).toBeVisible();
+  await page.getByRole('button', { name: 'Add exclusion' }).click();
+  await page
+    .getByPlaceholder('e.g. logs/ or tmp/generated/')
+    .fill('generated/');
+  await page.getByRole('button', { name: 'Add', exact: true }).click();
 
   await page.getByRole('button', { name: 'Run initial scan' }).click();
-  await expect(
-    page.getByRole('heading', { name: 'Scan summary' }),
-  ).toBeVisible();
-  await expect(page.getByText('73')).toBeVisible();
+  await expect(page.getByText('73', { exact: true })).toBeVisible();
 
   await page.getByRole('button', { name: 'Save project' }).click();
   await expect(page).toHaveURL('/dashboard');
@@ -150,9 +150,18 @@ test('adds a project through the selector and restores it after reload', async (
   await page
     .getByRole('menuitem', { name: 'Manage sources', exact: true })
     .click();
-  await page.getByRole('button', { name: 'Add', exact: true }).click();
+  const environmentSettings = page.getByRole('dialog', {
+    name: /Environment settings/,
+  });
+  await environmentSettings.getByRole('button', { name: 'Add Source' }).click();
+  await environmentSettings
+    .getByRole('button', { name: 'Add', exact: true })
+    .click();
+  await environmentSettings
+    .getByRole('button', { name: /Configured Sources/ })
+    .click();
   await expect(
-    page.getByRole('button', {
+    environmentSettings.getByRole('button', {
       name: 'Remove config/local.env',
       exact: true,
     }),
@@ -161,7 +170,9 @@ test('adds a project through the selector and restores it after reload', async (
   await expect(page.getByText('APP_MODE', { exact: true })).toBeVisible();
 
   await page.getByRole('tab', { name: 'Rules & Health' }).click();
-  await expect(page.getByText('Validation rules')).toBeVisible();
+  await expect(
+    page.getByRole('heading', { name: 'Validation rules', exact: true }),
+  ).toBeVisible();
   await page.getByRole('button', { name: 'Add rule' }).click();
   await page.getByLabel('Environment key').fill('DATABASE_URL');
   await page

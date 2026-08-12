@@ -15,11 +15,9 @@ test('shows dialogs above the backdrop and releases the workspace after close', 
   await topApplicationBar.getByRole('link', { name: 'Add Project' }).click();
 
   await page.getByLabel('Project name').fill('Modal regression project');
-  await page.getByRole('button', { name: 'Choose folder' }).click();
+  await page.getByRole('button', { name: 'Choose root folder' }).click();
   await page.getByRole('button', { name: 'Run initial scan' }).click();
-  await expect(
-    page.getByRole('heading', { name: 'Scan summary' }),
-  ).toBeVisible();
+  await expect(page.getByText('73', { exact: true })).toBeVisible();
   await page.getByRole('button', { name: 'Save project' }).click();
 
   const primaryNavigation = page.getByRole('navigation', {

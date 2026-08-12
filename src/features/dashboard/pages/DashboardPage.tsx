@@ -62,9 +62,9 @@ export function DashboardPage() {
               size={22}
               stroke={ICON_STROKE}
             />
-            <p className="font-mono break-words text-2xl font-semibold tracking-tight text-foreground">
+            <h1 className="font-mono break-words text-2xl font-semibold tracking-tight text-foreground">
               {activeProject.name}
-            </p>
+            </h1>
           </div>
           {activeProject.description && (
             <p className="font-mono mt-1 max-w-3xl text-xs leading-relaxed text-muted">

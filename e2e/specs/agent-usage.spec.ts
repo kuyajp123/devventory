@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test';
 
-test('tracks an agent account and confirmed reset without an active project', async ({
+test('tracks a manual quota window without an active project', async ({
   page,
 }) => {
   await page.goto('/dashboard');
@@ -30,38 +30,11 @@ test('tracks an agent account and confirmed reset without an active project', as
   await page
     .getByRole('button', { name: 'Add quota for browser-agent@example.com' })
     .click();
-  await page.getByRole('button', { name: 'Paste message' }).click();
-  await page
-    .getByLabel('Provider reset message')
-    .fill('Your limit resets Friday at 3:00 PM');
-  await expect(page.getByRole('button', { name: 'Save quota' })).toBeDisabled();
-  await page.getByRole('button', { name: 'Preview reset' }).click();
-  await expect(page.getByText('2026-08-14 15:00 +08')).toBeVisible();
-  await page.getByText('I confirm this interpreted reset time').click();
-  await page.getByRole('button', { name: 'Save quota' }).click();
+  await page.getByRole('button', { name: 'Reset in' }).click();
+  await page.getByLabel('Days').fill('7');
+  await page.getByRole('button', { name: 'Add quota', exact: true }).click();
   await expect(page.getByText('Usage remaining unknown')).toBeVisible();
-  await expect(page.getByText('Source: Pasted message')).toBeVisible();
-
-  await page
-    .getByRole('button', { name: 'Add quota for browser-agent@example.com' })
-    .click();
-  await page.getByRole('button', { name: 'Paste message' }).click();
-  await page
-    .getByLabel('Provider reset message')
-    .fill('Your limit resets Friday at 3:00 PM');
-  await page.getByRole('button', { name: 'Preview reset' }).click();
-  await page.getByText('I confirm this interpreted reset time').click();
-  await page.getByRole('button', { name: 'Save quota' }).click();
-
-  const quotaLabel = page.getByLabel('Quota window label');
-  const duplicateMessage =
-    'That quota window label is already used for this account.';
-  await expect(quotaLabel).toHaveAttribute('aria-invalid', 'true');
-  await expect(quotaLabel).toHaveAccessibleDescription(duplicateMessage);
-  await expect(page.getByText(duplicateMessage)).toHaveCount(1);
-  await quotaLabel.fill('Monthly');
-  await expect(quotaLabel).not.toHaveAttribute('aria-invalid', 'true');
-  await page.getByRole('button', { name: 'Cancel' }).click();
+  await expect(page.getByText('Source: Manual')).toBeVisible();
 
   await page.reload();
   await expect(page.getByText('browser-agent@example.com')).toBeVisible();

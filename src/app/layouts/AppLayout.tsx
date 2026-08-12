@@ -1,3 +1,10 @@
+import appIcon from '@/assets/devventory-app-icon.png';
+import { AgentUsageReminderSync } from '@/features/agent-usage';
+import { EnvironmentNavigationSync } from '@/features/environment-tracker';
+import { GlobalCommandPalette } from '@/features/global-search';
+import { ProjectSelector, useActiveProject } from '@/features/projects';
+import { IS_DIAGNOSTICS_ENABLED } from '@/shared/config/development.config';
+import { ICON_SIZE, ICON_STROKE } from '@/shared/constants/icon.constants';
 import { Button, toast, useTheme } from '@heroui/react';
 import {
   IconActivityHeartbeat,
@@ -16,17 +23,10 @@ import {
 } from '@tabler/icons-react';
 import { useRef } from 'react';
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router';
-import { IS_DIAGNOSTICS_ENABLED } from '@/shared/config/development.config';
-import { AgentUsageReminderSync } from '@/features/agent-usage';
-import { EnvironmentNavigationSync } from '@/features/environment-tracker';
-import { ProjectSelector, useActiveProject } from '@/features/projects';
-import { GlobalCommandPalette } from '@/features/global-search';
-import { ICON_SIZE, ICON_STROKE } from '@/shared/constants/icon.constants';
 import { useAppUiStore } from '../stores/app-ui.store';
 import { WorkbenchContextSidebar } from './WorkbenchContextSidebar';
 import { WorkbenchStatusBar } from './WorkbenchStatusBar';
 import { WorkbenchUtilityPanel } from './WorkbenchUtilityPanel';
-import appIcon from '@/assets/devventory-app-icon.png';
 
 interface NavigationItem {
   icon: React.ComponentType<{

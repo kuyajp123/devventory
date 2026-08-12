@@ -29,6 +29,7 @@
   },
   "bundle": {
     "active": true,
+    "createUpdaterArtifacts": true,
     "targets": ["nsis"],
     "icon": [
       "icons/32x32.png",
@@ -37,5 +38,13 @@
       "icons/icon.icns",
       "icons/icon.ico"
     ]
+  },
+  "plugins": {
+    "updater": {
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDFFNEJDNzEyQTBDQUE4N0IKUldSN3FNcWdFc2RMSGdFdWRhTmhxc1BKY1lGOGFtRk9BYXI3Rnovd0JmT3NwemhDcXErSFcyK0gK",
+      "endpoints": [
+        "https://github.com/kuyajp123/devventory-releases/releases/latest/download/latest.json"
+      ]
+    }
   }
 }
