@@ -87,19 +87,20 @@ pub(crate) async fn get_background_startup_preferences(
 
     #[cfg(not(debug_assertions))]
     {
-        if let Ok(autostart_mgr) = _app.autostart() {
-            if let Ok(actual_enabled) = autostart_mgr.is_enabled().await {
-                if domain.start_with_windows != actual_enabled {
-                    tracing::info!(
-                        saved = domain.start_with_windows,
-                        actual = actual_enabled,
-                        "Reconciling background startup preference with OS autostart registration"
-                    );
-                    domain.start_with_windows = actual_enabled;
-                    let _ = repository
-                        .save_background_startup_preferences(domain.clone())
-                        .await;
-                }
+        use tauri_plugin_autostart::ManagerExt;
+
+        let autostart_mgr = _app.autolaunch();
+        if let Ok(actual_enabled) = autostart_mgr.is_enabled() {
+            if domain.start_with_windows != actual_enabled {
+                tracing::info!(
+                    saved = domain.start_with_windows,
+                    actual = actual_enabled,
+                    "Reconciling background startup preference with OS autostart registration"
+                );
+                domain.start_with_windows = actual_enabled;
+                let _ = repository
+                    .save_background_startup_preferences(domain.clone())
+                    .await;
             }
         }
     }
@@ -124,12 +125,12 @@ pub(crate) async fn save_background_startup_preferences(
     if current.start_with_windows != target.start_with_windows {
         #[cfg(not(debug_assertions))]
         {
-            let autostart_mgr = _app.autostart().map_err(|_err| {
-                CommandError::operation_unavailable("Autostart plugin unavailable")
-            })?;
+            use tauri_plugin_autostart::ManagerExt;
+
+            let autostart_mgr = _app.autolaunch();
 
             if target.start_with_windows {
-                autostart_mgr.enable().await.map_err(|_err| {
+                autostart_mgr.enable().map_err(|_err| {
                     CommandError::operation_unavailable("Failed to enable OS autostart")
                 })?;
 
@@ -137,11 +138,11 @@ pub(crate) async fn save_background_startup_preferences(
                     .save_background_startup_preferences(target.clone())
                     .await
                 {
-                    let _ = autostart_mgr.disable().await;
+                    let _ = autostart_mgr.disable();
                     return Err(err.into());
                 }
             } else {
-                autostart_mgr.disable().await.map_err(|_err| {
+                autostart_mgr.disable().map_err(|_err| {
                     CommandError::operation_unavailable("Failed to disable OS autostart")
                 })?;
 
@@ -149,7 +150,7 @@ pub(crate) async fn save_background_startup_preferences(
                     .save_background_startup_preferences(target.clone())
                     .await
                 {
-                    let _ = autostart_mgr.enable().await;
+                    let _ = autostart_mgr.enable();
                     return Err(err.into());
                 }
             }
