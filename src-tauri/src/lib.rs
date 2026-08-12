@@ -2,7 +2,6 @@ mod app;
 mod features;
 mod shared;
 
-use std::sync::Arc;
 use tauri::Manager;
 
 use app::state::AppState;
@@ -57,8 +56,7 @@ use app::quick_access::{
     hide_quick_access_command, open_environment_settings_from_quick_access_command,
     open_main_window_from_quick_access_command, set_quick_access_mode_command,
     set_quick_access_prevent_auto_hide_command, show_main_exclusive, show_quick_access_exclusive,
-    toggle_quick_access_exclusive, QuickAccessState, QUICK_ACCESS_WINDOW_LABEL,
-    TRAY_SINGLE_CLICK_DELAY_MS,
+    QuickAccessState, QUICK_ACCESS_WINDOW_LABEL, TRAY_SINGLE_CLICK_DELAY_MS,
 };
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -96,6 +94,11 @@ pub fn run() {
                         if !is_quitting {
                             api.prevent_close();
                             app::quick_access::hide_quick_access(window.app_handle());
+                        }
+                    }
+                    tauri::WindowEvent::Moved(pos) => {
+                        if let Some(state) = window.app_handle().try_state::<QuickAccessState>() {
+                            state.record_moved_position(pos.x, pos.y);
                         }
                     }
                     tauri::WindowEvent::Focused(focused) => {
@@ -162,9 +165,16 @@ pub fn run() {
                 &[&open_main_item, &open_quick_item, &separator_item, &quit_item],
             )?;
 
-            let tray_result = tauri::tray::TrayIconBuilder::with_id("main")
+            let mut tray_builder = tauri::tray::TrayIconBuilder::with_id("main")
+                .tooltip("Devventory")
                 .menu(&menu)
-                .show_menu_on_left_click(false)
+                .show_menu_on_left_click(false);
+
+            if let Some(icon) = app::notification_session::get_base_tray_icon(app.handle()) {
+                tray_builder = tray_builder.icon(icon);
+            }
+
+            let tray_result = tray_builder
                 .on_menu_event(|app, event| match event.id.as_ref() {
                     "open_devventory" => {
                         let _ = show_main_exclusive(app);
@@ -178,9 +188,13 @@ pub fn run() {
                 .on_tray_icon_event(|tray, event| match event {
                     tauri::tray::TrayIconEvent::Click {
                         button: tauri::tray::MouseButton::Left,
-                        button_state: tauri::tray::MouseButtonState::Up,
+                        button_state,
                         ..
                     } => {
+                        if button_state != tauri::tray::MouseButtonState::Up {
+                            return;
+                        }
+
                         let app_handle = tray.app_handle().clone();
                         let state = app_handle.try_state::<QuickAccessState>();
                         if let Some(state) = state {
@@ -198,17 +212,13 @@ pub fn run() {
                                 .await;
                                 if let Some(st) = app_clone.try_state::<QuickAccessState>() {
                                     if st.current_click_generation() == gen {
-                                        toggle_quick_access_exclusive(&app_clone);
+                                        show_quick_access_exclusive(&app_clone);
                                     }
                                 }
                             });
-                            let state_arc = state.inner();
-                            let state_clone = Arc::new(state_arc);
-                            tauri::async_runtime::block_on(async move {
-                                state_clone.set_pending_click(handle).await;
-                            });
+                            state.set_pending_click(handle);
                         } else {
-                            toggle_quick_access_exclusive(&app_handle);
+                            show_quick_access_exclusive(&app_handle);
                         }
                     }
                     tauri::tray::TrayIconEvent::DoubleClick {
@@ -219,11 +229,7 @@ pub fn run() {
                         if let Some(state) = app_handle.try_state::<QuickAccessState>() {
                             state.record_tray_double_click();
                             state.invalidate_click_generation();
-                            let state_arc = state.inner();
-                            let state_clone = Arc::new(state_arc);
-                            tauri::async_runtime::block_on(async move {
-                                state_clone.cancel_pending_click().await;
-                            });
+                            state.cancel_pending_click();
                         }
                         let _ = show_main_exclusive(app_handle);
                     }

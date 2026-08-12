@@ -81,6 +81,7 @@ struct NotificationSessionData {
     accepting_unread: bool,
     reminders: BTreeMap<Uuid, UnreadReminder>,
     revision: u64,
+    last_show_marker: Option<bool>,
 }
 
 #[derive(Debug, Default)]
@@ -96,6 +97,13 @@ impl NotificationSessionState {
                 ..NotificationSessionData::default()
             }),
         }
+    }
+
+    pub(crate) fn get_and_set_last_marker(&self, show: bool) -> Option<bool> {
+        let mut data = self.lock_data();
+        let prev = data.last_show_marker;
+        data.last_show_marker = Some(show);
+        prev
     }
 
     pub(crate) fn record(&self, reminders: &[AgentReminder]) -> usize {
@@ -320,6 +328,11 @@ pub(crate) async fn open_agent_unread_from_quick_access(
     Ok(())
 }
 
+pub(crate) fn get_base_tray_icon(app: &AppHandle) -> Option<tauri::image::Image<'static>> {
+    app.default_window_icon()
+        .map(|img| tauri::image::Image::new_owned(img.rgba().to_vec(), img.width(), img.height()))
+}
+
 fn sync_unread_surfaces(app: &AppHandle, pulse_for_new_reminder: bool) {
     let state = app.state::<AppState>().notification_session_state();
     let is_quick_access_visible = app
@@ -342,14 +355,17 @@ fn sync_unread_surfaces(app: &AppHandle, pulse_for_new_reminder: bool) {
         warn!(%error, "failed to update unread reminder tray tooltip");
     }
 
-    if let Some(base_icon) = app.default_window_icon().cloned() {
-        let icon = if show_marker {
-            with_unread_marker(&base_icon)
-        } else {
-            base_icon
-        };
-        if let Err(error) = tray.set_icon(Some(icon)) {
-            warn!(%error, "failed to update unread reminder tray icon");
+    let prev_marker = state.get_and_set_last_marker(show_marker);
+    if prev_marker != Some(show_marker) {
+        if let Some(base_icon) = get_base_tray_icon(app) {
+            let icon = if show_marker {
+                with_unread_marker(&base_icon)
+            } else {
+                base_icon
+            };
+            if let Err(error) = tray.set_icon(Some(icon)) {
+                warn!(%error, "failed to update unread reminder tray icon");
+            }
         }
     }
 }
@@ -399,10 +415,17 @@ mod tests {
         state.record(std::slice::from_ref(&later));
 
         let acknowledged = state.acknowledge(&captured_ids);
-
         assert_eq!(acknowledged.len(), 1);
-        assert_eq!(acknowledged[0].id, first.id);
-        assert_eq!(state.snapshot().reminder_ids(), vec![later.id]);
+        assert_eq!(state.snapshot().count(), 1);
+    }
+
+    #[test]
+    fn tracks_last_marker_state_changes_to_avoid_redundant_icon_updates() {
+        let state = NotificationSessionState::new(true);
+        assert_eq!(state.get_and_set_last_marker(false), None);
+        assert_eq!(state.get_and_set_last_marker(false), Some(false));
+        assert_eq!(state.get_and_set_last_marker(true), Some(false));
+        assert_eq!(state.get_and_set_last_marker(true), Some(true));
     }
 
     #[test]

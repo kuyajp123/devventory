@@ -274,27 +274,13 @@ describe('QuickAccessApp', () => {
       expect(gateway.setQuickAccessMode).not.toHaveBeenCalledWith('home');
     });
 
-    it('prevents focus-loss auto-hide for the duration of a native window drag', async () => {
+    it('initiates native window dragging when mouse down occurs on titlebar', async () => {
       render(<QuickAccessApp />);
 
       fireEvent.mouseDown(screen.getByRole('banner'), { button: 0 });
 
       await waitFor(() => {
-        expect(gateway.setQuickAccessPreventAutoHide).toHaveBeenCalledWith(
-          true,
-        );
         expect(startDragging).toHaveBeenCalledOnce();
-      });
-      expect(gateway.setQuickAccessPreventAutoHide).not.toHaveBeenCalledWith(
-        false,
-      );
-
-      fireEvent.mouseUp(window);
-
-      await waitFor(() => {
-        expect(gateway.setQuickAccessPreventAutoHide).toHaveBeenLastCalledWith(
-          false,
-        );
       });
     });
   });

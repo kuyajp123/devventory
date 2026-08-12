@@ -19,11 +19,9 @@ import {
   openAgentUnreadFromQuickAccess,
   openMainWindowFromQuickAccess,
   setQuickAccessMode,
-  setQuickAccessPreventAutoHide,
 } from './services/quick-access.gateway';
 import { EnvironmentKeyFlow } from './EnvironmentKeyFlow';
 
-const DRAG_PROTECTION_TIMEOUT_MS = 10_000;
 const UNREAD_PULSE_DURATION_MS = 5_000;
 const UNREAD_CHANGED_EVENT = 'agent-reminders:unread-changed';
 const EMPTY_UNREAD_STATE: UnreadReminderState = {
@@ -35,8 +33,6 @@ const EMPTY_UNREAD_STATE: UnreadReminderState = {
 type QuickAccessView = 'home' | 'environment-key';
 
 export function QuickAccessApp() {
-  const dragProtectionActive = useRef(false);
-  const dragProtectionTimeout = useRef<number | null>(null);
   const latestUnreadRevision = useRef(EMPTY_UNREAD_STATE.revision);
   const unreadPulseTimeout = useRef<number | null>(null);
   const [unreadState, setUnreadState] =
@@ -124,55 +120,18 @@ export function QuickAccessApp() {
     };
   }, [applyUnreadState]);
 
-  const releaseDragProtection = useCallback(() => {
-    if (dragProtectionTimeout.current !== null) {
-      window.clearTimeout(dragProtectionTimeout.current);
-      dragProtectionTimeout.current = null;
-    }
-
-    if (dragProtectionActive.current) {
-      dragProtectionActive.current = false;
-      void setQuickAccessPreventAutoHide(false);
+  const handleStartDrag = useCallback((e: React.MouseEvent) => {
+    if (e.button === 0) {
+      void getCurrentWindow().startDragging();
     }
   }, []);
-
-  useEffect(() => {
-    window.addEventListener('mouseup', releaseDragProtection);
-
-    return () => {
-      window.removeEventListener('mouseup', releaseDragProtection);
-      releaseDragProtection();
-    };
-  }, [releaseDragProtection]);
-
-  const handleStartDrag = useCallback(
-    (e: React.MouseEvent) => {
-      if (e.button !== 0) {
-        return;
-      }
-
-      void (async () => {
-        try {
-          await setQuickAccessPreventAutoHide(true);
-          dragProtectionActive.current = true;
-          dragProtectionTimeout.current = window.setTimeout(
-            releaseDragProtection,
-            DRAG_PROTECTION_TIMEOUT_MS,
-          );
-          await getCurrentWindow().startDragging();
-        } catch {
-          releaseDragProtection();
-        }
-      })();
-    },
-    [releaseDragProtection],
-  );
 
   return (
     <div className="flex h-screen w-screen flex-col overflow-hidden select-none border border-border bg-background text-foreground shadow-2xl">
       {/* Titlebar Header with Native Drag Region */}
       <header
         className="flex h-11 shrink-0 items-center justify-between border-b border-border px-3 cursor-move select-none"
+        data-tauri-drag-region
         onMouseDown={handleStartDrag}
         style={{ backgroundColor: 'var(--panel)' }}
       >

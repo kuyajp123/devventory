@@ -1,55 +1,73 @@
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
-use std::sync::Arc;
+use std::sync::Mutex;
 use std::time::{SystemTime, UNIX_EPOCH};
 use tauri::{AppHandle, Emitter, Manager, PhysicalPosition, PhysicalSize, WebviewWindow};
-use tokio::sync::Mutex;
 use tracing::{info, warn};
 
 use super::lifecycle::activate_main_window;
 use crate::shared::errors::command::CommandError;
 
 pub(crate) const QUICK_ACCESS_WINDOW_LABEL: &str = "quick-panel";
-pub(crate) const DEFAULT_MARGIN_PX: i32 = 12;
-pub(crate) const TRAY_SINGLE_CLICK_DELAY_MS: u64 = 600;
-const TRAY_DOUBLE_CLICK_SUPPRESSION_MS: u64 = 2_000;
+pub(crate) const DEFAULT_MARGIN_PX: i32 = 10;
+pub(crate) const TRAY_SINGLE_CLICK_DELAY_MS: u64 = 250;
+const TRAY_DOUBLE_CLICK_SUPPRESSION_MS: u64 = 300;
 
 pub(crate) const QUICK_ACCESS_HOME_SIZE: (u32, u32) = (360, 260);
-pub(crate) const QUICK_ACCESS_TASK_SIZE: (u32, u32) = (360, 440);
+pub(crate) const QUICK_ACCESS_TASK_SIZE: (u32, u32) = (360, 380);
 
 #[derive(Debug)]
 pub(crate) struct QuickAccessState {
-    active_mode: Arc<Mutex<String>>,
+    active_mode: Mutex<String>,
+    custom_position: Mutex<Option<(i32, i32)>>,
     prevent_auto_hide: AtomicBool,
     position_initialized: AtomicBool,
     last_focus_lost_ms: AtomicU64,
     last_tray_double_click_ms: AtomicU64,
     click_generation: AtomicU64,
-    pending_click_task: Arc<Mutex<Option<tauri::async_runtime::JoinHandle<()>>>>,
+    pending_click_task: Mutex<Option<tauri::async_runtime::JoinHandle<()>>>,
 }
 
 impl QuickAccessState {
     pub(crate) fn new() -> Self {
         Self {
-            active_mode: Arc::new(Mutex::new("home".to_string())),
+            active_mode: Mutex::new("home".to_string()),
+            custom_position: Mutex::new(None),
             prevent_auto_hide: AtomicBool::new(false),
             position_initialized: AtomicBool::new(false),
             last_focus_lost_ms: AtomicU64::new(0),
             last_tray_double_click_ms: AtomicU64::new(0),
             click_generation: AtomicU64::new(0),
-            pending_click_task: Arc::new(Mutex::new(None)),
+            pending_click_task: Mutex::new(None),
         }
     }
 
-    pub(crate) async fn mode(&self) -> String {
-        let guard = self.active_mode.lock().await;
+    pub(crate) fn mode(&self) -> String {
+        let guard = self.active_mode.lock().unwrap_or_else(|e| e.into_inner());
         guard.clone()
     }
 
-    pub(crate) async fn set_mode(&self, mode: String) {
-        let mut guard = self.active_mode.lock().await;
+    pub(crate) fn set_mode(&self, mode: String) {
+        let mut guard = self.active_mode.lock().unwrap_or_else(|e| e.into_inner());
         *guard = mode;
     }
 
+    pub(crate) fn custom_position(&self) -> Option<(i32, i32)> {
+        let guard = self
+            .custom_position
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
+        *guard
+    }
+
+    pub(crate) fn record_moved_position(&self, x: i32, y: i32) {
+        let mut guard = self
+            .custom_position
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
+        *guard = Some((x, y));
+    }
+
+    #[allow(dead_code)]
     pub(crate) fn prevent_auto_hide(&self) -> bool {
         self.prevent_auto_hide.load(Ordering::SeqCst)
     }
@@ -74,6 +92,7 @@ impl QuickAccessState {
         self.last_focus_lost_ms.store(now, Ordering::SeqCst);
     }
 
+    #[allow(dead_code)]
     pub(crate) fn recently_lost_focus(&self, threshold_ms: u64) -> bool {
         let now = SystemTime::now()
             .duration_since(UNIX_EPOCH)
@@ -114,15 +133,21 @@ impl QuickAccessState {
             && timestamp_ms.saturating_sub(double_click_at) <= TRAY_DOUBLE_CLICK_SUPPRESSION_MS
     }
 
-    pub(crate) async fn cancel_pending_click(&self) {
-        let mut guard = self.pending_click_task.lock().await;
+    pub(crate) fn cancel_pending_click(&self) {
+        let mut guard = self
+            .pending_click_task
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
         if let Some(handle) = guard.take() {
             handle.abort();
         }
     }
 
-    pub(crate) async fn set_pending_click(&self, handle: tauri::async_runtime::JoinHandle<()>) {
-        let mut guard = self.pending_click_task.lock().await;
+    pub(crate) fn set_pending_click(&self, handle: tauri::async_runtime::JoinHandle<()>) {
+        let mut guard = self
+            .pending_click_task
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
         if let Some(old_handle) = guard.take() {
             old_handle.abort();
         }
@@ -149,6 +174,12 @@ pub(crate) fn compute_bottom_right_position(
 }
 
 pub(crate) fn position_quick_access_window(app: &AppHandle, window: &WebviewWindow) -> bool {
+    let custom_pos = if let Some(state) = app.try_state::<QuickAccessState>() {
+        state.custom_position()
+    } else {
+        None
+    };
+
     let cursor_pos = app.cursor_position().ok();
 
     let monitor = cursor_pos
@@ -165,22 +196,30 @@ pub(crate) fn position_quick_access_window(app: &AppHandle, window: &WebviewWind
         .outer_size()
         .unwrap_or_else(|_| PhysicalSize::new(360, 260));
 
-    let (target_x, target_y) = compute_bottom_right_position(
-        (work_area.position.x, work_area.position.y),
-        (work_area.size.width, work_area.size.height),
-        (window_size.width, window_size.height),
-        DEFAULT_MARGIN_PX,
-    );
+    let (target_x, target_y) = if let Some((user_x, user_y)) = custom_pos {
+        let max_x = (work_area.position.x + work_area.size.width as i32 - window_size.width as i32)
+            .max(work_area.position.x);
+        let max_y = (work_area.position.y + work_area.size.height as i32
+            - window_size.height as i32)
+            .max(work_area.position.y);
+        (
+            user_x.clamp(work_area.position.x, max_x),
+            user_y.clamp(work_area.position.y, max_y),
+        )
+    } else {
+        compute_bottom_right_position(
+            (work_area.position.x, work_area.position.y),
+            (work_area.size.width, work_area.size.height),
+            (window_size.width, window_size.height),
+            DEFAULT_MARGIN_PX,
+        )
+    };
 
     if let Err(err) = window.set_position(PhysicalPosition::new(target_x, target_y)) {
         warn!(error = %err, "Failed to set Quick Access window position");
         false
     } else {
-        info!(
-            x = target_x,
-            y = target_y,
-            "Positioned Quick Access window to work area bottom-right"
-        );
+        info!(x = target_x, y = target_y, "Positioned Quick Access window");
         true
     }
 }
@@ -190,7 +229,7 @@ pub(crate) async fn set_quick_access_mode_internal(
     mode: &str,
 ) -> Result<(), String> {
     if let Some(state) = app.try_state::<QuickAccessState>() {
-        state.set_mode(mode.to_string()).await;
+        state.set_mode(mode.to_string());
     }
 
     let Some(window) = app.get_webview_window(QUICK_ACCESS_WINDOW_LABEL) else {
@@ -225,7 +264,6 @@ pub(crate) fn hide_quick_access(app: &AppHandle) {
         if let Err(err) = window.hide() {
             warn!(error = %err, "Failed to hide Quick Access window");
         }
-        // Hiding Quick Access must NOT change task mode or reset height to home!
     }
     super::notification_session::refresh_unread_surfaces(app);
 }
@@ -250,7 +288,7 @@ pub(crate) fn show_quick_access_exclusive(app: &AppHandle) {
     };
 
     let mode = if let Some(state) = app.try_state::<QuickAccessState>() {
-        tauri::async_runtime::block_on(async { state.mode().await })
+        state.mode()
     } else {
         "home".to_string()
     };
@@ -286,6 +324,7 @@ pub(crate) fn show_quick_access_exclusive(app: &AppHandle) {
     }
 }
 
+#[allow(dead_code)]
 pub(crate) fn toggle_quick_access_exclusive(app: &AppHandle) {
     let state = app.try_state::<QuickAccessState>();
 
@@ -313,21 +352,10 @@ pub(crate) fn toggle_quick_access_exclusive(app: &AppHandle) {
     }
 }
 
-pub(crate) fn handle_quick_access_focus_changed(app: &AppHandle, focused: bool) {
-    if focused {
-        return;
-    }
-
+pub(crate) fn handle_quick_access_focus_changed(app: &AppHandle, _focused: bool) {
     if let Some(state) = app.try_state::<QuickAccessState>() {
         state.record_focus_lost();
-
-        if state.prevent_auto_hide() {
-            info!("Quick Access focus lost but auto-hide is prevented by active state");
-            return;
-        }
     }
-
-    hide_quick_access(app);
 }
 
 // Pure decision model for mutually exclusive surface transitions (Unit Testable)
@@ -482,12 +510,25 @@ mod tests {
         );
     }
 
-    #[tokio::test]
-    async fn preserves_mode_across_hide_operations() {
+    #[test]
+    fn preserves_mode_across_hide_operations() {
         let state = QuickAccessState::new();
-        assert_eq!(state.mode().await, "home");
+        assert_eq!(state.mode(), "home");
 
-        state.set_mode("environment-key".to_string()).await;
-        assert_eq!(state.mode().await, "environment-key");
+        state.set_mode("environment-key".to_string());
+        assert_eq!(state.mode(), "environment-key");
+    }
+
+    #[test]
+    fn double_click_invalidates_single_click_generation() {
+        let state = QuickAccessState::new();
+        let gen_single = state.next_click_generation();
+        assert_eq!(gen_single, 1);
+
+        state.record_tray_double_click();
+        state.invalidate_click_generation();
+
+        let gen_after_double = state.current_click_generation();
+        assert_ne!(gen_single, gen_after_double);
     }
 }
