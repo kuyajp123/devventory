@@ -13,14 +13,19 @@ import * as gateway from './services/quick-access.gateway';
 const { startDragging } = vi.hoisted(() => ({
   startDragging: vi.fn(),
 }));
-const { environmentGateway, selectionGateway } = vi.hoisted(() => ({
-  environmentGateway: {
-    addCustomKey: vi.fn(),
-    list: vi.fn(),
-    listCustomSources: vi.fn(),
-  },
-  selectionGateway: { getLastOpenedProjectId: vi.fn() },
-}));
+const { environmentGateway, selectionGateway, agentUsageGateway } = vi.hoisted(
+  () => ({
+    environmentGateway: {
+      addCustomKey: vi.fn(),
+      list: vi.fn(),
+      listCustomSources: vi.fn(),
+    },
+    selectionGateway: { getLastOpenedProjectId: vi.fn() },
+    agentUsageGateway: {
+      listAccounts: vi.fn(),
+    },
+  }),
+);
 
 let unreadEventCallback: ((event: { payload: unknown }) => void) | null = null;
 
@@ -45,6 +50,7 @@ vi.mock('./services/quick-access.gateway', () => ({
     revision: 0,
   }),
   openAgentUnreadFromQuickAccess: vi.fn().mockResolvedValue(undefined),
+  openAgentUsageFromQuickAccess: vi.fn().mockResolvedValue(undefined),
   openEnvironmentSettingsFromQuickAccess: vi.fn().mockResolvedValue(undefined),
   openMainWindowFromQuickAccess: vi.fn().mockResolvedValue(undefined),
   setQuickAccessMode: vi.fn().mockResolvedValue(undefined),
@@ -57,6 +63,10 @@ vi.mock('@/features/environment-tracker', () => ({
 
 vi.mock('@/features/projects', () => ({
   projectSelectionGateway: selectionGateway,
+}));
+
+vi.mock('@/features/agent-usage/services/agent-usage.gateway', () => ({
+  agentUsageGateway,
 }));
 
 describe('QuickAccessApp', () => {
@@ -77,6 +87,7 @@ describe('QuickAccessApp', () => {
     environmentGateway.list.mockResolvedValue([]);
     environmentGateway.listCustomSources.mockResolvedValue([]);
     environmentGateway.addCustomKey.mockResolvedValue(undefined);
+    agentUsageGateway.listAccounts.mockResolvedValue([]);
   });
 
   describe('home', () => {
@@ -87,8 +98,7 @@ describe('QuickAccessApp', () => {
       expect(screen.getByText('QUICK ACTIONS')).toBeInTheDocument();
       expect(screen.getByText('+ Environment Key')).toBeInTheDocument();
       expect(screen.getByText('+ Quota Window')).toBeInTheDocument();
-      expect(screen.getByText('Add')).toBeInTheDocument();
-      expect(screen.getAllByText('Coming soon')).toHaveLength(1);
+      expect(screen.getAllByText('Add')).toHaveLength(2);
     });
 
     it('does not show the environment key form on home', () => {
@@ -245,6 +255,49 @@ describe('QuickAccessApp', () => {
           screen.queryByRole('button', { name: 'Change environment' }),
         ).not.toBeInTheDocument(),
       );
+    });
+  });
+
+  describe('quota window flow', () => {
+    it('transitions to quota window flow when clicked', async () => {
+      const user = userEvent.setup();
+      agentUsageGateway.listAccounts.mockResolvedValue([
+        {
+          id: 'acc-1',
+          platform: 'antigravity',
+          identifier: 'paul@gmail.com',
+          defaultTimezone: 'America/Los_Angeles',
+          availability: 'available',
+          quotas: [],
+          createdAt: '2024-01-01T00:00:00Z',
+          updatedAt: '2024-01-01T00:00:00Z',
+          signInMethod: 'google',
+          trackingMode: 'manual',
+          customPlatform: null,
+          nextResetAt: null,
+        },
+      ]);
+
+      render(<QuickAccessApp />);
+      await user.click(screen.getByRole('button', { name: /quota window/i }));
+
+      // Should show quota window form
+      expect(await screen.findByLabelText('Quota label')).toBeInTheDocument();
+    });
+
+    it('shows empty state when no Agent Usage accounts exist', async () => {
+      const user = userEvent.setup();
+      agentUsageGateway.listAccounts.mockResolvedValue([]);
+
+      render(<QuickAccessApp />);
+      await user.click(screen.getByRole('button', { name: /quota window/i }));
+
+      expect(
+        await screen.findByText('No Agent Usage accounts yet'),
+      ).toBeInTheDocument();
+      expect(
+        screen.getByRole('button', { name: 'Open Agent Usage' }),
+      ).toBeInTheDocument();
     });
   });
 

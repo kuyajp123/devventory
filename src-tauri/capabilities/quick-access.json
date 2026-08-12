@@ -5,6 +5,7 @@
   "windows": ["quick-panel"],
   "permissions": [
     "core:default",
-    "core:window:allow-start-dragging"
+    "core:window:allow-start-dragging",
+    "core:event:allow-emit"
   ]
 }

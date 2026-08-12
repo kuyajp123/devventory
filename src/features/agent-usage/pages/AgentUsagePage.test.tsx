@@ -27,6 +27,10 @@ vi.mock('../services/agent-usage.gateway', () => ({
   },
 }));
 
+vi.mock('@tauri-apps/api/event', () => ({
+  listen: vi.fn().mockResolvedValue(() => vi.fn()),
+}));
+
 describe('AgentUsagePage', () => {
   beforeEach(() => {
     vi.clearAllMocks();

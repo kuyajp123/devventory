@@ -7,7 +7,9 @@ import {
   toast,
 } from '@heroui/react';
 import { IconPlus, IconRobot } from '@tabler/icons-react';
+import { listen } from '@tauri-apps/api/event';
 import { useEffect, useMemo, useState } from 'react';
+import { useNavigate } from 'react-router';
 import { ICON_SIZE, ICON_STROKE } from '@/shared/constants/icon.constants';
 import { TauriCommandError } from '@/shared/infrastructure/tauri/tauri-error';
 import { ConfirmDialog } from '@/shared/ui';
@@ -54,6 +56,7 @@ interface InitialPlatform {
 }
 
 export function AgentUsagePage() {
+  const navigate = useNavigate();
   const accounts = useAgentAccountsQuery();
   const saveAccount = useSaveAgentAccountMutation();
   const deleteAccount = useDeleteAgentAccountMutation();
@@ -124,6 +127,41 @@ export function AgentUsagePage() {
       return () => clearTimeout(timer);
     }
   }, [accounts.data]);
+
+  // Refresh accounts when Quick Access saves a quota
+  useEffect(() => {
+    let isDisposed = false;
+    const unlistenPromise = listen('agent-usage://changed', () => {
+      if (!isDisposed) {
+        accounts.refetch();
+      }
+    });
+
+    return () => {
+      isDisposed = true;
+      void unlistenPromise
+        .then((unlisten) => unlisten())
+        .catch(() => undefined);
+    };
+  }, [accounts]);
+
+  // Handle navigation events from Quick Access
+  useEffect(() => {
+    let isDisposed = false;
+    const unlistenPromise = listen('agent-usage://navigate', (event) => {
+      if (!isDisposed) {
+        const payload = event.payload as { route: string };
+        navigate(payload.route);
+      }
+    });
+
+    return () => {
+      isDisposed = true;
+      void unlistenPromise
+        .then((unlisten) => unlisten())
+        .catch(() => undefined);
+    };
+  }, [navigate]);
   const visibleAccounts = useMemo(() => {
     const normalizedSearch = search.trim().toLocaleLowerCase();
     const filtered = accountItems

@@ -27,7 +27,7 @@ export function setQuickAccessPreventAutoHide(prevent: boolean): Promise<void> {
 }
 
 export function setQuickAccessMode(
-  mode: 'home' | 'environment-key',
+  mode: 'home' | 'environment-key' | 'quota-window',
 ): Promise<void> {
   return invokeCommand('set_quick_access_mode_command', { mode });
 }
@@ -41,4 +41,8 @@ export async function getAgentReminderUnreadState(): Promise<UnreadReminderState
 
 export function openAgentUnreadFromQuickAccess(): Promise<void> {
   return invokeCommand('open_agent_unread_from_quick_access');
+}
+
+export function openAgentUsageFromQuickAccess(): Promise<void> {
+  return invokeCommand('open_agent_usage_from_quick_access');
 }

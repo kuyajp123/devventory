@@ -166,3 +166,9 @@ pub(crate) async fn test_system_channel_directly(app: AppHandle) -> Result<Strin
 
     Ok("System notification sent directly".to_owned())
 }
+
+#[tauri::command]
+pub(crate) async fn emit_agent_usage_changed(app: AppHandle) -> Result<(), CommandError> {
+    app.emit("agent-usage://changed", ())
+        .map_err(|_| CommandError::operation_unavailable("Failed to emit agent usage changed event"))
+}

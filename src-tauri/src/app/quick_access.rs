@@ -14,6 +14,7 @@ const TRAY_DOUBLE_CLICK_SUPPRESSION_MS: u64 = 300;
 
 pub(crate) const QUICK_ACCESS_HOME_SIZE: (u32, u32) = (360, 260);
 pub(crate) const QUICK_ACCESS_TASK_SIZE: (u32, u32) = (360, 380);
+pub(crate) const QUICK_ACCESS_QUOTA_SIZE: (u32, u32) = (360, 520);
 
 #[derive(Debug)]
 pub(crate) struct QuickAccessState {
@@ -236,8 +237,9 @@ pub(crate) async fn set_quick_access_mode_internal(
         return Err("Quick Access window not found".to_string());
     };
 
-    let target_size = match mode {
+    let target_size = match mode.as_ref() {
         "environment-key" => QUICK_ACCESS_TASK_SIZE,
+        "quota-window" => QUICK_ACCESS_QUOTA_SIZE,
         _ => QUICK_ACCESS_HOME_SIZE,
     };
 
@@ -293,8 +295,9 @@ pub(crate) fn show_quick_access_exclusive(app: &AppHandle) {
         "home".to_string()
     };
 
-    let target_size = match mode.as_str() {
+    let target_size = match mode.as_ref() {
         "environment-key" => QUICK_ACCESS_TASK_SIZE,
+        "quota-window" => QUICK_ACCESS_QUOTA_SIZE,
         _ => QUICK_ACCESS_HOME_SIZE,
     };
 
@@ -429,6 +432,17 @@ pub(crate) async fn open_environment_settings_from_quick_access_command(
         serde_json::json!({ "environmentId": environment_id }),
     )
     .map_err(|_err| CommandError::operation_unavailable("Failed to open Environment Settings."))
+}
+
+#[tauri::command]
+pub(crate) async fn open_agent_usage_from_quick_access(
+    app: tauri::AppHandle,
+) -> Result<(), CommandError> {
+    show_main_exclusive(&app).map_err(|_err| {
+        CommandError::operation_unavailable("Failed to activate main application window.")
+    })?;
+    app.emit("agent-usage://navigate", serde_json::json!({ "route": "/agent-usage" }))
+        .map_err(|_err| CommandError::operation_unavailable("Failed to navigate to Agent Usage."))
 }
 
 #[tauri::command]

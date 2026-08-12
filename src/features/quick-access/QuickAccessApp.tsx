@@ -21,6 +21,7 @@ import {
   setQuickAccessMode,
 } from './services/quick-access.gateway';
 import { EnvironmentKeyFlow } from './EnvironmentKeyFlow';
+import { QuotaWindowFlow } from './QuotaWindowFlow';
 
 const UNREAD_PULSE_DURATION_MS = 5_000;
 const UNREAD_CHANGED_EVENT = 'agent-reminders:unread-changed';
@@ -30,7 +31,7 @@ const EMPTY_UNREAD_STATE: UnreadReminderState = {
   revision: 0,
 };
 
-type QuickAccessView = 'home' | 'environment-key';
+type QuickAccessView = 'home' | 'environment-key' | 'quota-window';
 
 export function QuickAccessApp() {
   const latestUnreadRevision = useRef(EMPTY_UNREAD_STATE.revision);
@@ -214,10 +215,12 @@ export function QuickAccessApp() {
               </span>
             </button>
 
-            {/* Action Card: Quota Window (placeholder) */}
-            <div
-              className="flex items-start justify-between rounded-lg border border-border p-3 opacity-80"
+            {/* Action Card: Quota Window */}
+            <button
+              className="flex w-full items-start justify-between rounded-lg border border-border p-3 text-left transition-colors hover:border-accent/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+              onClick={() => handleSetView('quota-window')}
               style={{ backgroundColor: 'var(--panel)' }}
+              type="button"
             >
               <div className="flex items-start gap-3">
                 <div className="mt-0.5 flex h-7 w-7 items-center justify-center rounded bg-accent/10 text-accent">
@@ -234,14 +237,16 @@ export function QuickAccessApp() {
                   </p>
                 </div>
               </div>
-              <span className="rounded bg-accent/5 px-1.5 py-0.5 font-mono text-[9px] font-medium text-muted-foreground">
-                Coming soon
+              <span className="rounded bg-accent/10 px-1.5 py-0.5 font-mono text-[9px] font-medium text-accent">
+                Add
               </span>
-            </div>
+            </button>
           </div>
         </main>
-      ) : (
+      ) : activeView === 'environment-key' ? (
         <EnvironmentKeyFlow onClose={() => handleSetView('home')} />
+      ) : (
+        <QuotaWindowFlow onClose={() => handleSetView('home')} />
       )}
     </div>
   );

@@ -3,7 +3,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   buildExactResetAt,
   buildRelativeResetAt,
+  format24HourTo12HourText,
+  formatCalendarDateToText,
+  formatResetSummary,
   parseExistingResetAt,
+  parseTextDate,
+  parseTextTime,
 } from './reset-at';
 
 // Fixed "now" so tests don't depend on wall-clock time
@@ -153,5 +158,117 @@ describe('parseExistingResetAt', () => {
     // 2026-08-14T01:05:00Z = 09:05 Asia/Manila
     const result = parseExistingResetAt('2026-08-14T01:05:00Z', MANILA);
     expect(result.time).toBe('09:05');
+  });
+});
+
+describe('parseTextDate', () => {
+  it('parses valid MM/DD/YYYY format', () => {
+    const result = parseTextDate('08/14/2026');
+    expect(result).toEqual(new CalendarDate(2026, 8, 14));
+  });
+
+  it('parses without leading zeros', () => {
+    const result = parseTextDate('8/14/2026');
+    expect(result).toEqual(new CalendarDate(2026, 8, 14));
+  });
+
+  it('returns null for invalid month', () => {
+    expect(parseTextDate('13/14/2026')).toBeNull();
+    expect(parseTextDate('00/14/2026')).toBeNull();
+  });
+
+  it('returns null for invalid day', () => {
+    expect(parseTextDate('08/32/2026')).toBeNull();
+    expect(parseTextDate('08/00/2026')).toBeNull();
+  });
+
+  it('returns null for invalid year', () => {
+    expect(parseTextDate('08/14/1899')).toBeNull();
+    expect(parseTextDate('08/14/2101')).toBeNull();
+  });
+
+  it('parses valid YYYY-MM-DD format', () => {
+    const result = parseTextDate('2026-08-14');
+    expect(result).toEqual(new CalendarDate(2026, 8, 14));
+  });
+
+  it('returns null for malformed format', () => {
+    expect(parseTextDate('2026-99-99')).toBeNull();
+    expect(parseTextDate('abcd')).toBeNull();
+    expect(parseTextDate('')).toBeNull();
+  });
+
+  it('returns null for leap day when not a leap year', () => {
+    expect(parseTextDate('02/29/2026')).toBeNull(); // 2026 is not a leap year
+  });
+
+  it('accepts leap day when it is a leap year', () => {
+    const result = parseTextDate('02/29/2028');
+    expect(result).toEqual(new CalendarDate(2028, 2, 29));
+  });
+});
+
+describe('parseTextTime', () => {
+  it('parses valid 12-hour AM/PM format', () => {
+    expect(parseTextTime('09:00 AM')).toBe('09:00');
+    expect(parseTextTime('09:00 PM')).toBe('21:00');
+  });
+
+  it('parses without leading zeros', () => {
+    expect(parseTextTime('9:00 AM')).toBe('09:00');
+    expect(parseTextTime('9:00 PM')).toBe('21:00');
+  });
+
+  it('defaults to AM when meridiem not specified', () => {
+    expect(parseTextTime('09:00')).toBe('09:00');
+    expect(parseTextTime('9:00')).toBe('09:00');
+  });
+
+  it('handles midnight correctly', () => {
+    expect(parseTextTime('12:00 AM')).toBe('00:00');
+  });
+
+  it('handles noon correctly', () => {
+    expect(parseTextTime('12:00 PM')).toBe('12:00');
+  });
+
+  it('returns null for invalid hour', () => {
+    expect(parseTextTime('13:00 AM')).toBeNull();
+    expect(parseTextTime('25:00 PM')).toBeNull();
+  });
+
+  it('returns null for invalid minute', () => {
+    expect(parseTextTime('09:60 AM')).toBeNull();
+    expect(parseTextTime('09:99 PM')).toBeNull();
+  });
+
+  it('returns null for malformed format', () => {
+    expect(parseTextTime('not-a-time')).toBeNull();
+    expect(parseTextTime('')).toBeNull();
+  });
+});
+
+describe('formatting helpers', () => {
+  it('formatCalendarDateToText formats CalendarDate to MM/DD/YYYY', () => {
+    expect(formatCalendarDateToText(new CalendarDate(2026, 8, 14))).toBe(
+      '08/14/2026',
+    );
+    expect(formatCalendarDateToText(new CalendarDate(2026, 1, 5))).toBe(
+      '01/05/2026',
+    );
+  });
+
+  it('format24HourTo12HourText formats HH:MM to 12-hour AM/PM string', () => {
+    expect(format24HourTo12HourText('09:00')).toBe('09:00 AM');
+    expect(format24HourTo12HourText('15:30')).toBe('03:30 PM');
+    expect(format24HourTo12HourText('00:00')).toBe('12:00 AM');
+    expect(format24HourTo12HourText('12:00')).toBe('12:00 PM');
+  });
+
+  it('formatResetSummary formats ISO resetAt with timezone', () => {
+    // 2026-08-14T01:00:00Z = 09:00 AM Asia/Manila (UTC+8)
+    const formatted = formatResetSummary('2026-08-14T01:00:00Z', MANILA);
+    expect(formatted).toContain('Aug 14, 2026');
+    expect(formatted).toContain('09:00 AM');
   });
 });
