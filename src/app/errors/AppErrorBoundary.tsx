@@ -1,5 +1,6 @@
 import { Alert, Button, Card } from '@heroui/react';
 import { Component, type PropsWithChildren } from 'react';
+import appIcon from '@/assets/devventory-app-icon.png';
 
 interface ErrorBoundaryState {
   hasError: boolean;
@@ -21,6 +22,14 @@ export class AppErrorBoundary extends Component<
         <main className="flex min-h-screen items-center justify-center bg-background px-6 text-foreground">
           <Card className="w-full max-w-lg">
             <Card.Content className="space-y-5">
+              <div className="flex items-center gap-3 mb-2">
+                <img
+                  src={appIcon}
+                  alt="Devventory"
+                  className="h-8 w-8 rounded"
+                />
+                <span className="font-mono text-sm font-bold">Devventory</span>
+              </div>
               <Alert role="alert" status="danger">
                 <Alert.Indicator />
                 <Alert.Content>

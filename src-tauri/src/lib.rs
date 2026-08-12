@@ -6,9 +6,9 @@ use tauri::Manager;
 
 use app::state::AppState;
 use features::agent_usage::commands::{
-    acknowledge_agent_reminders, delete_agent_account, delete_agent_quota, emit_agent_usage_changed,
-    list_agent_accounts, save_agent_account, save_agent_quota, test_normal_notification,
-    test_system_channel_directly,
+    acknowledge_agent_reminders, delete_agent_account, delete_agent_quota,
+    emit_agent_usage_changed, list_agent_accounts, save_agent_account, save_agent_quota,
+    test_normal_notification, test_system_channel_directly,
 };
 use features::app_health::commands::health_check;
 use features::asset_library::commands::{
@@ -55,9 +55,10 @@ use app::notification_session::{
 };
 use app::quick_access::{
     hide_quick_access_command, open_agent_usage_from_quick_access,
-    open_environment_settings_from_quick_access_command, open_main_window_from_quick_access_command,
-    set_quick_access_mode_command, set_quick_access_prevent_auto_hide_command, show_main_exclusive,
-    show_quick_access_exclusive, QuickAccessState, QUICK_ACCESS_WINDOW_LABEL, TRAY_SINGLE_CLICK_DELAY_MS,
+    open_environment_settings_from_quick_access_command,
+    open_main_window_from_quick_access_command, set_quick_access_mode_command,
+    set_quick_access_prevent_auto_hide_command, show_main_exclusive, show_quick_access_exclusive,
+    QuickAccessState, QUICK_ACCESS_WINDOW_LABEL, TRAY_SINGLE_CLICK_DELAY_MS,
 };
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]

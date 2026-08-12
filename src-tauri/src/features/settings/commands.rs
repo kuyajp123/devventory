@@ -87,9 +87,8 @@ pub(crate) async fn get_background_startup_preferences(
 
     #[cfg(not(debug_assertions))]
     {
-        use tauri_plugin_autostart::ManagerExt;
         if let Ok(autostart_mgr) = _app.autostart() {
-            if let Ok(actual_enabled) = autostart_mgr.is_enabled() {
+            if let Ok(actual_enabled) = autostart_mgr.is_enabled().await {
                 if domain.start_with_windows != actual_enabled {
                     tracing::info!(
                         saved = domain.start_with_windows,
@@ -125,42 +124,32 @@ pub(crate) async fn save_background_startup_preferences(
     if current.start_with_windows != target.start_with_windows {
         #[cfg(not(debug_assertions))]
         {
-            use tauri_plugin_autostart::ManagerExt;
-            let autostart_mgr = _app.autostart().map_err(|err| {
-                CommandError::operation_unavailable(format!(
-                    "Autostart plugin unavailable: {}",
-                    err
-                ))
+            let autostart_mgr = _app.autostart().map_err(|_err| {
+                CommandError::operation_unavailable("Autostart plugin unavailable")
             })?;
 
             if target.start_with_windows {
-                autostart_mgr.enable().map_err(|err| {
-                    CommandError::operation_unavailable(format!(
-                        "Failed to enable OS autostart: {}",
-                        err
-                    ))
+                autostart_mgr.enable().await.map_err(|_err| {
+                    CommandError::operation_unavailable("Failed to enable OS autostart")
                 })?;
 
                 if let Err(err) = repository
                     .save_background_startup_preferences(target.clone())
                     .await
                 {
-                    let _ = autostart_mgr.disable();
+                    let _ = autostart_mgr.disable().await;
                     return Err(err.into());
                 }
             } else {
-                autostart_mgr.disable().map_err(|err| {
-                    CommandError::operation_unavailable(format!(
-                        "Failed to disable OS autostart: {}",
-                        err
-                    ))
+                autostart_mgr.disable().await.map_err(|_err| {
+                    CommandError::operation_unavailable("Failed to disable OS autostart")
                 })?;
 
                 if let Err(err) = repository
                     .save_background_startup_preferences(target.clone())
                     .await
                 {
-                    let _ = autostart_mgr.enable();
+                    let _ = autostart_mgr.enable().await;
                     return Err(err.into());
                 }
             }

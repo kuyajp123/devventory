@@ -26,6 +26,7 @@ import { useAppUiStore } from '../stores/app-ui.store';
 import { WorkbenchContextSidebar } from './WorkbenchContextSidebar';
 import { WorkbenchStatusBar } from './WorkbenchStatusBar';
 import { WorkbenchUtilityPanel } from './WorkbenchUtilityPanel';
+import appIcon from '@/assets/devventory-app-icon.png';
 
 interface NavigationItem {
   icon: React.ComponentType<{
@@ -141,9 +142,7 @@ export function AppLayout() {
       >
         <div className="flex items-center gap-3 min-w-0">
           <div className="flex items-center gap-2 pr-2 font-mono text-xs font-bold tracking-tight text-foreground">
-            <span className="flex h-6 w-6 items-center justify-center rounded bg-accent text-slate-950 font-mono text-xs font-black">
-              DV
-            </span>
+            <img src={appIcon} alt="Devventory" className="h-6 w-6 rounded" />
             <span>Devventory</span>
           </div>
 

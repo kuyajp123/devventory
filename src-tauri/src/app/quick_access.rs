@@ -237,7 +237,7 @@ pub(crate) async fn set_quick_access_mode_internal(
         return Err("Quick Access window not found".to_string());
     };
 
-    let target_size = match mode.as_ref() {
+    let target_size = match mode {
         "environment-key" => QUICK_ACCESS_TASK_SIZE,
         "quota-window" => QUICK_ACCESS_QUOTA_SIZE,
         _ => QUICK_ACCESS_HOME_SIZE,
@@ -295,7 +295,7 @@ pub(crate) fn show_quick_access_exclusive(app: &AppHandle) {
         "home".to_string()
     };
 
-    let target_size = match mode.as_ref() {
+    let target_size = match mode.as_str() {
         "environment-key" => QUICK_ACCESS_TASK_SIZE,
         "quota-window" => QUICK_ACCESS_QUOTA_SIZE,
         _ => QUICK_ACCESS_HOME_SIZE,
@@ -441,8 +441,11 @@ pub(crate) async fn open_agent_usage_from_quick_access(
     show_main_exclusive(&app).map_err(|_err| {
         CommandError::operation_unavailable("Failed to activate main application window.")
     })?;
-    app.emit("agent-usage://navigate", serde_json::json!({ "route": "/agent-usage" }))
-        .map_err(|_err| CommandError::operation_unavailable("Failed to navigate to Agent Usage."))
+    app.emit(
+        "agent-usage://navigate",
+        serde_json::json!({ "route": "/agent-usage" }),
+    )
+    .map_err(|_err| CommandError::operation_unavailable("Failed to navigate to Agent Usage."))
 }
 
 #[tauri::command]

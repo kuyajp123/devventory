@@ -79,7 +79,7 @@ export function WorkbenchContextSidebar({
 
       <aside
         aria-label="Context sidebar"
-        className="fixed inset-y-0 left-12 z-40 flex w-60 flex-col border-r border-divider bg-sidebar shadow-2xl transition-all lg:static lg:z-auto lg:shadow-none"
+        className="fixed inset-y-0 left-12 z-40 flex w-60 flex-col border-r border-divider bg-surface shadow-2xl transition-all lg:static lg:z-auto lg:shadow-none"
       >
         <div className="flex h-10 items-center justify-between border-b border-divider px-3">
           <span className="font-mono text-[11px] font-semibold uppercase tracking-wider text-muted">

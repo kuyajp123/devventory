@@ -22,7 +22,7 @@ interface AppUiState {
 export const useAppUiStore = create<AppUiState>((set) => ({
   activeUtilityTab: 'watcher',
   isCommandPaletteOpen: false,
-  isContextSidebarCollapsed: false,
+  isContextSidebarCollapsed: true,
   isNavigationCollapsed: false,
   isUtilityPanelOpen: false,
   setActiveUtilityTab: (activeUtilityTab) => set({ activeUtilityTab }),
