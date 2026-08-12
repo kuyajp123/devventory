@@ -69,8 +69,8 @@ export function DevventoryMetricStrip({
                   </span>
                 </dt>
                 <dd
-                  className={`mt-1.5 font-mono text-base font-semibold tabular-nums text-foreground ${
-                    item.valueClassName ?? ''
+                  className={`mt-1.5 font-mono text-base font-semibold tabular-nums ${
+                    item.valueClassName || 'text-foreground'
                   }`}
                 >
                   {item.value}

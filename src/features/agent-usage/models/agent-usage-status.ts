@@ -50,3 +50,21 @@ export function remainingPercentProgressColor(
   if (remainingPercent < 30) return 'warning';
   return 'success';
 }
+
+export const PROGRESS_FILL_CLASSES: Record<
+  'danger' | 'default' | 'success' | 'warning',
+  string
+> = {
+  danger: 'bg-danger',
+  default: 'bg-muted',
+  success: 'bg-success',
+  warning: 'bg-warning',
+};
+
+export function remainingPercentProgressFillClass(
+  remainingPercent: number | null,
+  usageIsStale: boolean,
+): string {
+  const color = remainingPercentProgressColor(remainingPercent, usageIsStale);
+  return PROGRESS_FILL_CLASSES[color];
+}

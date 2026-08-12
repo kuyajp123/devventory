@@ -1,24 +1,46 @@
 import { describe, expect, it } from 'vitest';
-import { remainingPercentProgressColor } from './agent-usage-status';
+import {
+  PROGRESS_FILL_CLASSES,
+  remainingPercentProgressColor,
+  remainingPercentProgressFillClass,
+} from './agent-usage-status';
 
 describe('remainingPercentProgressColor', () => {
   it.each([
-    { color: 'danger', percentage: 0 },
-    { color: 'danger', percentage: 19 },
-    { color: 'warning', percentage: 20 },
-    { color: 'warning', percentage: 29 },
-    { color: 'success', percentage: 30 },
-    { color: 'success', percentage: 99 },
-    { color: 'success', percentage: 100 },
-  ] as const)(
-    'maps $percentage% remaining to $color',
-    ({ color, percentage }) => {
+    { color: 'danger', fillClass: 'bg-danger', percentage: 0 },
+    { color: 'danger', fillClass: 'bg-danger', percentage: 15 },
+    { color: 'danger', fillClass: 'bg-danger', percentage: 19.99 },
+    { color: 'warning', fillClass: 'bg-warning', percentage: 20 },
+    { color: 'warning', fillClass: 'bg-warning', percentage: 25 },
+    { color: 'warning', fillClass: 'bg-warning', percentage: 29.99 },
+    { color: 'success', fillClass: 'bg-success', percentage: 30 },
+    { color: 'success', fillClass: 'bg-success', percentage: 50 },
+    { color: 'success', fillClass: 'bg-success', percentage: 90 },
+    { color: 'success', fillClass: 'bg-success', percentage: 100 },
+  ])(
+    'maps $percentage% remaining to color $color and fill class $fillClass',
+    ({ color, fillClass, percentage }) => {
       expect(remainingPercentProgressColor(percentage, false)).toBe(color);
+      expect(remainingPercentProgressFillClass(percentage, false)).toBe(
+        fillClass,
+      );
     },
   );
 
-  it('uses a neutral progress color when usage is unknown or stale', () => {
+  it('uses neutral default progress color and bg-muted when usage is unknown or stale', () => {
     expect(remainingPercentProgressColor(null, false)).toBe('default');
-    expect(remainingPercentProgressColor(80, true)).toBe('default');
+    expect(remainingPercentProgressFillClass(null, false)).toBe('bg-muted');
+
+    expect(remainingPercentProgressColor(90, true)).toBe('default');
+    expect(remainingPercentProgressFillClass(90, true)).toBe('bg-muted');
+  });
+
+  it('provides a complete mapping in PROGRESS_FILL_CLASSES for all color tokens', () => {
+    expect(PROGRESS_FILL_CLASSES).toEqual({
+      danger: 'bg-danger',
+      default: 'bg-muted',
+      success: 'bg-success',
+      warning: 'bg-warning',
+    });
   });
 });

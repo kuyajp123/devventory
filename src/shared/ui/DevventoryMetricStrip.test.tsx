@@ -19,4 +19,27 @@ describe('DevventoryMetricStrip', () => {
     expect(screen.getByText('Environments')).toBeInTheDocument();
     expect(screen.getByText('3')).toBeInTheDocument();
   });
+
+  it('applies custom valueClassName without hardcoding text-foreground', () => {
+    renderWithProviders(
+      <DevventoryMetricStrip
+        items={[
+          { label: 'Exhausted', value: 6, valueClassName: 'text-danger' },
+          { label: 'Reset soon', value: 1, valueClassName: 'text-accent' },
+          { label: 'Default item', value: 9 },
+        ]}
+      />,
+    );
+
+    const exhaustedDd = screen.getByText('6');
+    expect(exhaustedDd).toHaveClass('text-danger');
+    expect(exhaustedDd).not.toHaveClass('text-foreground');
+
+    const resetSoonDd = screen.getByText('1');
+    expect(resetSoonDd).toHaveClass('text-accent');
+    expect(resetSoonDd).not.toHaveClass('text-foreground');
+
+    const defaultDd = screen.getByText('9');
+    expect(defaultDd).toHaveClass('text-foreground');
+  });
 });

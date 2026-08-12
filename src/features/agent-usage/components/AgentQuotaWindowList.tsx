@@ -6,7 +6,10 @@ import {
   type AgentAccount,
   type AgentQuota,
 } from '../models/agent-usage';
-import { remainingPercentProgressColor } from '../models/agent-usage-status';
+import {
+  remainingPercentProgressColor,
+  remainingPercentProgressFillClass,
+} from '../models/agent-usage-status';
 import { quotaUsageLabel } from '../models/agent-usage-view';
 import { AgentAvailabilityBadge } from './AgentAvailabilityBadge';
 
@@ -86,6 +89,15 @@ function QuotaWindow({
   quota: AgentQuota;
 }) {
   const hasKnownUsage = quota.remainingPercent != null && !quota.usageIsStale;
+  const progressColor = remainingPercentProgressColor(
+    quota.remainingPercent,
+    quota.usageIsStale,
+  );
+  const fillClass = remainingPercentProgressFillClass(
+    quota.remainingPercent,
+    quota.usageIsStale,
+  );
+
   return (
     <section className="grid gap-3 p-3 lg:grid-cols-[minmax(11rem,0.7fr)_minmax(15rem,1.4fr)_minmax(13rem,1fr)_auto] lg:items-center">
       <div className="min-w-0">
@@ -99,10 +111,7 @@ function QuotaWindow({
       <ProgressBar
         aria-label={`${quota.label} quota remaining for ${account.identifier}`}
         aria-valuetext={quotaUsageLabel(quota)}
-        color={remainingPercentProgressColor(
-          quota.remainingPercent,
-          quota.usageIsStale,
-        )}
+        color={progressColor}
         maxValue={100}
         minValue={0}
         size="sm"
@@ -110,7 +119,7 @@ function QuotaWindow({
       >
         <ProgressBar.Output className="sr-only" />
         <ProgressBar.Track>
-          <ProgressBar.Fill />
+          <ProgressBar.Fill className={fillClass} />
         </ProgressBar.Track>
       </ProgressBar>
 
