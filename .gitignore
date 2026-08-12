@@ -27,7 +27,7 @@ test-results
 *.sw?
 
 # Ignore everything inside .github
-.github/*
+# .github/*
 
 # Keep GitHub Actions workflows
 !.github/workflows/

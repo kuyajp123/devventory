@@ -1,0 +1,29 @@
+{
+  "version": 1,
+  "skills": {
+    "tauri-app-positioner": {
+      "source": "full-stack-skills/tauri-skills",
+      "sourceType": "github",
+      "skillPath": "skills/tauri-app-positioner/SKILL.md",
+      "computedHash": "8f1a181136cdef3986521254f81ce9bff5b6968ce6e049a7339b3fe3d7e7fa3e"
+    },
+    "tauri-app-system-tray": {
+      "source": "full-stack-skills/tauri-skills",
+      "sourceType": "github",
+      "skillPath": "skills/tauri-app-system-tray/SKILL.md",
+      "computedHash": "861132ec27c292f28d54be01358f578cb001d83a24d1048a070fad1e29a7694f"
+    },
+    "tauri-ipc": {
+      "source": "full-stack-skills/tauri-skills",
+      "sourceType": "github",
+      "skillPath": "skills/tauri-ipc/SKILL.md",
+      "computedHash": "694e8b68d28793ad053b0735879b7f1232f2ff91e6ee3472e457d9b0e29c739a"
+    },
+    "tauri-window": {
+      "source": "full-stack-skills/tauri-skills",
+      "sourceType": "github",
+      "skillPath": "skills/tauri-window/SKILL.md",
+      "computedHash": "923b975ffad599aff0bfb354282bd8040bb4fb02b82486b55a9e6a56e3c35471"
+    }
+  }
+}
