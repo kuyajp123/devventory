@@ -1,18 +1,9 @@
-import {
-  act,
-  fireEvent,
-  render,
-  screen,
-  waitFor,
-} from '@testing-library/react';
+import { act, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { QuickAccessApp } from './QuickAccessApp';
 import * as gateway from './services/quick-access.gateway';
 
-const { startDragging } = vi.hoisted(() => ({
-  startDragging: vi.fn(),
-}));
 const { environmentGateway, selectionGateway, agentUsageGateway } = vi.hoisted(
   () => ({
     environmentGateway: {
@@ -28,10 +19,6 @@ const { environmentGateway, selectionGateway, agentUsageGateway } = vi.hoisted(
 );
 
 let unreadEventCallback: ((event: { payload: unknown }) => void) | null = null;
-
-vi.mock('@tauri-apps/api/window', () => ({
-  getCurrentWindow: () => ({ startDragging }),
-}));
 
 vi.mock('@tauri-apps/api/event', () => ({
   listen: vi.fn((_eventName, callback) => {
@@ -77,7 +64,6 @@ describe('QuickAccessApp', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
-    startDragging.mockResolvedValue(undefined);
     vi.mocked(gateway.getAgentReminderUnreadState).mockResolvedValue({
       count: 0,
       pulse: false,
@@ -327,14 +313,11 @@ describe('QuickAccessApp', () => {
       expect(gateway.setQuickAccessMode).not.toHaveBeenCalledWith('home');
     });
 
-    it('initiates native window dragging when mouse down occurs on titlebar', async () => {
+    it('uses data-tauri-drag-region attribute for native window dragging', () => {
       render(<QuickAccessApp />);
 
-      fireEvent.mouseDown(screen.getByRole('banner'), { button: 0 });
-
-      await waitFor(() => {
-        expect(startDragging).toHaveBeenCalledOnce();
-      });
+      const header = screen.getByRole('banner');
+      expect(header).toHaveAttribute('data-tauri-drag-region');
     });
   });
 

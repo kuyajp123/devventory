@@ -6,7 +6,6 @@ import {
   IconX,
 } from '@tabler/icons-react';
 
-import { getCurrentWindow } from '@tauri-apps/api/window';
 import { listen } from '@tauri-apps/api/event';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
@@ -121,19 +120,12 @@ export function QuickAccessApp() {
     };
   }, [applyUnreadState]);
 
-  const handleStartDrag = useCallback((e: React.MouseEvent) => {
-    if (e.button === 0) {
-      void getCurrentWindow().startDragging();
-    }
-  }, []);
-
   return (
     <div className="flex h-screen w-screen flex-col overflow-hidden select-none border border-border bg-background text-foreground shadow-2xl">
       {/* Titlebar Header with Native Drag Region */}
       <header
         className="flex h-11 shrink-0 items-center justify-between border-b border-border px-3 cursor-move select-none"
         data-tauri-drag-region
-        onMouseDown={handleStartDrag}
         style={{ backgroundColor: 'var(--panel)' }}
       >
         <div className="flex items-center gap-2 pointer-events-none">
