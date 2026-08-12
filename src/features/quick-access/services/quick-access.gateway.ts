@@ -26,6 +26,12 @@ export function setQuickAccessPreventAutoHide(prevent: boolean): Promise<void> {
   });
 }
 
+export function setQuickAccessMode(
+  mode: 'home' | 'environment-key',
+): Promise<void> {
+  return invokeCommand('set_quick_access_mode_command', { mode });
+}
+
 export async function getAgentReminderUnreadState(): Promise<UnreadReminderState> {
   const response = await invokeCommand<unknown>(
     'get_agent_reminder_unread_state',

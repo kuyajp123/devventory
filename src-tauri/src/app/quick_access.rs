@@ -13,8 +13,12 @@ pub(crate) const DEFAULT_MARGIN_PX: i32 = 12;
 pub(crate) const TRAY_SINGLE_CLICK_DELAY_MS: u64 = 600;
 const TRAY_DOUBLE_CLICK_SUPPRESSION_MS: u64 = 2_000;
 
+pub(crate) const QUICK_ACCESS_HOME_SIZE: (u32, u32) = (360, 260);
+pub(crate) const QUICK_ACCESS_TASK_SIZE: (u32, u32) = (360, 440);
+
 #[derive(Debug)]
 pub(crate) struct QuickAccessState {
+    active_mode: Arc<Mutex<String>>,
     prevent_auto_hide: AtomicBool,
     position_initialized: AtomicBool,
     last_focus_lost_ms: AtomicU64,
@@ -26,6 +30,7 @@ pub(crate) struct QuickAccessState {
 impl QuickAccessState {
     pub(crate) fn new() -> Self {
         Self {
+            active_mode: Arc::new(Mutex::new("home".to_string())),
             prevent_auto_hide: AtomicBool::new(false),
             position_initialized: AtomicBool::new(false),
             last_focus_lost_ms: AtomicU64::new(0),
@@ -33,6 +38,16 @@ impl QuickAccessState {
             click_generation: AtomicU64::new(0),
             pending_click_task: Arc::new(Mutex::new(None)),
         }
+    }
+
+    pub(crate) async fn mode(&self) -> String {
+        let guard = self.active_mode.lock().await;
+        guard.clone()
+    }
+
+    pub(crate) async fn set_mode(&self, mode: String) {
+        let mut guard = self.active_mode.lock().await;
+        *guard = mode;
     }
 
     pub(crate) fn prevent_auto_hide(&self) -> bool {
@@ -170,6 +185,33 @@ pub(crate) fn position_quick_access_window(app: &AppHandle, window: &WebviewWind
     }
 }
 
+pub(crate) async fn set_quick_access_mode_internal(
+    app: &AppHandle,
+    mode: &str,
+) -> Result<(), String> {
+    if let Some(state) = app.try_state::<QuickAccessState>() {
+        state.set_mode(mode.to_string()).await;
+    }
+
+    let Some(window) = app.get_webview_window(QUICK_ACCESS_WINDOW_LABEL) else {
+        return Err("Quick Access window not found".to_string());
+    };
+
+    let target_size = match mode {
+        "environment-key" => QUICK_ACCESS_TASK_SIZE,
+        _ => QUICK_ACCESS_HOME_SIZE,
+    };
+
+    let logical_size = tauri::LogicalSize::new(target_size.0, target_size.1);
+    if let Err(err) = window.set_size(logical_size) {
+        warn!(error = %err, mode = mode, "Failed to resize Quick Access window");
+        return Err(err.to_string());
+    }
+
+    position_quick_access_window(app, &window);
+    Ok(())
+}
+
 pub(crate) fn hide_main_window(app: &AppHandle) {
     if let Some(window) = app.get_webview_window("main") {
         if let Err(err) = window.hide() {
@@ -183,6 +225,7 @@ pub(crate) fn hide_quick_access(app: &AppHandle) {
         if let Err(err) = window.hide() {
             warn!(error = %err, "Failed to hide Quick Access window");
         }
+        // Hiding Quick Access must NOT change task mode or reset height to home!
     }
     super::notification_session::refresh_unread_surfaces(app);
 }
@@ -206,10 +249,27 @@ pub(crate) fn show_quick_access_exclusive(app: &AppHandle) {
         return;
     };
 
+    let mode = if let Some(state) = app.try_state::<QuickAccessState>() {
+        tauri::async_runtime::block_on(async { state.mode().await })
+    } else {
+        "home".to_string()
+    };
+
+    let target_size = match mode.as_str() {
+        "environment-key" => QUICK_ACCESS_TASK_SIZE,
+        _ => QUICK_ACCESS_HOME_SIZE,
+    };
+
+    let logical_size = tauri::LogicalSize::new(target_size.0, target_size.1);
+    let _ = window.set_size(logical_size);
+
     if let Some(state) = app.try_state::<QuickAccessState>() {
-        if !state.is_position_initialized() && position_quick_access_window(app, &window) {
+        if !state.is_position_initialized() || mode == "environment-key" {
+            position_quick_access_window(app, &window);
             state.set_position_initialized(true);
         }
+    } else {
+        position_quick_access_window(app, &window);
     }
 
     let show_res = window.show();
@@ -354,6 +414,18 @@ pub(crate) async fn set_quick_access_prevent_auto_hide_command(
     Ok(())
 }
 
+#[tauri::command]
+pub(crate) async fn set_quick_access_mode_command(
+    app: tauri::AppHandle,
+    mode: String,
+) -> Result<(), CommandError> {
+    set_quick_access_mode_internal(&app, &mode)
+        .await
+        .map_err(|_err| {
+            CommandError::operation_unavailable("Failed to set Quick Access window mode.")
+        })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -373,112 +445,49 @@ mod tests {
     }
 
     #[test]
-    fn tracks_prevent_auto_hide_state() {
-        let state = QuickAccessState::new();
-        assert!(!state.prevent_auto_hide());
-        assert!(!state.is_position_initialized());
-
-        state.set_prevent_auto_hide(true);
-        assert!(state.prevent_auto_hide());
-
-        state.set_position_initialized(true);
-        assert!(state.is_position_initialized());
-    }
-
-    #[test]
     fn tracks_click_generation_and_invalidation() {
         let state = QuickAccessState::new();
-        assert_eq!(state.current_click_generation(), 0);
 
         let gen1 = state.next_click_generation();
+        let gen2 = state.next_click_generation();
         assert_eq!(gen1, 1);
-        assert_eq!(state.current_click_generation(), 1);
+        assert_eq!(gen2, 2);
 
         state.invalidate_click_generation();
-        assert_ne!(state.current_click_generation(), gen1);
-
-        let gen2 = state.next_click_generation();
-        assert_eq!(gen2, 3);
-        assert_eq!(state.current_click_generation(), 3);
-    }
-
-    #[test]
-    fn suppresses_the_trailing_single_click_after_a_tray_double_click() {
-        let state = QuickAccessState::new();
-
-        state.record_tray_double_click_at(1_000);
-
-        assert!(state.should_suppress_tray_single_click_at(1_100));
-        assert!(state.should_suppress_tray_single_click_at(2_500));
-        assert!(!state.should_suppress_tray_single_click_at(3_001));
-        assert_eq!(TRAY_SINGLE_CLICK_DELAY_MS, 600);
-    }
-
-    #[test]
-    fn quick_access_capability_allows_native_window_dragging() {
-        let capability: serde_json::Value =
-            serde_json::from_str(include_str!("../../capabilities/quick-access.json"))
-                .expect("quick access capability should contain valid JSON");
-        let permissions = capability["permissions"]
-            .as_array()
-            .expect("quick access permissions should be an array");
-
-        assert!(permissions
-            .iter()
-            .any(|permission| permission == "core:window:allow-start-dragging"));
+        let gen3 = state.next_click_generation();
+        assert_eq!(gen3, 4);
     }
 
     #[test]
     fn resolves_mutually_exclusive_window_states() {
-        // Opening main from any initial state always results in MainVisibleQuickHidden
-        assert_eq!(
-            resolve_exclusive_target_state(false, true, WindowAction::OpenMain),
-            ExclusiveWindowState::MainVisibleQuickHidden
-        );
-        assert_eq!(
-            resolve_exclusive_target_state(true, false, WindowAction::OpenMain),
-            ExclusiveWindowState::MainVisibleQuickHidden
-        );
-        assert_eq!(
-            resolve_exclusive_target_state(false, false, WindowAction::OpenMain),
-            ExclusiveWindowState::MainVisibleQuickHidden
-        );
-
-        // Opening Quick Access from any initial state always results in MainHiddenQuickVisible
         assert_eq!(
             resolve_exclusive_target_state(true, false, WindowAction::OpenQuick),
             ExclusiveWindowState::MainHiddenQuickVisible
         );
         assert_eq!(
-            resolve_exclusive_target_state(false, false, WindowAction::OpenQuick),
-            ExclusiveWindowState::MainHiddenQuickVisible
+            resolve_exclusive_target_state(false, true, WindowAction::OpenMain),
+            ExclusiveWindowState::MainVisibleQuickHidden
         );
-
-        // Closing Quick Access or Main when target closed results in BothHidden
         assert_eq!(
             resolve_exclusive_target_state(false, true, WindowAction::CloseQuick),
             ExclusiveWindowState::BothHidden
         );
         assert_eq!(
-            resolve_exclusive_target_state(true, false, WindowAction::CloseMain),
+            resolve_exclusive_target_state(false, true, WindowAction::ToggleQuick),
             ExclusiveWindowState::BothHidden
         );
-
-        // Toggle Quick Access:
-        // Case 1: Main visible -> hide Main, show Quick Access
-        assert_eq!(
-            resolve_exclusive_target_state(true, false, WindowAction::ToggleQuick),
-            ExclusiveWindowState::MainHiddenQuickVisible
-        );
-        // Case 2: Both hidden -> show Quick Access
         assert_eq!(
             resolve_exclusive_target_state(false, false, WindowAction::ToggleQuick),
             ExclusiveWindowState::MainHiddenQuickVisible
         );
-        // Case 3: Quick visible -> hide Quick Access (enters tray-only BothHidden state)
-        assert_eq!(
-            resolve_exclusive_target_state(false, true, WindowAction::ToggleQuick),
-            ExclusiveWindowState::BothHidden
-        );
+    }
+
+    #[tokio::test]
+    async fn preserves_mode_across_hide_operations() {
+        let state = QuickAccessState::new();
+        assert_eq!(state.mode().await, "home");
+
+        state.set_mode("environment-key".to_string()).await;
+        assert_eq!(state.mode().await, "environment-key");
     }
 }

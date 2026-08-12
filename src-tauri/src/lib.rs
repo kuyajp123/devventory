@@ -55,9 +55,10 @@ use app::notification_session::{
 };
 use app::quick_access::{
     hide_quick_access_command, open_environment_settings_from_quick_access_command,
-    open_main_window_from_quick_access_command, set_quick_access_prevent_auto_hide_command,
-    show_main_exclusive, show_quick_access_exclusive, toggle_quick_access_exclusive,
-    QuickAccessState, QUICK_ACCESS_WINDOW_LABEL, TRAY_SINGLE_CLICK_DELAY_MS,
+    open_main_window_from_quick_access_command, set_quick_access_mode_command,
+    set_quick_access_prevent_auto_hide_command, show_main_exclusive, show_quick_access_exclusive,
+    toggle_quick_access_exclusive, QuickAccessState, QUICK_ACCESS_WINDOW_LABEL,
+    TRAY_SINGLE_CLICK_DELAY_MS,
 };
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -334,6 +335,7 @@ pub fn run() {
             open_main_window_from_quick_access_command,
             open_environment_settings_from_quick_access_command,
             set_quick_access_prevent_auto_hide_command,
+            set_quick_access_mode_command,
             get_agent_reminder_unread_state,
             acknowledge_agent_unread_reminders,
             open_agent_unread_from_quick_access
