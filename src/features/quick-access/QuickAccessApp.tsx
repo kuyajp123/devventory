@@ -21,6 +21,7 @@ import {
 } from './services/quick-access.gateway';
 import { EnvironmentKeyFlow } from './EnvironmentKeyFlow';
 import { QuotaWindowFlow } from './QuotaWindowFlow';
+import appIcon from '@/assets/devventory-app-icon.png';
 
 const UNREAD_PULSE_DURATION_MS = 5_000;
 const UNREAD_CHANGED_EVENT = 'agent-reminders:unread-changed';
@@ -129,9 +130,7 @@ export function QuickAccessApp() {
         style={{ backgroundColor: 'var(--panel)' }}
       >
         <div className="flex items-center gap-2 pointer-events-none">
-          <div className="flex h-6 w-6 items-center justify-center rounded bg-accent/20 font-mono text-xs font-bold text-accent">
-            DV
-          </div>
+          <img src={appIcon} alt="Devventory" className="h-6 w-6 rounded" />
           <span className="font-mono text-xs font-semibold tracking-wide text-foreground">
             Devventory Quick Access
           </span>
