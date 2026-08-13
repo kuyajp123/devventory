@@ -29,6 +29,8 @@ cargo install cargo-audit --locked
 
 Run the same gate at any time with `npm run ci:local`. Git's `git push --no-verify` escape hatch bypasses the local hook and should be reserved for a deliberate emergency. The GitHub Actions workflow remains manual-only as an explicit hosted fallback and consumes no runner minutes unless a maintainer starts it from the Actions page.
 
+See the [Local CI and Protected Main Workflow Manual](docs/local-ci-protected-main-workflow-manual.md) for setup, feature-branch and pull-request procedures, VS Code behavior, troubleshooting, limitations, and the future automated-release handoff.
+
 ## Local persistence foundation
 
 Phase 2 initializes an SQLx SQLite pool in Tauri's application-local data directory. Embedded, versioned migrations create only foundation-owned settings and backup metadata tables. When an existing database has pending migrations, Devventory creates and verifies a consistent SQLite snapshot before applying them.
