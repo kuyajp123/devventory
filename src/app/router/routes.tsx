@@ -8,6 +8,7 @@ import {
   ProjectRequiredRoute,
 } from '@/features/projects';
 import {
+  AboutUpdatesSettingsSection,
   BackgroundStartupSettingsSection,
   NotificationsSettingsSection,
   SettingsPage,
@@ -55,6 +56,10 @@ export const appRoutes: RouteObject[] = [
           {
             path: 'background-startup',
             Component: BackgroundStartupSettingsSection,
+          },
+          {
+            path: 'about-updates',
+            Component: AboutUpdatesSettingsSection,
           },
         ],
       },

@@ -66,6 +66,7 @@ pub fn run() {
     shared::telemetry::initialize();
 
     tauri::Builder::default()
+        .plugin(tauri_plugin_process::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_single_instance::init(|app, argv, _cwd| {
             let is_autostart = argv.iter().any(|arg| arg == "--autostart");

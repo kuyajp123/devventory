@@ -1,5 +1,6 @@
 import appIcon from '@/assets/devventory-app-icon.png';
 import { AgentUsageReminderSync } from '@/features/agent-usage';
+import { AppUpdateIndicator, AppUpdateModal } from '@/features/app-updater';
 import { EnvironmentNavigationSync } from '@/features/environment-tracker';
 import { GlobalCommandPalette } from '@/features/global-search';
 import { ProjectSelector, useActiveProject } from '@/features/projects';
@@ -169,6 +170,8 @@ export function AppLayout() {
             </kbd>
           </button>
 
+          <AppUpdateIndicator />
+
           <Button
             aria-label={
               isContextSidebarCollapsed
@@ -291,6 +294,9 @@ export function AppLayout() {
 
       {/* Command Palette Overlay */}
       <GlobalCommandPalette />
+
+      {/* App Update Modal */}
+      <AppUpdateModal />
 
       {/* Global In-App Agent Usage Reminder Listener */}
       <AgentUsageReminderSync />

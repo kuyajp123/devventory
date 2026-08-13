@@ -1,4 +1,9 @@
-import { IconBell, IconDeviceDesktop, IconSettings } from '@tabler/icons-react';
+import {
+  IconBell,
+  IconDeviceDesktop,
+  IconInfoCircle,
+  IconSettings,
+} from '@tabler/icons-react';
 import { NavLink, Outlet } from 'react-router';
 import { ICON_SIZE, ICON_STROKE } from '@/shared/constants/icon.constants';
 
@@ -12,6 +17,11 @@ const settingsSections = [
     icon: IconDeviceDesktop,
     label: 'Background & Startup',
     to: '/settings/background-startup',
+  },
+  {
+    icon: IconInfoCircle,
+    label: 'About & Updates',
+    to: '/settings/about-updates',
   },
 ];
 

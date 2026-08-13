@@ -1,3 +1,4 @@
+export { AboutUpdatesSettingsSection } from './components/AboutUpdatesSettingsSection';
 export { BackgroundStartupSettingsSection } from './components/BackgroundStartupSettingsSection';
 export { NotificationsSettingsSection } from './components/NotificationsSettingsSection';
 export {
