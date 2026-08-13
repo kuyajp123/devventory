@@ -1,14 +1,9 @@
-name: CI
+name: Manual CI fallback
 
+# Normal quality checks run locally through scripts/local-ci.ps1 and the
+# repository pre-push hook. This workflow consumes GitHub-hosted runner minutes
+# only when a maintainer explicitly starts it from the Actions page.
 on:
-  push:
-    branches:
-      - main
-      - develop
-      - 'agent/**'
-      - 'feature/**'
-      - 'fix/**'
-  pull_request:
   workflow_dispatch:
 
 permissions:
@@ -58,29 +53,6 @@ jobs:
 
       - name: Build frontend
         run: npm run build
-
-      - name: Validate pull-request commits
-        if: github.event_name == 'pull_request'
-        shell: pwsh
-        run: |
-          $baseRef = "${{ github.event.pull_request.base.ref }}"
-          $pullRequestNumber = "${{ github.event.pull_request.number }}"
-          $headRef = "refs/remotes/origin/pull-request-head"
-
-          if ((git rev-parse --is-shallow-repository).Trim() -eq "true") {
-            git fetch --no-tags --unshallow origin
-          }
-
-          git fetch --no-tags origin "+refs/heads/${baseRef}:refs/remotes/origin/${baseRef}"
-          git fetch --no-tags origin "+refs/pull/${pullRequestNumber}/head:${headRef}"
-
-          $mergeBase = git merge-base "refs/remotes/origin/${baseRef}" "$headRef"
-
-          if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($mergeBase)) {
-            throw "Unable to determine the pull request merge base."
-          }
-
-          npm exec commitlint -- --from "$mergeBase" --to "$headRef" --verbose
 
   rust:
     name: Rust checks

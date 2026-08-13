@@ -10,8 +10,24 @@ Devventory is an offline-first Tauri desktop application for keeping a local inv
 - `npm run test:unit` runs the Vitest suite.
 - `npm run test:e2e` runs browser-compatible Playwright tests with mocked Tauri IPC.
 - `npm run build` type-checks and creates the frontend production bundle.
+- `npm run ci:local` runs the complete frontend, browser, Rust, and dependency-audit quality suite on the local Windows computer.
 
-Rust checks run from `src-tauri` with `cargo fmt --check`, `cargo clippy --all-targets --all-features -- -D warnings`, `cargo test`, and `cargo check`. CI also audits `Cargo.lock` with RustSec's `cargo-audit`.
+Rust checks run from `src-tauri` with `cargo fmt --check`, `cargo clippy --all-targets --all-features -- -D warnings`, `cargo test`, and `cargo check`. The local quality suite also audits `Cargo.lock` with RustSec's `cargo-audit`.
+
+## Local CI automation
+
+GitHub-hosted CI does not run automatically on pushes or pull requests. The repository's Git `pre-push` hook runs the complete local suite before every `git push`; a failing check exits nonzero and prevents the push. `npm ci` installs the tracked hooks automatically through the package `prepare` script.
+
+Prepare a new Windows checkout once with:
+
+```powershell
+npm ci
+npm exec playwright install chromium --only-shell
+rustup component add clippy rustfmt
+cargo install cargo-audit --locked
+```
+
+Run the same gate at any time with `npm run ci:local`. Git's `git push --no-verify` escape hatch bypasses the local hook and should be reserved for a deliberate emergency. The GitHub Actions workflow remains manual-only as an explicit hosted fallback and consumes no runner minutes unless a maintainer starts it from the Actions page.
 
 ## Local persistence foundation
 

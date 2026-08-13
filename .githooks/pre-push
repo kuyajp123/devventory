@@ -1,0 +1,3 @@
+#!/bin/sh
+echo "Running Devventory local CI before push..."
+npm.cmd run ci:local
