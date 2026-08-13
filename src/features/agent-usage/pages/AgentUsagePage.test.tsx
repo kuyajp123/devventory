@@ -503,6 +503,15 @@ describe('AgentUsagePage', () => {
 
   it('edits and removes quota windows without requiring usage percentage', async () => {
     const user = userEvent.setup();
+    const resetAt = new Date(
+      Date.now() + 7 * 24 * 60 * 60 * 1_000,
+    ).toISOString();
+    vi.mocked(agentUsageGateway.listAccounts).mockResolvedValue([
+      accountResponse({
+        nextResetAt: resetAt,
+        quotas: [quotaResponse({ resetAt })],
+      }),
+    ]);
     renderAgentUsagePage();
 
     await expandAccount(user);
