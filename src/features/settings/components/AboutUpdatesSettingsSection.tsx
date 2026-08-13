@@ -6,6 +6,7 @@ import {
   IconInfoCircle,
   IconLoader2,
 } from '@tabler/icons-react';
+import { useEffect } from 'react';
 import {
   useAppUpdaterStore,
   isAppUpdateBusy,
@@ -16,10 +17,22 @@ import { ICON_SIZE, ICON_STROKE } from '@/shared/constants/icon.constants';
 export function AboutUpdatesSettingsSection() {
   const status = useAppUpdaterStore((state) => state.status);
   const currentVersion = useAppUpdaterStore((state) => state.currentVersion);
+  const currentVersionLoadAttempted = useAppUpdaterStore(
+    (state) => state.currentVersionLoadAttempted,
+  );
   const availableUpdate = useAppUpdaterStore((state) => state.availableUpdate);
   const error = useAppUpdaterStore((state) => state.error);
   const lastCheckedAt = useAppUpdaterStore((state) => state.lastCheckedAt);
-  const { checkForUpdates, openUpdateModal } = useAppUpdaterActions();
+  const { checkForUpdates, openUpdateModal, loadCurrentVersion } =
+    useAppUpdaterActions();
+
+  // Load current version if not already available (independent of update check)
+  // Guard against infinite loops if getVersion() fails
+  useEffect(() => {
+    if (!currentVersion && !currentVersionLoadAttempted) {
+      void loadCurrentVersion();
+    }
+  }, [currentVersion, currentVersionLoadAttempted, loadCurrentVersion]);
 
   const isBusy = isAppUpdateBusy(status);
   const isChecking = status === 'checking';

@@ -15,6 +15,7 @@ export function useAppUpdaterActions() {
       const version = await appUpdaterGateway.getCurrentAppVersion();
       store.setCurrentVersion(version);
     } catch (err) {
+      store.setCurrentVersionLoadAttempted();
       store.setError('version', 'Failed to retrieve application version');
       console.error('Failed to load current version:', err);
     }
@@ -83,6 +84,8 @@ export function useAppUpdaterActions() {
       return;
     }
 
+    let errorStage: 'check' | 'download' | 'install' = 'check';
+
     try {
       const freshUpdate = await appUpdaterGateway.checkForAppUpdate();
 
@@ -103,6 +106,7 @@ export function useAppUpdaterActions() {
       }
 
       // Same version - proceed with download and install
+      errorStage = 'download';
       const onProgress = (event: AppUpdateDownloadEvent) => {
         store.recordDownloadEvent(event);
       };
@@ -148,14 +152,12 @@ export function useAppUpdaterActions() {
           ? err.message
           : 'An error occurred during the update process';
 
-      // Determine stage based on current status
+      // Use explicit stage, falling back to status-based inference for install stage
       const currentStatus = useAppUpdaterStore.getState().status;
       const stage =
-        currentStatus === 'downloading'
-          ? 'download'
-          : currentStatus === 'installing'
-            ? 'install'
-            : 'check';
+        errorStage === 'download' && currentStatus === 'installing'
+          ? 'install'
+          : errorStage;
 
       store.setError(stage, message);
       toast(message, { variant: 'danger' });

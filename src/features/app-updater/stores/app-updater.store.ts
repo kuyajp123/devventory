@@ -14,6 +14,7 @@ interface AppUpdaterState {
   beginStartupCheck: () => boolean;
   closeModal: () => boolean;
   currentVersion: string | null;
+  currentVersionLoadAttempted: boolean;
   download: AppUpdateDownloadProgress;
   error: AppUpdateError | null;
   isModalOpen: boolean;
@@ -23,6 +24,7 @@ interface AppUpdaterState {
   reset: () => void;
   setAvailableUpdate: (update: AvailableAppUpdate, openModal: boolean) => void;
   setCurrentVersion: (version: string) => void;
+  setCurrentVersionLoadAttempted: () => void;
   setError: (stage: AppUpdateErrorStage, message: string) => void;
   setInstalling: () => void;
   setRelaunching: () => void;
@@ -40,6 +42,7 @@ const emptyDownloadProgress: AppUpdateDownloadProgress = {
 const initialState = {
   availableUpdate: null,
   currentVersion: null,
+  currentVersionLoadAttempted: false,
   download: emptyDownloadProgress,
   error: null,
   isModalOpen: false,
@@ -50,6 +53,7 @@ const initialState = {
   AppUpdaterState,
   | 'availableUpdate'
   | 'currentVersion'
+  | 'currentVersionLoadAttempted'
   | 'download'
   | 'error'
   | 'isModalOpen'
@@ -162,6 +166,9 @@ export const useAppUpdaterStore = create<AppUpdaterState>((set, get) => ({
     }),
 
   setCurrentVersion: (currentVersion) => set({ currentVersion }),
+
+  setCurrentVersionLoadAttempted: () =>
+    set({ currentVersionLoadAttempted: true }),
 
   setError: (stage, message) =>
     set({

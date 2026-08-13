@@ -1,4 +1,5 @@
 import { useEffect, useRef } from 'react';
+import { isTauri } from '@tauri-apps/api/core';
 import { useAppUpdaterActions } from '../hooks/useAppUpdaterActions';
 import { useAppUpdaterStore } from '../stores/app-updater.store';
 
@@ -22,11 +23,7 @@ export function AppUpdaterSync() {
     if (startupCheckStarted) return;
 
     // Only run in packaged Tauri environment
-    if (
-      typeof window === 'undefined' ||
-      !(window as { __TAURI__?: unknown }).__TAURI__
-    )
-      return;
+    if (!isTauri()) return;
 
     hasInitialized.current = true;
 

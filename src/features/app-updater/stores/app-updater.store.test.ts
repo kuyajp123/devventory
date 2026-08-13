@@ -94,6 +94,19 @@ describe('app updater store', () => {
     });
   });
 
+  it('tracks version load attempt to prevent infinite retry loops', () => {
+    const store = useAppUpdaterStore.getState();
+    expect(store.currentVersionLoadAttempted).toBe(false);
+    store.setCurrentVersionLoadAttempted();
+    expect(useAppUpdaterStore.getState().currentVersionLoadAttempted).toBe(
+      true,
+    );
+    store.reset();
+    expect(useAppUpdaterStore.getState().currentVersionLoadAttempted).toBe(
+      false,
+    );
+  });
+
   it('marks a new session startup check exactly once', () => {
     expect(useAppUpdaterStore.getState().beginStartupCheck()).toBe(true);
     expect(useAppUpdaterStore.getState().beginStartupCheck()).toBe(false);
