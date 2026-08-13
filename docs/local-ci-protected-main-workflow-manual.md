@@ -40,7 +40,7 @@ flowchart LR
     A["Work on feature branch"] --> B["Commit"]
     B --> C["pre-commit and commit-msg hooks"]
     C --> D["git push"]
-    D --> E["Local pre-push CI: 11 checks"]
+    D --> E["Local pre-push CI: 12 checks"]
     E -->|"Failure"| F["Push canceled; fix and retry"]
     E -->|"Pass"| G["Feature branch reaches GitHub"]
     G --> H["Open pull request to main"]
@@ -136,13 +136,14 @@ The PowerShell runner executes these stages sequentially and stops at the first 
 2. `npm run format:check`
 3. `npm run typecheck`
 4. `npm run test:unit`
-5. `npm run test:e2e`
-6. `npm run build`
-7. `cargo fmt --check` from `src-tauri`
-8. `cargo clippy --all-targets --all-features -- -D warnings` from `src-tauri`
-9. `cargo test` from `src-tauri`
-10. `cargo check` from `src-tauri`
-11. `cargo audit` from `src-tauri`
+5. `npm run test:release-tools`
+6. `npm run test:e2e`
+7. `npm run build`
+8. `cargo fmt --check` from `src-tauri`
+9. `cargo clippy --all-targets --all-features -- -D warnings` from `src-tauri`
+10. `cargo test` from `src-tauri`
+11. `cargo check` from `src-tauri`
+12. `cargo audit` from `src-tauri`
 
 List the configured stages without running them:
 
@@ -152,7 +153,7 @@ npm run ci:local -- -ListOnly
 
 ### Parallel behavior
 
-The 11 top-level stages do not overlap. Individual tools still use internal parallelism:
+The 12 top-level stages do not overlap. Individual tools still use internal parallelism:
 
 - Vitest uses up to four workers locally and two when the `CI` environment variable is present.
 - Playwright has `fullyParallel: true` and uses the worker count selected for the local machine. The verified run used four workers.
@@ -186,7 +187,7 @@ Expected beginning of the output:
 ```text
 Running Devventory local CI before push...
 > devventory@0.1.0 ci:local
-[1/11] Frontend lint
+[1/12] Frontend lint
 ```
 
 When every check succeeds, Git continues the push. When one check returns a nonzero exit code:
@@ -504,7 +505,7 @@ Review the advisory list and exit code. The last verified snapshot reported 17 a
 
 Capture and report:
 
-1. the `[n/11]` stage name;
+1. the `[n/12]` stage name;
 2. the exact command and first relevant error;
 3. the final exit code;
 4. `git status --short`;
@@ -513,17 +514,13 @@ Capture and report:
 
 Never include signing-key contents, signing passwords, GitHub tokens, `.env` values, or other secrets in the report.
 
-## Future automated updater-release handoff
+## Automated updater-release handoff
 
-Release automation is intentionally not implemented by this manual. The existing updater master plan describes it as Phase 3, but that plan assumes automatic GitHub Actions quality gates. The plan predates the decision to avoid routine GitHub-hosted runner usage.
+Release automation is implemented separately from routine CI. Feature-branch pushes still use local pre-push checks and do not consume Actions minutes. The hosted release workflow runs only when `main` changes or a maintainer explicitly retries it with `workflow_dispatch`.
 
-Before implementation, choose and document one trusted execution model:
+The default hosted path and local fallback share one recovery-first release engine. See the [Dual-Path Release Workflow Manual](./dual-path-release-workflow-manual.md) for setup and operation.
 
-1. a local, explicit one-command release pipeline on the maintainer's Windows computer; or
-2. a self-hosted GitHub Actions runner controlled by the maintainer; or
-3. a deliberately authorized hosted release workflow that consumes GitHub Actions resources.
-
-Do not silently re-enable automatic GitHub-hosted push/PR workflows while implementing release automation.
+Routine push/PR CI remains local. Only the production release job deliberately uses GitHub-hosted resources after protected `main` changes.
 
 ### Release automation must eventually perform
 

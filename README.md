@@ -8,6 +8,7 @@ Devventory is an offline-first Tauri desktop application for keeping a local inv
 - `npm run tauri dev` starts the desktop application in development mode.
 - `npm run lint`, `npm run format:check`, and `npm run typecheck` run static checks.
 - `npm run test:unit` runs the Vitest suite.
+- `npm run test:release-tools` runs the recovery and release-automation tests.
 - `npm run test:e2e` runs browser-compatible Playwright tests with mocked Tauri IPC.
 - `npm run build` type-checks and creates the frontend production bundle.
 - `npm run ci:local` runs the complete frontend, browser, Rust, and dependency-audit quality suite on the local Windows computer.
@@ -29,7 +30,13 @@ cargo install cargo-audit --locked
 
 Run the same gate at any time with `npm run ci:local`. Git's `git push --no-verify` escape hatch bypasses the local hook and should be reserved for a deliberate emergency. The GitHub Actions workflow remains manual-only as an explicit hosted fallback and consumes no runner minutes unless a maintainer starts it from the Actions page.
 
-See the [Local CI and Protected Main Workflow Manual](docs/local-ci-protected-main-workflow-manual.md) for setup, feature-branch and pull-request procedures, VS Code behavior, troubleshooting, limitations, and the future automated-release handoff.
+See the [Local CI and Protected Main Workflow Manual](docs/local-ci-protected-main-workflow-manual.md) for setup, feature-branch and pull-request procedures, VS Code behavior, troubleshooting, and limitations.
+
+## Release automation
+
+Merges to protected `main` start the recovery-first hosted release workflow. `npm run release:local` is the interactive Windows fallback when GitHub Actions is unavailable. Both paths publish only the signed NSIS installer, its `.sig`, and `latest.json` to the public updater repository.
+
+See the [Dual-Path Release Workflow Manual](docs/dual-path-release-workflow-manual.md) for required secrets, commands, recovery states, stale-lock handling, and release verification.
 
 ## Local persistence foundation
 

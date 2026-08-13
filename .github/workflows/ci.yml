@@ -48,6 +48,9 @@ jobs:
       - name: Run unit tests
         run: npm run test:unit
 
+      - name: Run release tooling tests
+        run: npm run test:release-tools
+
       - name: Run browser tests
         run: npm run test:e2e
 

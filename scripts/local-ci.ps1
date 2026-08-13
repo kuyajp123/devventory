@@ -13,6 +13,7 @@ $checks = @(
   @{ Name = 'Frontend format'; Directory = $repositoryRoot; Command = 'npm.cmd'; Arguments = @('run', 'format:check') },
   @{ Name = 'TypeScript'; Directory = $repositoryRoot; Command = 'npm.cmd'; Arguments = @('run', 'typecheck') },
   @{ Name = 'Frontend unit tests'; Directory = $repositoryRoot; Command = 'npm.cmd'; Arguments = @('run', 'test:unit') },
+  @{ Name = 'Release tooling tests'; Directory = $repositoryRoot; Command = 'npm.cmd'; Arguments = @('run', 'test:release-tools') },
   @{ Name = 'Browser E2E tests'; Directory = $repositoryRoot; Command = 'npm.cmd'; Arguments = @('run', 'test:e2e') },
   @{ Name = 'Frontend production build'; Directory = $repositoryRoot; Command = 'npm.cmd'; Arguments = @('run', 'build') },
   @{ Name = 'Rust format'; Directory = $tauriRoot; Command = 'cargo'; Arguments = @('fmt', '--check') },
