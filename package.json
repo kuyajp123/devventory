@@ -17,6 +17,7 @@
     "format:check": "prettier . --check",
     "test:unit": "vitest run",
     "test:unit:watch": "vitest",
+    "test:hooks": "node --test scripts/git/*.test.mjs",
     "test:release-tools": "node --test scripts/release/*.test.mjs",
     "test:e2e": "playwright test",
     "preview": "vite preview",

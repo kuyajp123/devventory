@@ -1,3 +1,3 @@
 #!/bin/sh
-echo "Running Devventory local CI before push..."
-npm.cmd run ci:local
+# Git runs hooks for non-bare repositories from the working-tree root.
+exec node "scripts/git/pre-push.mjs"

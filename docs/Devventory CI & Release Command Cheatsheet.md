@@ -64,6 +64,14 @@ npm run test:release-tools
 - GitHub release logic
 - version handoff
 
+### Test only the Git hook policies
+
+```powershell
+npm run test:hooks
+```
+
+**Does:** Verifies normal pushes, deletion-only pushes, mixed pushes, and protected `main` deletion behavior without pushing anything.
+
 ---
 
 ## 🚀 Normal Git Push
@@ -85,7 +93,7 @@ PASS → push continues
 FAIL → push canceled
 ```
 
-You normally **do not need to run `npm run ci:local` manually before every push**, because `git push` automatically invokes it.
+You normally **do not need to run `npm run ci:local` manually before a code push**, because `git push` automatically invokes it. A push that only deletes remote feature branches skips local CI.
 
 ---
 
@@ -102,6 +110,14 @@ Future pushes can simply use:
 ```powershell
 git push
 ```
+
+### Delete a merged remote feature branch
+
+```powershell
+git push origin --delete feature/my-feature
+```
+
+**Does:** Deletes the remote feature branch without running local CI. Remote `main` deletion is blocked locally and remains protected by the GitHub ruleset.
 
 ---
 
@@ -584,8 +600,11 @@ git status --short
 # Complete local test
 npm run ci:local
 
-# Push + automatically run local CI
+# Push code + automatically run local CI
 git push
+
+# Delete a merged remote feature branch without local CI
+git push origin --delete feature/my-feature
 
 # Update local main
 git switch main
@@ -599,6 +618,9 @@ npm run release:local
 
 # Test release tooling only
 npm run test:release-tools
+
+# Test Git hook policies only
+npm run test:hooks
 ```
 
 ---

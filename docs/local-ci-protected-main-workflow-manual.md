@@ -40,7 +40,7 @@ flowchart LR
     A["Work on feature branch"] --> B["Commit"]
     B --> C["pre-commit and commit-msg hooks"]
     C --> D["git push"]
-    D --> E["Local pre-push CI: 12 checks"]
+    D --> E["Local pre-push CI: 13 checks"]
     E -->|"Failure"| F["Push canceled; fix and retry"]
     E -->|"Pass"| G["Feature branch reaches GitHub"]
     G --> H["Open pull request to main"]
@@ -48,7 +48,7 @@ flowchart LR
     I --> J["Pull updated main locally"]
 ```
 
-The local CI runs when `git push` invokes the repository's `pre-push` hook. It does not run merely because a branch was merged on the GitHub website.
+The local CI runs when `git push` creates or updates a remote ref. A push that only deletes non-`main` remote branches skips the suite because it uploads no source changes. It does not run merely because a branch was merged on the GitHub website.
 
 ## Files that own the setup
 
@@ -57,7 +57,8 @@ The local CI runs when `git push` invokes the repository's `pre-push` hook. It d
 | `.githooks/install.mjs`    | Configures this checkout to use the tracked `.githooks` directory. |
 | `.githooks/pre-commit`     | Runs `lint-staged` for staged files.                               |
 | `.githooks/commit-msg`     | Enforces Conventional Commit messages with commitlint.             |
-| `.githooks/pre-push`       | Starts the complete local CI suite before a push.                  |
+| `.githooks/pre-push`       | Delegates push-ref classification to the tracked Node handler.     |
+| `scripts/git/pre-push.mjs` | Skips deletion-only pushes, protects `main`, and starts local CI.  |
 | `scripts/local-ci.ps1`     | Defines the ordered, fail-fast local checks.                       |
 | `package.json`             | Exposes `npm run ci:local` and installs hooks through `prepare`.   |
 | `.github/workflows/ci.yml` | Provides the manual-only GitHub-hosted fallback.                   |
@@ -126,7 +127,7 @@ Run the complete suite manually at any time:
 npm run ci:local
 ```
 
-The same command runs automatically through `.githooks/pre-push` when Git has a ref to push.
+The same command runs automatically when a push creates or updates a remote ref. Deletion-only feature-branch pushes are intentionally excluded.
 
 ### Ordered checks
 
@@ -136,14 +137,15 @@ The PowerShell runner executes these stages sequentially and stops at the first 
 2. `npm run format:check`
 3. `npm run typecheck`
 4. `npm run test:unit`
-5. `npm run test:release-tools`
-6. `npm run test:e2e`
-7. `npm run build`
-8. `cargo fmt --check` from `src-tauri`
-9. `cargo clippy --all-targets --all-features -- -D warnings` from `src-tauri`
-10. `cargo test` from `src-tauri`
-11. `cargo check` from `src-tauri`
-12. `cargo audit` from `src-tauri`
+5. `npm run test:hooks`
+6. `npm run test:release-tools`
+7. `npm run test:e2e`
+8. `npm run build`
+9. `cargo fmt --check` from `src-tauri`
+10. `cargo clippy --all-targets --all-features -- -D warnings` from `src-tauri`
+11. `cargo test` from `src-tauri`
+12. `cargo check` from `src-tauri`
+13. `cargo audit` from `src-tauri`
 
 List the configured stages without running them:
 
@@ -153,7 +155,7 @@ npm run ci:local -- -ListOnly
 
 ### Parallel behavior
 
-The 12 top-level stages do not overlap. Individual tools still use internal parallelism:
+The 13 top-level stages do not overlap. Individual tools still use internal parallelism:
 
 - Vitest uses up to four workers locally and two when the `CI` environment variable is present.
 - Playwright has `fullyParallel: true` and uses the worker count selected for the local machine. The verified run used four workers.
@@ -326,6 +328,14 @@ git pull --ff-only
 
 `git pull` does not run the `pre-push` hook because it is not a push.
 
+### Deleting a merged remote feature branch
+
+```powershell
+git push origin --delete feature/<short-feature-name>
+```
+
+When every ref in the push is a non-`main` remote branch deletion, the hook prints `Skipping Devventory local CI: remote branch deletion only.` and allows Git to continue without running the suite. A mixed push containing any creation or update still runs the complete local CI. Deleting remote `main` is blocked locally; the GitHub ruleset remains the authoritative protection for operations performed outside this checkout.
+
 ### If `main` changes before the PR is merged
 
 Update the feature branch locally, resolve any integration issues, and push it again so the updated branch receives a fresh local CI run:
@@ -476,7 +486,7 @@ If needed:
 npm run prepare
 ```
 
-Also confirm that the branch has at least one commit/ref update to push. A branch that is already synchronized may simply report that everything is up to date.
+Also confirm that the branch has at least one commit/ref update to push. A branch that is already synchronized may simply report that everything is up to date. A deletion-only feature-branch push intentionally shows the skip message instead of the CI banner.
 
 ### Frontend dependencies are missing
 
