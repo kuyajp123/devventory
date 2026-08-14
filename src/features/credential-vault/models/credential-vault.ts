@@ -121,6 +121,18 @@ export const PREDEFINED_CREDENTIAL_SOURCES = [
     logoFileName: 'azure.png',
   },
   {
+    defaultName: 'Render',
+    description: 'Service tokens, API keys, and deployment credentials.',
+    key: 'render',
+    logoFileName: 'render.png',
+  },
+  {
+    defaultName: 'Railway',
+    description: 'Project tokens, service tokens, and deployment credentials.',
+    key: 'railway',
+    logoFileName: 'railway.png',
+  },
+  {
     defaultName: 'Cloudflare',
     description: 'API tokens, account identifiers, and zone credentials.',
     key: 'cloudflare',
