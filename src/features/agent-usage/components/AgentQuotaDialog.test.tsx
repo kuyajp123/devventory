@@ -10,6 +10,10 @@ function renderQuotaDialog(ui: React.ReactElement) {
   return renderWithProviders(<MemoryRouter>{ui}</MemoryRouter>);
 }
 
+const futureResetAt = new Date(
+  Date.now() + 2 * 24 * 60 * 60 * 1000,
+).toISOString();
+
 const sampleAccount: AgentAccount = {
   availability: 'available',
   createdAt: '2026-08-08T00:00:00Z',
@@ -17,7 +21,7 @@ const sampleAccount: AgentAccount = {
   defaultTimezone: 'Asia/Manila',
   id: 'acc-1',
   identifier: 'paul@example.com',
-  nextResetAt: '2026-08-16T11:53:00Z',
+  nextResetAt: futureResetAt,
   platform: 'codex',
   quotas: [],
   signInMethod: 'google',
@@ -36,7 +40,7 @@ const existingQuotaCustom6: AgentQuota = {
     resetDay: false,
     resetReached: true,
   },
-  resetAt: '2026-08-14T07:00:00Z',
+  resetAt: futureResetAt,
   resetReachedAt: null,
   resetTiming: 'future',
   status: 'available',
@@ -58,7 +62,7 @@ const existingQuotaResetDay: AgentQuota = {
     resetDay: true,
     resetReached: false,
   },
-  resetAt: '2026-08-14T07:00:00Z',
+  resetAt: futureResetAt,
   resetReachedAt: null,
   resetTiming: 'future',
   status: 'available',
