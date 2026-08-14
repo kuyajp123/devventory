@@ -91,25 +91,14 @@ test('fails closed and removes the probe when the password cannot unlock the key
   }
 });
 
-test('the local wrapper runs the signing preflight before the release engine', async () => {
+test('the PowerShell wrapper delegates password input to the paste-safe release entrypoint', async () => {
   const wrapper = await readFile(
     new URL('../release-local.ps1', import.meta.url),
     'utf8',
   );
-  const passwordAssignment = wrapper.indexOf(
-    '$env:TAURI_SIGNING_PRIVATE_KEY_PASSWORD =',
-  );
-  const preflight = wrapper.indexOf("'scripts/release/signing-preflight.mjs'");
-  const release = wrapper.indexOf("'scripts/release/cli.mjs' 'local'");
 
-  assert.ok(passwordAssignment >= 0, 'the password must be loaded securely');
-  assert.ok(
-    preflight > passwordAssignment,
-    'preflight must follow password input',
-  );
-  assert.ok(
-    release > preflight,
-    'release must not start before preflight passes',
-  );
+  assert.match(wrapper, /scripts\/release\/local-release\.mjs/);
+  assert.doesNotMatch(wrapper, /Read-Host/);
+  assert.doesNotMatch(wrapper, /SecureStringToBSTR/);
   assert.doesNotMatch(wrapper, /--password\b/);
 });
