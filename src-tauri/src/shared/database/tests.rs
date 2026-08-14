@@ -116,8 +116,18 @@ async fn initializes_the_foundation_schema_without_a_first_run_backup() {
     );
     assert!(table_exists(initialization.database.pool(), "validation_issues").await);
     assert!(table_exists(initialization.database.pool(), "project_validation_state").await);
-    assert!(table_exists(initialization.database.pool(), "custom_environment_sources").await);
-    assert!(table_exists(initialization.database.pool(), "custom_environment_keys").await);
+    assert!(!table_exists(initialization.database.pool(), "custom_environment_sources").await);
+    assert!(!table_exists(initialization.database.pool(), "custom_environment_keys").await);
+    assert!(table_exists(initialization.database.pool(), "credential_sources").await);
+    assert!(table_exists(initialization.database.pool(), "credentials").await);
+    assert!(table_exists(initialization.database.pool(), "credential_project_links").await);
+    assert!(
+        table_exists(
+            initialization.database.pool(),
+            "credential_environment_links"
+        )
+        .await
+    );
     assert!(table_exists(initialization.database.pool(), "search_history").await);
     assert!(observed_name_column_exists(initialization.database.pool()).await);
     assert!(
@@ -162,7 +172,7 @@ async fn snapshots_an_existing_database_before_applying_pending_migrations() {
     assert!(snapshot.file_path.starts_with(paths.backups_directory()));
     assert!(snapshot.file_path.is_file());
     assert_eq!(snapshot.from_version, 0);
-    assert_eq!(snapshot.to_version, 13);
+    assert_eq!(snapshot.to_version, 15);
 
     let backup_options = SqliteConnectOptions::new()
         .filename(&snapshot.file_path)
@@ -248,6 +258,26 @@ async fn upgrades_a_database_that_already_applied_the_immutable_asset_migration(
         .execute(initial.database.pool())
         .await
         .expect("validation state should be absent from the version 4 fixture");
+    query("DROP TABLE IF EXISTS credential_environment_links")
+        .execute(initial.database.pool())
+        .await
+        .expect("credential environment links should be absent from the version 4 fixture");
+    query("DROP TABLE IF EXISTS credential_project_links")
+        .execute(initial.database.pool())
+        .await
+        .expect("credential project links should be absent from the version 4 fixture");
+    query("DROP TABLE IF EXISTS credentials")
+        .execute(initial.database.pool())
+        .await
+        .expect("credentials should be absent from the version 4 fixture");
+    query("DROP TABLE IF EXISTS credential_source_projects")
+        .execute(initial.database.pool())
+        .await
+        .expect("credential source projects should be absent from the version 4 fixture");
+    query("DROP TABLE IF EXISTS credential_sources")
+        .execute(initial.database.pool())
+        .await
+        .expect("credential sources should be absent from the version 4 fixture");
     query("DROP TABLE IF EXISTS custom_environment_keys")
         .execute(initial.database.pool())
         .await
@@ -311,9 +341,9 @@ async fn upgrades_a_database_that_already_applied_the_immutable_asset_migration(
         .expect("latest migration version should load");
 
     assert_eq!(snapshot.from_version, 4);
-    assert_eq!(snapshot.to_version, 13);
+    assert_eq!(snapshot.to_version, 15);
     assert!(snapshot.file_path.is_file());
-    assert_eq!(latest_applied, 13);
+    assert_eq!(latest_applied, 15);
     assert!(index_exists(upgraded.database.pool(), "indexed_files_project_size_idx").await);
     assert!(
         index_exists(

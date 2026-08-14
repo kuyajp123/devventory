@@ -4,19 +4,26 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { QuickAccessApp } from './QuickAccessApp';
 import * as gateway from './services/quick-access.gateway';
 
-const { environmentGateway, selectionGateway, agentUsageGateway } = vi.hoisted(
-  () => ({
-    environmentGateway: {
-      addCustomKey: vi.fn(),
-      list: vi.fn(),
-      listCustomSources: vi.fn(),
-    },
-    selectionGateway: { getLastOpenedProjectId: vi.fn() },
-    agentUsageGateway: {
-      listAccounts: vi.fn(),
-    },
-  }),
-);
+const {
+  credentialGateway,
+  environmentGateway,
+  selectionGateway,
+  agentUsageGateway,
+} = vi.hoisted(() => ({
+  credentialGateway: {
+    createCredentials: vi.fn(),
+    listSources: vi.fn(),
+    status: vi.fn(),
+    unlock: vi.fn(),
+  },
+  environmentGateway: {
+    list: vi.fn(),
+  },
+  selectionGateway: { getLastOpenedProjectId: vi.fn() },
+  agentUsageGateway: {
+    listAccounts: vi.fn(),
+  },
+}));
 
 let unreadEventCallback: ((event: { payload: unknown }) => void) | null = null;
 
@@ -38,6 +45,7 @@ vi.mock('./services/quick-access.gateway', () => ({
   }),
   openAgentUnreadFromQuickAccess: vi.fn().mockResolvedValue(undefined),
   openAgentUsageFromQuickAccess: vi.fn().mockResolvedValue(undefined),
+  openCredentialVaultFromQuickAccess: vi.fn().mockResolvedValue(undefined),
   openEnvironmentSettingsFromQuickAccess: vi.fn().mockResolvedValue(undefined),
   openMainWindowFromQuickAccess: vi.fn().mockResolvedValue(undefined),
   setQuickAccessMode: vi.fn().mockResolvedValue(undefined),
@@ -46,6 +54,11 @@ vi.mock('./services/quick-access.gateway', () => ({
 
 vi.mock('@/features/environment-tracker', () => ({
   environmentTrackerGateway: environmentGateway,
+}));
+
+vi.mock('@/features/credential-vault', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/features/credential-vault')>()),
+  credentialVaultGateway: credentialGateway,
 }));
 
 vi.mock('@/features/projects', () => ({
@@ -59,7 +72,6 @@ vi.mock('@/features/agent-usage/services/agent-usage.gateway', () => ({
 describe('QuickAccessApp', () => {
   const projectId = '30af17bd-2dd6-4b89-a5e7-8517191815a7';
   const environmentId = 'd63f9ad6-0817-4b8b-ad88-ec19881295b8';
-  const environmentId2 = 'a1b2c3d4-1234-5678-abcd-ef0123456789';
   const sourceId = '4b2cc20c-9360-44b8-85d3-d5f089582d6e';
 
   beforeEach(() => {
@@ -71,8 +83,12 @@ describe('QuickAccessApp', () => {
     });
     selectionGateway.getLastOpenedProjectId.mockResolvedValue(null);
     environmentGateway.list.mockResolvedValue([]);
-    environmentGateway.listCustomSources.mockResolvedValue([]);
-    environmentGateway.addCustomKey.mockResolvedValue(undefined);
+    credentialGateway.listSources.mockResolvedValue([]);
+    credentialGateway.status.mockResolvedValue({
+      isConfigured: true,
+      isUnlocked: true,
+    });
+    credentialGateway.createCredentials.mockResolvedValue([]);
     agentUsageGateway.listAccounts.mockResolvedValue([]);
   });
 
@@ -90,9 +106,7 @@ describe('QuickAccessApp', () => {
     it('does not show the environment key form on home', () => {
       render(<QuickAccessApp />);
 
-      expect(
-        screen.queryByLabelText('Custom key name'),
-      ).not.toBeInTheDocument();
+      expect(screen.queryByLabelText('Credential key')).not.toBeInTheDocument();
       expect(
         screen.queryByLabelText('Choose environment'),
       ).not.toBeInTheDocument();
@@ -104,8 +118,8 @@ describe('QuickAccessApp', () => {
       environmentGateway.list.mockResolvedValue([
         { id: environmentId, name: 'Production' },
       ]);
-      environmentGateway.listCustomSources.mockResolvedValue([
-        { id: sourceId, name: 'Deployment secrets' },
+      credentialGateway.listSources.mockResolvedValue([
+        credentialSource(sourceId, projectId, 'Deployment secrets'),
       ]);
 
       render(<QuickAccessApp />);
@@ -115,7 +129,7 @@ describe('QuickAccessApp', () => {
 
       // Should advance to enter-key since Production has sources
       expect(
-        await screen.findByLabelText('Custom key name'),
+        await screen.findByLabelText('Credential key'),
       ).toBeInTheDocument();
     });
   });
@@ -127,8 +141,8 @@ describe('QuickAccessApp', () => {
       environmentGateway.list.mockResolvedValue([
         { id: environmentId, name: 'Production' },
       ]);
-      environmentGateway.listCustomSources.mockResolvedValue([
-        { id: sourceId, name: 'Deployment secrets' },
+      credentialGateway.listSources.mockResolvedValue([
+        credentialSource(sourceId, projectId, 'Deployment secrets'),
       ]);
 
       render(<QuickAccessApp />);
@@ -139,7 +153,7 @@ describe('QuickAccessApp', () => {
       // After loading, should auto-advance to enter-key (Production has sources)
       // Verify by checking for the key name input
       expect(
-        await screen.findByLabelText('Custom key name'),
+        await screen.findByLabelText('Credential key'),
       ).toBeInTheDocument();
     });
 
@@ -161,13 +175,13 @@ describe('QuickAccessApp', () => {
       ).toBeInTheDocument();
     });
 
-    it('shows no-custom-sources state with environment name', async () => {
+    it('shows the global no-sources state', async () => {
       const user = userEvent.setup();
       selectionGateway.getLastOpenedProjectId.mockResolvedValue(projectId);
       environmentGateway.list.mockResolvedValue([
         { id: environmentId, name: 'Production' },
       ]);
-      environmentGateway.listCustomSources.mockResolvedValue([]);
+      credentialGateway.listSources.mockResolvedValue([]);
 
       render(<QuickAccessApp />);
       await user.click(
@@ -175,72 +189,32 @@ describe('QuickAccessApp', () => {
       );
 
       expect(
-        await screen.findByText(/No custom sources in "Production"/),
+        await screen.findByText('No Credential Vault sources yet'),
       ).toBeInTheDocument();
       expect(
-        screen.getByRole('button', { name: 'Open Environment Settings' }),
+        screen.getByRole('button', { name: 'Open Credential Vault' }),
       ).toBeInTheDocument();
     });
 
-    it('opens Environment Settings when no custom sources', async () => {
+    it('opens Credential Vault when no sources exist', async () => {
       const user = userEvent.setup();
       selectionGateway.getLastOpenedProjectId.mockResolvedValue(projectId);
       environmentGateway.list.mockResolvedValue([
         { id: environmentId, name: 'Production' },
       ]);
-      environmentGateway.listCustomSources.mockResolvedValue([]);
+      credentialGateway.listSources.mockResolvedValue([]);
 
       render(<QuickAccessApp />);
       await user.click(
         screen.getByRole('button', { name: /environment key/i }),
       );
-      await screen.findByText(/No custom sources in "Production"/);
+      await screen.findByText('No Credential Vault sources yet');
 
       await user.click(
-        screen.getByRole('button', { name: 'Open Environment Settings' }),
+        screen.getByRole('button', { name: 'Open Credential Vault' }),
       );
 
-      expect(
-        gateway.openEnvironmentSettingsFromQuickAccess,
-      ).toHaveBeenCalledWith(environmentId);
-    });
-
-    it('allows changing environment from no-custom-sources state', async () => {
-      const user = userEvent.setup();
-      selectionGateway.getLastOpenedProjectId.mockResolvedValue(projectId);
-      environmentGateway.list.mockResolvedValue([
-        { id: environmentId, name: 'Production' },
-        { id: environmentId2, name: 'local' },
-      ]);
-      environmentGateway.listCustomSources.mockImplementation(
-        async (_projId, envId) => {
-          if (envId === environmentId2) {
-            return [{ id: sourceId, name: 'Local secrets' }];
-          }
-          return [];
-        },
-      );
-
-      render(<QuickAccessApp />);
-      await user.click(
-        screen.getByRole('button', { name: /environment key/i }),
-      );
-
-      // Production has no sources - verify the no-custom-sources state
-      await screen.findByText(/No custom sources in "Production"/);
-
-      // Change environment - should transition away from no-custom-sources
-      await user.click(
-        screen.getByRole('button', { name: 'Change environment' }),
-      );
-
-      // After changing environment, the "Change environment" button should disappear
-      // (we're now in choose-environment or enter-key stage)
-      await waitFor(() =>
-        expect(
-          screen.queryByRole('button', { name: 'Change environment' }),
-        ).not.toBeInTheDocument(),
-      );
+      expect(gateway.openCredentialVaultFromQuickAccess).toHaveBeenCalledOnce();
     });
   });
 
@@ -462,3 +436,17 @@ describe('QuickAccessApp', () => {
     });
   });
 });
+
+function credentialSource(id: string, projectId: string, name: string) {
+  return {
+    createdAt: '2026-08-13T00:00:00.000Z',
+    credentialCount: 0,
+    definitionKey: null,
+    description: null,
+    iconPath: null,
+    id,
+    name,
+    projectIds: [projectId],
+    updatedAt: '2026-08-13T00:00:00.000Z',
+  };
+}

@@ -1,20 +1,24 @@
-import { render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { EnvironmentKeyFlow } from './EnvironmentKeyFlow';
 
-const { environmentGateway, selectionGateway } = vi.hoisted(() => ({
-  environmentGateway: {
-    addCustomKey: vi.fn(),
-    list: vi.fn(),
-    listCustomSources: vi.fn(),
-  },
-  selectionGateway: { getLastOpenedProjectId: vi.fn() },
-}));
+const { credentialGateway, environmentGateway, selectionGateway } = vi.hoisted(
+  () => ({
+    credentialGateway: {
+      createCredentials: vi.fn(),
+      listSources: vi.fn(),
+      status: vi.fn(),
+      unlock: vi.fn(),
+    },
+    environmentGateway: { list: vi.fn() },
+    selectionGateway: { getLastOpenedProjectId: vi.fn() },
+  }),
+);
 
-vi.mock('./services/quick-access.gateway', () => ({
-  openEnvironmentSettingsFromQuickAccess: vi.fn().mockResolvedValue(undefined),
-  openMainWindowFromQuickAccess: vi.fn().mockResolvedValue(undefined),
+vi.mock('@/features/credential-vault', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/features/credential-vault')>()),
+  credentialVaultGateway: credentialGateway,
 }));
 
 vi.mock('@/features/environment-tracker', () => ({
@@ -25,149 +29,129 @@ vi.mock('@/features/projects', () => ({
   projectSelectionGateway: selectionGateway,
 }));
 
+vi.mock('./services/quick-access.gateway', () => ({
+  openCredentialVaultFromQuickAccess: vi.fn().mockResolvedValue(undefined),
+  openMainWindowFromQuickAccess: vi.fn().mockResolvedValue(undefined),
+}));
+
 describe('EnvironmentKeyFlow', () => {
-  const projectId = 'proj-123';
-  const envProductionId = 'env-prod';
-  const envLocalId = 'env-local';
-  const sourceSecretId = 'src-secrets';
-  const sourceTestId = 'src-test';
+  const projectId = '30af17bd-2dd6-4b89-a5e7-8517191815a7';
+  const environmentId = 'd63f9ad6-0817-4b8b-ad88-ec19881295b8';
+  const sourceId = '4b2cc20c-9360-44b8-85d3-d5f089582d6e';
 
   beforeEach(() => {
     vi.clearAllMocks();
     selectionGateway.getLastOpenedProjectId.mockResolvedValue(projectId);
     environmentGateway.list.mockResolvedValue([
-      { id: envProductionId, name: 'Production' },
-      { id: envLocalId, name: 'local' },
-    ]);
-    environmentGateway.listCustomSources.mockImplementation(
-      async (_proj, envId) => {
-        if (envId === envProductionId) {
-          return [{ id: sourceSecretId, name: 'deployment secrets' }];
-        }
-        if (envId === envLocalId) {
-          return [{ id: sourceTestId, name: 'test' }];
-        }
-        return [];
+      {
+        createdAt: '2026-08-13T00:00:00.000Z',
+        description: null,
+        id: environmentId,
+        name: 'Production',
+        projectId,
+        sortOrder: 0,
+        updatedAt: '2026-08-13T00:00:00.000Z',
       },
+    ]);
+    credentialGateway.listSources.mockResolvedValue([
+      {
+        createdAt: '2026-08-13T00:00:00.000Z',
+        credentialCount: 0,
+        definitionKey: 'github',
+        description: null,
+        iconPath: null,
+        id: sourceId,
+        name: 'Release credentials',
+        projectIds: [projectId],
+        updatedAt: '2026-08-13T00:00:00.000Z',
+      },
+    ]);
+    credentialGateway.status.mockResolvedValue({
+      isConfigured: true,
+      isUnlocked: true,
+    });
+    credentialGateway.unlock.mockResolvedValue({
+      isConfigured: true,
+      isUnlocked: true,
+    });
+    credentialGateway.createCredentials.mockResolvedValue([]);
+  });
+
+  it('stores the exact optional value with project and environment associations', async () => {
+    const user = userEvent.setup();
+    const exactValue = '  -----BEGIN KEY-----\r\nabc  \r\n-----END KEY-----\n';
+    render(<EnvironmentKeyFlow onClose={vi.fn()} />);
+
+    await user.type(
+      await screen.findByLabelText('Credential key'),
+      'SERVICE_KEY',
     );
-    environmentGateway.addCustomKey.mockResolvedValue(undefined);
+    fireEvent.paste(screen.getByLabelText('Credential value'), {
+      clipboardData: { getData: () => exactValue },
+    });
+    await user.click(screen.getByRole('button', { name: 'Add credential' }));
+
+    expect(credentialGateway.createCredentials).toHaveBeenCalledWith(sourceId, [
+      {
+        environmentLinks: [{ environmentId, projectId }],
+        key: 'SERVICE_KEY',
+        projectIds: [projectId],
+        value: exactValue,
+      },
+    ]);
+    expect(await screen.findByText('Credential key added')).toBeVisible();
   });
 
-  it('allows selecting and re-confirming the same environment without breaking downstream state', async () => {
+  it('requires and uses the master password when a value is added while locked', async () => {
     const user = userEvent.setup();
-    const onClose = vi.fn();
-
-    render(<EnvironmentKeyFlow onClose={onClose} />);
-
-    // Wait for initial load
-    expect(await screen.findByDisplayValue('')).toBeInTheDocument(); // Key name input placeholder exists
-
-    // Open environment dropdown
-    const envTrigger = screen.getByRole('button', {
-      name: 'Choose environment',
+    credentialGateway.status.mockResolvedValue({
+      isConfigured: true,
+      isUnlocked: false,
     });
-    await user.click(envTrigger);
+    render(<EnvironmentKeyFlow onClose={vi.fn()} />);
 
-    // Re-click 'Production' (already selected)
-    const prodOption = screen.getByRole('button', { name: 'Production' });
-    await user.click(prodOption);
+    await user.type(
+      await screen.findByLabelText('Vault master password'),
+      'master pass',
+    );
+    await user.click(screen.getByRole('button', { name: 'Unlock vault' }));
+    await waitFor(() =>
+      expect(credentialGateway.unlock).toHaveBeenCalledWith('master pass'),
+    );
+    await user.type(
+      await screen.findByLabelText('Credential key'),
+      'LOCKED_KEY',
+    );
+    await user.type(screen.getByLabelText('Credential value'), 'secret');
+    await user.click(screen.getByRole('button', { name: 'Add credential' }));
 
-    // Key input should remain visible and valid
-    expect(screen.getByLabelText('Custom key name')).toBeInTheDocument();
+    expect(credentialGateway.createCredentials).toHaveBeenCalledOnce();
   });
 
-  it('handles 1-option custom source selection and confirms workflow to key input', async () => {
-    const user = userEvent.setup();
-    const onClose = vi.fn();
-
-    render(<EnvironmentKeyFlow onClose={onClose} />);
-
-    // Switch to 'local' environment which only has 1 source ('test')
-    const envTrigger = await screen.findByRole('button', {
-      name: 'Choose environment',
+  it('does not expose credential sources or metadata creation while locked', async () => {
+    credentialGateway.status.mockResolvedValue({
+      isConfigured: true,
+      isUnlocked: false,
     });
-    await user.click(envTrigger);
-    await user.click(screen.getByRole('button', { name: 'local' }));
+    render(<EnvironmentKeyFlow onClose={vi.fn()} />);
 
-    // Open Custom Source picker
-    const sourceTrigger = await screen.findByRole('button', {
-      name: 'Choose custom source',
-    });
-    await user.click(sourceTrigger);
-
-    // Click the only available option ('test')
-    const testOption = screen.getByRole('button', { name: 'test' });
-    await user.click(testOption);
-
-    // Key name input should appear
-    expect(await screen.findByLabelText('Custom key name')).toBeInTheDocument();
+    expect(await screen.findByText('Credential Vault is locked')).toBeVisible();
+    expect(credentialGateway.listSources).not.toHaveBeenCalled();
+    expect(screen.queryByLabelText('Credential key')).not.toBeInTheDocument();
+    expect(credentialGateway.createCredentials).not.toHaveBeenCalled();
   });
 
-  it('resets custom source and key name when changing to a different environment', async () => {
+  it('calls onClose from the Back button', async () => {
     const user = userEvent.setup();
     const onClose = vi.fn();
-
     render(<EnvironmentKeyFlow onClose={onClose} />);
 
-    const keyInput = await screen.findByLabelText('Custom key name');
-    await user.type(keyInput, 'MY_KEY');
-
-    // Switch environment to 'local'
-    const envTrigger = screen.getByRole('button', {
-      name: 'Choose environment',
-    });
-    await user.click(envTrigger);
-    await user.click(screen.getByRole('button', { name: 'local' }));
-
-    // Key input should reset
-    await waitFor(() => {
-      expect(screen.getByLabelText('Custom key name')).toHaveValue('');
-    });
-  });
-
-  it('submits key name and shows success state, then resets key name on Add another', async () => {
-    const user = userEvent.setup();
-    const onClose = vi.fn();
-
-    render(<EnvironmentKeyFlow onClose={onClose} />);
-
-    const keyInput = await screen.findByLabelText('Custom key name');
-    await user.type(keyInput, 'SERVICE_ACCOUNT_JSON');
-
-    const addBtn = screen.getByRole('button', { name: /Add key/i });
-    await user.click(addBtn);
-
-    expect(environmentGateway.addCustomKey).toHaveBeenCalledWith({
-      environmentId: envProductionId,
-      name: 'SERVICE_ACCOUNT_JSON',
-      projectId,
-      sourceId: sourceSecretId,
-    });
-
-    expect(
-      await screen.findByText('Environment key added'),
-    ).toBeInTheDocument();
-    expect(screen.getByText('SERVICE_ACCOUNT_JSON')).toBeInTheDocument();
-
-    // Click 'Add another'
-    await user.click(screen.getByRole('button', { name: 'Add another' }));
-
-    // Key input returns empty
-    const newKeyInput = await screen.findByLabelText('Custom key name');
-    expect(newKeyInput).toHaveValue('');
-  });
-
-  it('calls onClose when Done or Back button is clicked', async () => {
-    const user = userEvent.setup();
-    const onClose = vi.fn();
-
-    render(<EnvironmentKeyFlow onClose={onClose} />);
-
-    const backBtn = await screen.findByRole('button', {
+    await screen.findByLabelText('Credential key');
+    const back = screen.getByRole('button', {
       name: 'Back to Quick Actions',
     });
-    await user.click(backBtn);
+    await user.click(back);
 
-    expect(onClose).toHaveBeenCalled();
+    expect(onClose).toHaveBeenCalledOnce();
   });
 });

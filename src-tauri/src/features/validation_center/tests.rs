@@ -5,10 +5,11 @@ use uuid::Uuid;
 
 use crate::{
     features::{
-        environment_tracker::{
-            CreateCustomEnvironmentSource, CreateEnvironment, EnvironmentService,
-            SqliteEnvironmentRepository,
+        credential_vault::{
+            CreateCredentials, CredentialEnvironmentLink, CredentialVaultService, NewCredential,
+            NewCredentialSource, SqliteCredentialVaultRepository,
         },
+        environment_tracker::{CreateEnvironment, EnvironmentService, SqliteEnvironmentRepository},
         file_inventory::{FileInventoryService, SqliteFileInventoryRepository},
         projects::{
             CreateProject, LocalProjectFilesystem, ProjectService, ProjectType,
@@ -707,16 +708,40 @@ async fn manifest_preview_and_export_include_only_empty_values_and_refresh_inven
 async fn custom_definitions_participate_in_required_and_duplicate_validation() {
     let context = TestContext::new("Custom validation project").await;
     let environment_id = context.environment("Production").await;
-    context
-        .environment_service
-        .create_custom_source(CreateCustomEnvironmentSource {
-            project_id: context.project_id,
-            environment_id,
+    let vault = CredentialVaultService::new(
+        SqliteCredentialVaultRepository::new(context.pool.clone()),
+        context.root.parent().expect("workspace root"),
+    );
+    vault
+        .unlock("validation integration test password".to_owned())
+        .await
+        .expect("vault setup");
+    let source = vault
+        .create_source(NewCredentialSource {
+            definition_key: None,
             name: "Deployment secrets".to_owned(),
-            key_names: vec!["API_TOKEN".to_owned()],
+            description: None,
+            project_ids: vec![context.project_id],
+            icon_source_path: None,
         })
         .await
         .expect("custom source");
+    vault
+        .create_credentials(CreateCredentials {
+            source_id: source.id,
+            credentials: vec![NewCredential {
+                key: "API_TOKEN".to_owned(),
+                notes: None,
+                value: None,
+                project_ids: vec![context.project_id],
+                environment_links: vec![CredentialEnvironmentLink {
+                    project_id: context.project_id,
+                    environment_id,
+                }],
+            }],
+        })
+        .await
+        .expect("custom credential");
     context
         .service
         .save_rule(SaveValidationRule {

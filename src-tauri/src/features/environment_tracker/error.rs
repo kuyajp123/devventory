@@ -7,10 +7,6 @@ use crate::shared::errors::command::CommandError;
 pub(crate) enum EnvironmentError {
     #[error("environment source is already configured")]
     DuplicateSource,
-    #[error("custom environment source name is already used")]
-    DuplicateCustomSource,
-    #[error("custom environment key is already assigned to this source")]
-    DuplicateCustomKey,
     #[error("environment name is already used")]
     DuplicateEnvironment,
     #[error("environment request is invalid")]
@@ -21,10 +17,6 @@ pub(crate) enum EnvironmentError {
     EnvironmentNotFound,
     #[error("environment source was not found")]
     SourceNotFound,
-    #[error("custom environment source was not found")]
-    CustomSourceNotFound,
-    #[error("custom environment key was not found")]
-    CustomKeyNotFound,
     #[error("environment source is unreadable")]
     SourceUnreadable,
     #[error("project file access failed")]
@@ -44,16 +36,8 @@ impl From<EnvironmentError> for CommandError {
             EnvironmentError::DuplicateSource => Self::environment_conflict(
                 "That configuration source is already assigned to this environment.",
             ),
-            EnvironmentError::DuplicateCustomSource => Self::environment_conflict(
-                "A custom source with that name already exists in the target environment.",
-            ),
-            EnvironmentError::DuplicateCustomKey => Self::environment_conflict(
-                "That custom key already exists in the selected custom source.",
-            ),
             EnvironmentError::EnvironmentNotFound
-            | EnvironmentError::SourceNotFound
-            | EnvironmentError::CustomSourceNotFound
-            | EnvironmentError::CustomKeyNotFound => {
+            | EnvironmentError::SourceNotFound => {
                 Self::not_found("The requested environment configuration could not be found.")
             }
             EnvironmentError::InvalidInput => {

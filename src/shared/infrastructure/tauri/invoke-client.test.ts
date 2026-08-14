@@ -63,4 +63,22 @@ describe('invokeCommand', () => {
       recoverable: true,
     });
   });
+
+  it('shows a clear safe message when the vault password is incorrect', async () => {
+    mockIPC(() => {
+      throw {
+        code: 'CREDENTIAL_VAULT_PASSWORD_INCORRECT',
+        message: 'untrusted backend details',
+        recoverable: true,
+      };
+    });
+
+    await expect(
+      invokeCommand('unlock_credential_vault'),
+    ).rejects.toMatchObject({
+      code: 'CREDENTIAL_VAULT_PASSWORD_INCORRECT',
+      message: 'The master password is incorrect. Try again.',
+      recoverable: true,
+    });
+  });
 });

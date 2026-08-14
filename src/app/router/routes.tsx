@@ -1,6 +1,7 @@
 import { Navigate, type RouteObject } from 'react-router';
 import { AgentUsagePage } from '@/features/agent-usage';
 import { AppHealthPage } from '@/features/app-health';
+import { CredentialVaultPage } from '@/features/credential-vault';
 import { EnvironmentTrackerPage } from '@/features/environment-tracker';
 import {
   LegacyProjectRedirect,
@@ -29,6 +30,7 @@ export const appRoutes: RouteObject[] = [
       { index: true, element: <Navigate replace to="/dashboard" /> },
       { path: 'dashboard', Component: LazyDashboardRoute },
       { path: 'agent-usage', Component: AgentUsagePage },
+      { path: 'credential-vault', Component: CredentialVaultPage },
       { path: 'search', Component: LazyGlobalSearchRoute },
       { path: 'projects/new', Component: ProjectOnboardingPage },
       {

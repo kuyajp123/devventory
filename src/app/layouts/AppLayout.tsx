@@ -1,7 +1,7 @@
 import appIcon from '@/assets/devventory-app-icon.png';
 import { AgentUsageReminderSync } from '@/features/agent-usage';
 import { AppUpdateIndicator, AppUpdateModal } from '@/features/app-updater';
-import { EnvironmentNavigationSync } from '@/features/environment-tracker';
+import { CredentialVaultNavigationSync } from '@/features/credential-vault';
 import { GlobalCommandPalette } from '@/features/global-search';
 import { ProjectSelector, useActiveProject } from '@/features/projects';
 import { IS_DIAGNOSTICS_ENABLED } from '@/shared/config/development.config';
@@ -16,6 +16,7 @@ import {
   IconLayoutDashboard,
   IconLayoutSidebarLeftCollapse,
   IconLayoutSidebarLeftExpand,
+  IconLock,
   IconMoon,
   IconRobot,
   IconSearch,
@@ -70,6 +71,12 @@ const primaryNavigationItems: NavigationItem[] = [
     label: 'Agent Usage',
     requiresProject: false,
     to: '/agent-usage',
+  },
+  {
+    icon: IconLock,
+    label: 'Credential Vault',
+    requiresProject: false,
+    to: '/credential-vault',
   },
 ];
 
@@ -132,6 +139,7 @@ export function AppLayout() {
     )?.label ?? 'Workbench';
   const isFixedWorkspaceRoute =
     location.pathname.startsWith('/environments') ||
+    location.pathname.startsWith('/credential-vault') ||
     location.pathname === '/search';
 
   return (
@@ -300,7 +308,7 @@ export function AppLayout() {
 
       {/* Global In-App Agent Usage Reminder Listener */}
       <AgentUsageReminderSync />
-      <EnvironmentNavigationSync />
+      <CredentialVaultNavigationSync />
     </div>
   );
 }

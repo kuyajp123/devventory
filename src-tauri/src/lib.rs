@@ -16,15 +16,19 @@ use features::asset_library::commands::{
     preview_asset_import, resolve_asset_variant_path, run_asset_action, update_asset_metadata,
     update_asset_variants,
 };
+use features::credential_vault::commands::{
+    create_credential_source, create_credentials, delete_credential, delete_credential_source,
+    get_credential_vault_status, list_credential_sources, list_credentials, lock_credential_vault,
+    remove_credential_secret, replace_credential_secret, reveal_credential_secret,
+    unlock_credential_vault, update_credential, update_credential_source,
+};
 use features::dashboard::commands::get_project_dashboard;
 use features::environment_tracker::commands::{
-    add_custom_environment_key, add_environment_source, copy_custom_environment_key,
-    copy_custom_environment_source, create_custom_environment_source, create_environment,
-    delete_custom_environment_key, delete_custom_environment_source, delete_environment,
-    delete_environment_source, get_environment_matrix, list_custom_environment_sources,
-    list_environment_source_candidates, list_environment_sources, list_environments,
-    refresh_environment, refresh_project_environment_sources, rename_custom_environment_source,
-    reorder_environment_sources, reorder_environments, update_environment,
+    add_environment_source, create_environment, delete_environment, delete_environment_source,
+    get_environment_matrix, list_custom_environment_sources, list_environment_source_candidates,
+    list_environment_sources, list_environments, refresh_environment,
+    refresh_project_environment_sources, reorder_environment_sources, reorder_environments,
+    update_environment,
 };
 use features::file_inventory::commands::{
     list_project_directory, list_project_files, rescan_project, rescan_watched_location,
@@ -55,10 +59,10 @@ use app::notification_session::{
 };
 use app::quick_access::{
     hide_quick_access_command, open_agent_usage_from_quick_access,
-    open_environment_settings_from_quick_access_command,
-    open_main_window_from_quick_access_command, set_quick_access_mode_command,
-    set_quick_access_prevent_auto_hide_command, show_main_exclusive, show_quick_access_exclusive,
-    QuickAccessState, QUICK_ACCESS_WINDOW_LABEL, TRAY_SINGLE_CLICK_DELAY_MS,
+    open_credential_vault_from_quick_access, open_main_window_from_quick_access_command,
+    set_quick_access_mode_command, set_quick_access_prevent_auto_hide_command, show_main_exclusive,
+    show_quick_access_exclusive, QuickAccessState, QUICK_ACCESS_WINDOW_LABEL,
+    TRAY_SINGLE_CLICK_DELAY_MS,
 };
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -291,6 +295,20 @@ pub fn run() {
             delete_search_history,
             clear_search_history,
             get_project_dashboard,
+            get_credential_vault_status,
+            unlock_credential_vault,
+            lock_credential_vault,
+            list_credential_sources,
+            create_credential_source,
+            update_credential_source,
+            delete_credential_source,
+            list_credentials,
+            create_credentials,
+            update_credential,
+            replace_credential_secret,
+            remove_credential_secret,
+            reveal_credential_secret,
+            delete_credential,
             get_last_opened_project_id,
             save_last_opened_project_id,
             get_notification_preferences,
@@ -321,13 +339,6 @@ pub fn run() {
             delete_environment_source,
             reorder_environment_sources,
             list_custom_environment_sources,
-            create_custom_environment_source,
-            rename_custom_environment_source,
-            delete_custom_environment_source,
-            add_custom_environment_key,
-            delete_custom_environment_key,
-            copy_custom_environment_key,
-            copy_custom_environment_source,
             list_environment_source_candidates,
             get_environment_matrix,
             refresh_environment,
@@ -344,7 +355,7 @@ pub fn run() {
             export_environment_manifest,
             hide_quick_access_command,
             open_agent_usage_from_quick_access,
-            open_environment_settings_from_quick_access_command,
+            open_credential_vault_from_quick_access,
             open_main_window_from_quick_access_command,
             set_quick_access_prevent_auto_hide_command,
             set_quick_access_mode_command,

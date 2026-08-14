@@ -12,12 +12,8 @@ export function openMainWindowFromQuickAccess(): Promise<void> {
   return invokeCommand('open_main_window_from_quick_access_command');
 }
 
-export function openEnvironmentSettingsFromQuickAccess(
-  environmentId: string,
-): Promise<void> {
-  return invokeCommand('open_environment_settings_from_quick_access_command', {
-    environmentId,
-  });
+export function openCredentialVaultFromQuickAccess(): Promise<void> {
+  return invokeCommand('open_credential_vault_from_quick_access');
 }
 
 export function setQuickAccessPreventAutoHide(prevent: boolean): Promise<void> {

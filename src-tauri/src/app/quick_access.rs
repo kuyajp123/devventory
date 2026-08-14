@@ -420,18 +420,14 @@ pub(crate) async fn open_main_window_from_quick_access_command(
 }
 
 #[tauri::command]
-pub(crate) async fn open_environment_settings_from_quick_access_command(
+pub(crate) async fn open_credential_vault_from_quick_access(
     app: tauri::AppHandle,
-    environment_id: String,
 ) -> Result<(), CommandError> {
     show_main_exclusive(&app).map_err(|_err| {
         CommandError::operation_unavailable("Failed to activate main application window.")
     })?;
-    app.emit(
-        "environment://open-custom-sources",
-        serde_json::json!({ "environmentId": environment_id }),
-    )
-    .map_err(|_err| CommandError::operation_unavailable("Failed to open Environment Settings."))
+    app.emit("credential-vault://navigate", serde_json::json!({}))
+        .map_err(|_err| CommandError::operation_unavailable("Failed to open Credential Vault."))
 }
 
 #[tauri::command]

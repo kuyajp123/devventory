@@ -77,10 +77,13 @@ impl SqliteDashboardRepository {
                       AND o.environment_id = e.id
                       AND o.is_commented = 0
                     UNION
-                    SELECT k.key_definition_id
-                    FROM custom_environment_keys k
-                    WHERE k.project_id = e.project_id
-                      AND k.environment_id = e.id
+                    SELECT l.key_definition_id
+                    FROM credential_project_links l
+                    JOIN credential_environment_links link
+                      ON link.credential_id = l.credential_id
+                     AND link.project_id = l.project_id
+                    WHERE l.project_id = e.project_id
+                      AND link.environment_id = e.id
                  )) AS present_keys,
                 (SELECT COUNT(*) FROM environment_sources s
                  WHERE s.project_id = e.project_id AND s.environment_id = e.id
