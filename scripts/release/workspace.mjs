@@ -5,13 +5,25 @@ import { join, resolve } from 'node:path';
 
 const VERSION_PATTERN = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/;
 
+function spawnInvocation(command, args, env) {
+  const isWindowsCommandScript =
+    process.platform === 'win32' && /\.(?:cmd|bat)$/i.test(command);
+  if (!isWindowsCommandScript) return { command, args };
+
+  return {
+    command: env.ComSpec ?? env.COMSPEC ?? process.env.ComSpec ?? 'cmd.exe',
+    args: ['/d', '/s', '/c', command, ...args],
+  };
+}
+
 export async function runProcess(
   command,
   args,
   { cwd, env = process.env, capture = false } = {},
 ) {
   return new Promise((resolvePromise, reject) => {
-    const child = spawn(command, args, {
+    const invocation = spawnInvocation(command, args, env);
+    const child = spawn(invocation.command, invocation.args, {
       cwd,
       env,
       shell: false,

@@ -4,7 +4,19 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
 
-import { applyReleaseVersion } from './workspace.mjs';
+import { applyReleaseVersion, runProcess } from './workspace.mjs';
+
+test(
+  'runs Windows command scripts used by the local release quality gate',
+  { skip: process.platform !== 'win32' },
+  async () => {
+    const result = await runProcess('npm.cmd', ['--version'], {
+      capture: true,
+    });
+
+    assert.match(result.stdout.trim(), /^\d+\.\d+\.\d+$/);
+  },
+);
 
 test('synchronizes all build version sources inside an isolated workspace', async () => {
   const root = await mkdtemp(join(tmpdir(), 'devventory-version-test-'));
