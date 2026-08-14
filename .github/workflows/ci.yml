@@ -48,6 +48,9 @@ jobs:
       - name: Run unit tests
         run: npm run test:unit
 
+      - name: Test Git hook policies
+        run: npm run test:hooks
+
       - name: Run release tooling tests
         run: npm run test:release-tools
 

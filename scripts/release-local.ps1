@@ -17,11 +17,17 @@ $passwordPointer = [IntPtr]::Zero
 try {
   $securePassword = Read-Host 'Updater signing key password' -AsSecureString
   $passwordPointer = [Runtime.InteropServices.Marshal]::SecureStringToBSTR($securePassword)
-  $env:TAURI_SIGNING_PRIVATE_KEY = (Resolve-Path -LiteralPath $SigningKeyPath).Path
+  $resolvedSigningKeyPath = (Resolve-Path -LiteralPath $SigningKeyPath).Path
+  $env:TAURI_SIGNING_PRIVATE_KEY = $resolvedSigningKeyPath
   $env:TAURI_SIGNING_PRIVATE_KEY_PASSWORD = [Runtime.InteropServices.Marshal]::PtrToStringBSTR($passwordPointer)
 
   Push-Location -LiteralPath $repositoryRoot
   try {
+    & node 'scripts/release/signing-preflight.mjs' $resolvedSigningKeyPath
+    if ($LASTEXITCODE -ne 0) {
+      throw 'Local release did not start because updater signing credential verification failed.'
+    }
+
     & node 'scripts/release/cli.mjs' 'local'
     if ($LASTEXITCODE -ne 0) {
       throw "Local release stopped with exit code $LASTEXITCODE."
