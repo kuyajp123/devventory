@@ -189,30 +189,6 @@ pub(crate) struct CreateEnvironment {
 }
 
 #[derive(Debug, Clone)]
-pub(crate) struct CreateCustomEnvironmentSource {
-    pub(crate) project_id: Uuid,
-    pub(crate) environment_id: Uuid,
-    pub(crate) name: String,
-    pub(crate) key_names: Vec<String>,
-}
-
-#[derive(Debug, Clone)]
-pub(crate) struct CopyCustomEnvironmentKey {
-    pub(crate) project_id: Uuid,
-    pub(crate) key_id: Uuid,
-    pub(crate) target_environment_id: Uuid,
-    pub(crate) target_source_id: Uuid,
-}
-
-#[derive(Debug, Clone)]
-pub(crate) struct CopyCustomEnvironmentSource {
-    pub(crate) project_id: Uuid,
-    pub(crate) source_id: Uuid,
-    pub(crate) target_environment_id: Uuid,
-    pub(crate) target_name: Option<String>,
-}
-
-#[derive(Debug, Clone)]
 pub(crate) struct UpdateEnvironment {
     pub(super) project_id: Uuid,
     pub(super) environment_id: Uuid,

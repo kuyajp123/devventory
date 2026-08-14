@@ -5,6 +5,7 @@ export { ProjectConfigurationPanel } from './components/ProjectConfigurationPane
 export { ScanSummaryCard } from './components/ScanSummaryCard';
 export { useActiveProject } from './hooks/use-active-project';
 export { useProjectQuery } from './hooks/use-projects';
+export { useProjectsQuery } from './hooks/use-projects';
 export { useDeleteProjectMutation } from './hooks/use-projects';
 export type { Project } from './models/project';
 export { DEFAULT_PROJECT_EXCLUSIONS } from './models/project';

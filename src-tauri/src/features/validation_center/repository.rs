@@ -247,13 +247,16 @@ impl SqliteValidationRepository {
                ON d.project_id = o.project_id AND d.id = o.key_definition_id
              WHERE o.project_id = ?
              UNION ALL
-             SELECT k.key_definition_id, k.environment_id, k.source_id, d.name AS key_name,
-                    k.name AS observed_name, d.normalized_name AS normalized_key,
+             SELECT l.key_definition_id, e.environment_id, c.source_id, d.name AS key_name,
+                    c.key_name AS observed_name, d.normalized_name AS normalized_key,
                     NULL AS line_number, 0 AS is_commented, 0 AS is_duplicate
-             FROM custom_environment_keys k
+             FROM credential_project_links l
+             JOIN credentials c ON c.id = l.credential_id
+             JOIN credential_environment_links e
+               ON e.credential_id = l.credential_id AND e.project_id = l.project_id
              JOIN environment_key_definitions d
-               ON d.project_id = k.project_id AND d.id = k.key_definition_id
-             WHERE k.project_id = ?
+               ON d.project_id = l.project_id AND d.id = l.key_definition_id
+             WHERE l.project_id = ?
              ORDER BY source_id ASC, line_number ASC",
         )
         .bind(project_id.to_string())

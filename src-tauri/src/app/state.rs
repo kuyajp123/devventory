@@ -9,6 +9,7 @@ use crate::features::asset_library::{AssetService, LocalAssetFilesystem, SqliteA
 use crate::features::backups::repository::{
     BackupRecordDraft, BackupRepository, SqliteBackupRepository,
 };
+use crate::features::credential_vault::{CredentialVaultService, SqliteCredentialVaultRepository};
 use crate::features::dashboard::{DashboardService, SqliteDashboardRepository};
 use crate::features::environment_tracker::{
     EnvironmentService, EnvironmentWorkspaceService, SqliteEnvironmentRepository,
@@ -37,6 +38,7 @@ pub(crate) struct AppState {
     asset_service: AssetService,
     environment_service: EnvironmentService,
     environment_workspace_service: EnvironmentWorkspaceService,
+    credential_vault_service: CredentialVaultService,
     validation_service: ValidationService,
     inventory_runtime: InventoryRuntime,
     agent_reminder_runtime: AgentReminderRuntime,
@@ -49,7 +51,8 @@ impl AppState {
         data_directory: impl AsRef<Path>,
         is_autostart_launch: bool,
     ) -> Result<Self, AppError> {
-        let initialization = initialize_database(&DatabasePaths::new(data_directory)).await?;
+        let data_directory = data_directory.as_ref().to_path_buf();
+        let initialization = initialize_database(&DatabasePaths::new(&data_directory)).await?;
 
         if let Some(snapshot) = initialization.pre_migration_backup {
             let file_name = snapshot
@@ -119,6 +122,10 @@ impl AppState {
             environment_service.clone(),
             validation_service.clone(),
         );
+        let credential_vault_service = CredentialVaultService::new(
+            SqliteCredentialVaultRepository::new(database.pool().clone()),
+            &data_directory,
+        );
 
         Ok(Self {
             database,
@@ -126,6 +133,7 @@ impl AppState {
             asset_service,
             environment_service,
             environment_workspace_service,
+            credential_vault_service,
             validation_service,
             file_inventory_service,
             inventory_runtime: InventoryRuntime::new(),
@@ -199,6 +207,10 @@ impl AppState {
 
     pub(crate) fn environment_workspace_service(&self) -> EnvironmentWorkspaceService {
         self.environment_workspace_service.clone()
+    }
+
+    pub(crate) fn credential_vault_service(&self) -> &CredentialVaultService {
+        &self.credential_vault_service
     }
 
     pub(crate) fn validation_service(&self) -> ValidationService {

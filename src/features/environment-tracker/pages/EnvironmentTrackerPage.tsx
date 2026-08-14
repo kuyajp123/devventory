@@ -85,7 +85,6 @@ export function EnvironmentTrackerPage() {
   const [editing, setEditing] = useState<'new' | null>(null);
   const [sourceEnvironment, setSourceEnvironment] =
     useState<Environment | null>(null);
-  const [sourceOrigin, setSourceOrigin] = useState<'file' | 'custom'>('file');
   const previousProjectId = useRef(projectId);
   const matrixContainerRef = useRef<HTMLDivElement>(null);
   const activeTab: EnvironmentWorkspaceTab = location.pathname.endsWith(
@@ -151,19 +150,6 @@ export function EnvironmentTrackerPage() {
       ? (selectedEnvironment?.id ?? '')
       : '',
   );
-  const requestedCustomEnvironmentId = (
-    location.state as { customEnvironmentSettingsId?: string } | null
-  )?.customEnvironmentSettingsId;
-  const requestedCustomEnvironment = requestedCustomEnvironmentId
-    ? environmentItems.find(
-        (environment) => environment.id === requestedCustomEnvironmentId,
-      )
-    : undefined;
-  const managedSourceEnvironment =
-    sourceEnvironment ?? requestedCustomEnvironment ?? null;
-  const managedSourceOrigin = requestedCustomEnvironment
-    ? 'custom'
-    : sourceOrigin;
   const selectedCustomSources = useCustomEnvironmentSourcesQuery(
     projectId ?? '',
     activeTab === 'environments' && view === 'inspect'
@@ -317,7 +303,10 @@ export function EnvironmentTrackerPage() {
   const activeMatrix = view === 'compare' ? compareMatrix : inspectMatrix;
   const matrixData =
     view === 'compare' ? compareMatrix.data : inspectMatrix.data;
-  const isLoading = environments.isPending || activeMatrix.isPending;
+  const isLoading =
+    environments.isPending ||
+    activeMatrix.isPending ||
+    (view === 'inspect' && selectedCustomSources.isPending);
 
   if (isHydrating) return <EnvironmentTrackerSkeleton />;
   if (!activeProject || !projectId) {
@@ -656,9 +645,7 @@ export function EnvironmentTrackerPage() {
                       onSelect={selectionStore.setSelection}
                       selectionStore={selectionStore}
                     />
-                  ) : selectedEnvironment &&
-                    selectedSources.data &&
-                    selectedCustomSources.data ? (
+                  ) : selectedEnvironment && selectedSources.data ? (
                     <InspectEnvironmentMatrix
                       environment={selectedEnvironment}
                       matrix={matrixData}
@@ -738,15 +725,10 @@ export function EnvironmentTrackerPage() {
         onSubmit={saveEnvironment}
       />
       <EnvironmentSourceManager
-        environment={managedSourceEnvironment}
-        environments={environmentItems}
-        initialSourceOrigin={managedSourceOrigin}
-        key={`${projectId}:${managedSourceEnvironment?.id ?? 'none'}:${managedSourceOrigin}`}
+        environment={sourceEnvironment}
+        key={`${projectId}:${sourceEnvironment?.id ?? 'none'}`}
         onEnvironmentChange={(updatedEnvironment) => {
           setSourceEnvironment(updatedEnvironment);
-          if (requestedCustomEnvironmentId) {
-            void navigate(location.pathname, { replace: true, state: null });
-          }
           selectionStore.setSelection((currentSelection) =>
             currentSelection?.environment.id === updatedEnvironment.id
               ? {
@@ -756,20 +738,14 @@ export function EnvironmentTrackerPage() {
               : currentSelection,
           );
         }}
+        onOpenCredentialVault={() => void navigate('/credential-vault')}
         onStartDeleteEnvironment={(environment) => {
           setSourceEnvironment(null);
-          if (requestedCustomEnvironmentId) {
-            void navigate(location.pathname, { replace: true, state: null });
-          }
           pendingDeletion.startPendingDeletion(environment);
         }}
         onOpenChange={(isOpen) => {
           if (!isOpen) {
             setSourceEnvironment(null);
-            setSourceOrigin('file');
-            if (requestedCustomEnvironmentId) {
-              void navigate(location.pathname, { replace: true, state: null });
-            }
           }
         }}
         projectId={projectId ?? ''}

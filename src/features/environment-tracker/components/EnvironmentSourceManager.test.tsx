@@ -42,27 +42,13 @@ describe('EnvironmentSourceManager', () => {
     vi.mocked(environmentTrackerGateway.delete).mockResolvedValue(undefined);
   });
 
-  it('counts configured file and custom sources together', async () => {
+  it('counts only file sources and points credential editing to Credential Vault', async () => {
     vi.mocked(environmentTrackerGateway.listSources)
       .mockReset()
       .mockResolvedValue([parseIssueSource]);
-    vi.mocked(environmentTrackerGateway.listCustomSources).mockResolvedValue([
-      {
-        createdAt: '2026-08-11T00:00:00.000Z',
-        environmentId: environment.id,
-        id: '39f15e31-e7b1-47db-b027-c8707551d1d2',
-        keys: [],
-        name: 'Credential registry',
-        projectId: environment.projectId,
-        sortOrder: 0,
-        updatedAt: '2026-08-11T00:00:00.000Z',
-      },
-    ]);
-
     renderWithProviders(
       <EnvironmentSourceManager
         environment={environment}
-        environments={[environment]}
         onOpenChange={vi.fn()}
         projectId={environment.projectId}
       />,
@@ -72,8 +58,11 @@ describe('EnvironmentSourceManager', () => {
       name: /Configured Sources/,
     });
     await waitFor(() =>
-      expect(configuredSources).toHaveTextContent(/Configured Sources\s*2/),
+      expect(configuredSources).toHaveTextContent(/Configured Sources\s*1/),
     );
+    expect(
+      screen.getByText('Credential sources are managed globally'),
+    ).toBeVisible();
   });
 
   it('renames the environment inline under General Settings', async () => {
@@ -87,7 +76,6 @@ describe('EnvironmentSourceManager', () => {
     renderWithProviders(
       <EnvironmentSourceManager
         environment={environment}
-        environments={[environment]}
         onEnvironmentChange={onEnvironmentChange}
         onOpenChange={vi.fn()}
         projectId={environment.projectId}
@@ -131,7 +119,6 @@ describe('EnvironmentSourceManager', () => {
     renderWithProviders(
       <EnvironmentSourceManager
         environment={environment}
-        environments={[environment]}
         onOpenChange={onOpenChange}
         onStartDeleteEnvironment={onStartDeleteEnvironment}
         projectId={environment.projectId}
@@ -161,7 +148,6 @@ describe('EnvironmentSourceManager', () => {
     renderWithProviders(
       <EnvironmentSourceManager
         environment={environment}
-        environments={[environment]}
         onOpenChange={vi.fn()}
         projectId={environment.projectId}
       />,
@@ -209,7 +195,6 @@ describe('EnvironmentSourceManager', () => {
     renderWithProviders(
       <EnvironmentSourceManager
         environment={environment}
-        environments={[environment]}
         onOpenChange={vi.fn()}
         projectId={environment.projectId}
       />,

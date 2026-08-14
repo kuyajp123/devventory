@@ -1,0 +1,128 @@
+import { render, screen, fireEvent } from '@testing-library/react';
+import { describe, expect, it, beforeEach, vi } from 'vitest';
+import { AboutUpdatesSettingsSection } from './AboutUpdatesSettingsSection';
+import { useAppUpdaterStore } from '@/features/app-updater/stores/app-updater.store';
+import { useAppUpdaterActions } from '@/features/app-updater/hooks/useAppUpdaterActions';
+
+vi.mock('@/features/app-updater/hooks/useAppUpdaterActions', () => ({
+  useAppUpdaterActions: vi.fn(),
+}));
+
+describe('AboutUpdatesSettingsSection', () => {
+  const checkForUpdatesMock = vi.fn();
+  const openUpdateModalMock = vi.fn();
+  const loadCurrentVersionMock = vi.fn();
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    useAppUpdaterStore.getState().reset();
+    vi.mocked(useAppUpdaterActions).mockReturnValue({
+      checkForUpdates: checkForUpdatesMock,
+      closeUpdateModal: vi.fn(),
+      installAvailableUpdate: vi.fn(),
+      loadCurrentVersion: loadCurrentVersionMock,
+      openUpdateModal: openUpdateModalMock,
+    });
+  });
+
+  it('displays current version when available', () => {
+    useAppUpdaterStore.getState().setCurrentVersion('0.1.0');
+    render(<AboutUpdatesSettingsSection />);
+    expect(screen.getByText('Version 0.1.0')).toBeInTheDocument();
+  });
+
+  it('displays placeholder when version is not yet loaded', () => {
+    useAppUpdaterStore.getState().reset();
+    render(<AboutUpdatesSettingsSection />);
+    expect(screen.getByText('Version —')).toBeInTheDocument();
+  });
+
+  it('loads current version if not already available', () => {
+    useAppUpdaterStore.getState().reset();
+    render(<AboutUpdatesSettingsSection />);
+    expect(loadCurrentVersionMock).toHaveBeenCalledOnce();
+  });
+
+  it('does not reload version after failed attempt', () => {
+    useAppUpdaterStore.getState().reset();
+    loadCurrentVersionMock.mockRejectedValue(new Error('Failed'));
+    render(<AboutUpdatesSettingsSection />);
+    // First attempt happens
+    expect(loadCurrentVersionMock).toHaveBeenCalledOnce();
+    // Mark load as attempted
+    useAppUpdaterStore.getState().setCurrentVersionLoadAttempted();
+    // Should not attempt again on re-render
+    loadCurrentVersionMock.mockClear();
+    render(<AboutUpdatesSettingsSection />);
+    expect(loadCurrentVersionMock).not.toHaveBeenCalled();
+  });
+
+  it('does not reload version if already available', () => {
+    useAppUpdaterStore.getState().setCurrentVersion('0.1.0');
+    render(<AboutUpdatesSettingsSection />);
+    expect(loadCurrentVersionMock).not.toHaveBeenCalled();
+  });
+
+  it('manual Check for Updates works', () => {
+    render(<AboutUpdatesSettingsSection />);
+    const checkButton = screen.getByRole('button', {
+      name: 'Check for Updates',
+    });
+    fireEvent.click(checkButton);
+    expect(checkForUpdatesMock).toHaveBeenCalledWith('manual');
+  });
+
+  it('displays up-to-date state', () => {
+    useAppUpdaterStore.getState().setUpToDate();
+    render(<AboutUpdatesSettingsSection />);
+    expect(screen.getByText("You're up to date.")).toBeInTheDocument();
+  });
+
+  it('displays available-update state', () => {
+    useAppUpdaterStore
+      .getState()
+      .setAvailableUpdate({ currentVersion: '0.1.0', version: '0.1.1' }, false);
+    render(<AboutUpdatesSettingsSection />);
+    expect(screen.getByText('Version 0.1.1 is available.')).toBeInTheDocument();
+  });
+
+  it('View Update opens update modal', () => {
+    useAppUpdaterStore
+      .getState()
+      .setAvailableUpdate({ currentVersion: '0.1.0', version: '0.1.1' }, false);
+    render(<AboutUpdatesSettingsSection />);
+    const viewUpdateButton = screen.getByRole('button', {
+      name: 'View Update',
+    });
+    fireEvent.click(viewUpdateButton);
+    expect(openUpdateModalMock).toHaveBeenCalledOnce();
+  });
+
+  it('displays error state', () => {
+    useAppUpdaterStore.getState().setError('check', 'Network error');
+    render(<AboutUpdatesSettingsSection />);
+    expect(screen.getByText('Unable to check for updates')).toBeInTheDocument();
+    expect(screen.getByText('Network error')).toBeInTheDocument();
+  });
+
+  it('last checked state renders safely', () => {
+    useAppUpdaterStore.getState().setUpToDate();
+    render(<AboutUpdatesSettingsSection />);
+    expect(screen.getByText(/Last checked/i)).toBeInTheDocument();
+  });
+
+  it('last checked handles null safely', () => {
+    useAppUpdaterStore.getState().reset();
+    render(<AboutUpdatesSettingsSection />);
+    expect(screen.queryByText(/Last checked/i)).not.toBeInTheDocument();
+  });
+
+  it('Check button is disabled while busy', () => {
+    useAppUpdaterStore.getState().beginCheck();
+    render(<AboutUpdatesSettingsSection />);
+    const checkButton = screen.getByRole('button', {
+      name: 'Checking...',
+    });
+    expect(checkButton).toBeDisabled();
+  });
+});

@@ -1,6 +1,7 @@
 import { Navigate, type RouteObject } from 'react-router';
 import { AgentUsagePage } from '@/features/agent-usage';
 import { AppHealthPage } from '@/features/app-health';
+import { CredentialVaultPage } from '@/features/credential-vault';
 import { EnvironmentTrackerPage } from '@/features/environment-tracker';
 import {
   LegacyProjectRedirect,
@@ -8,6 +9,7 @@ import {
   ProjectRequiredRoute,
 } from '@/features/projects';
 import {
+  AboutUpdatesSettingsSection,
   BackgroundStartupSettingsSection,
   NotificationsSettingsSection,
   SettingsPage,
@@ -28,6 +30,7 @@ export const appRoutes: RouteObject[] = [
       { index: true, element: <Navigate replace to="/dashboard" /> },
       { path: 'dashboard', Component: LazyDashboardRoute },
       { path: 'agent-usage', Component: AgentUsagePage },
+      { path: 'credential-vault', Component: CredentialVaultPage },
       { path: 'search', Component: LazyGlobalSearchRoute },
       { path: 'projects/new', Component: ProjectOnboardingPage },
       {
@@ -55,6 +58,10 @@ export const appRoutes: RouteObject[] = [
           {
             path: 'background-startup',
             Component: BackgroundStartupSettingsSection,
+          },
+          {
+            path: 'about-updates',
+            Component: AboutUpdatesSettingsSection,
           },
         ],
       },

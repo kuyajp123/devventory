@@ -19,6 +19,8 @@ const safeMessages: Record<string, string> = {
     'That Agent Usage account or quota window is already being tracked.',
   ASSET_CONFLICT:
     'A file already exists at that destination. Choose how to continue.',
+  CREDENTIAL_VAULT_PASSWORD_INCORRECT:
+    'The master password is incorrect. Try again.',
   ENVIRONMENT_CONFLICT: 'That environment configuration already exists.',
   FILESYSTEM_UNAVAILABLE:
     'The selected folder cannot be read. Check its permissions and try again.',

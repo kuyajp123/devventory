@@ -5,7 +5,6 @@ use uuid::Uuid;
 
 use super::error::EnvironmentError;
 use super::model::{
-    CopyCustomEnvironmentKey, CopyCustomEnvironmentSource, CreateCustomEnvironmentSource,
     CustomEnvironmentKey, CustomEnvironmentSource, Environment, EnvironmentMatrixCell,
     EnvironmentMatrixCellState, EnvironmentMatrixCellValidation, EnvironmentMatrixPage,
     EnvironmentMatrixQuery, EnvironmentMatrixRow, EnvironmentMatrixRuleKey,
@@ -295,264 +294,32 @@ impl SqliteEnvironmentRepository {
         environment_id: Uuid,
     ) -> Result<Vec<CustomEnvironmentSource>, EnvironmentError> {
         let source_rows = sqlx::query_as::<_, CustomSourceRow>(
-            "SELECT id, project_id, environment_id, name, sort_order, created_at, updated_at
-             FROM custom_environment_sources
-             WHERE project_id = ? AND environment_id = ?
-             ORDER BY sort_order ASC, lower(name) ASC, id ASC",
+            "SELECT DISTINCT s.id, l.project_id, l.environment_id, s.name, s.sort_order,
+                    s.created_at, s.updated_at
+             FROM credential_sources s
+             JOIN credentials c ON c.source_id = s.id
+             JOIN credential_environment_links l ON l.credential_id = c.id
+             WHERE l.project_id = ? AND l.environment_id = ?
+             ORDER BY s.sort_order ASC, lower(s.name) ASC, s.id ASC",
         )
         .bind(project_id.to_string())
         .bind(environment_id.to_string())
         .fetch_all(&self.pool)
         .await?;
         let key_rows = sqlx::query_as::<_, CustomKeyRow>(
-            "SELECT id, project_id, environment_id, source_id, name, normalized_name,
-                    created_at, updated_at
-             FROM custom_environment_keys
-             WHERE project_id = ? AND environment_id = ?
-             ORDER BY lower(name) ASC, id ASC",
+            "SELECT c.id, l.project_id, l.environment_id, c.source_id,
+                    c.key_name AS name, c.normalized_key_name AS normalized_name,
+                    c.created_at, c.updated_at
+             FROM credentials c
+             JOIN credential_environment_links l ON l.credential_id = c.id
+             WHERE l.project_id = ? AND l.environment_id = ?
+             ORDER BY lower(c.key_name) ASC, c.id ASC",
         )
         .bind(project_id.to_string())
         .bind(environment_id.to_string())
         .fetch_all(&self.pool)
         .await?;
         assemble_custom_sources(source_rows, key_rows)
-    }
-
-    pub(crate) async fn custom_source(
-        &self,
-        project_id: Uuid,
-        environment_id: Uuid,
-        source_id: Uuid,
-    ) -> Result<CustomEnvironmentSource, EnvironmentError> {
-        self.list_custom_sources(project_id, environment_id)
-            .await?
-            .into_iter()
-            .find(|source| source.id == source_id)
-            .ok_or(EnvironmentError::CustomSourceNotFound)
-    }
-
-    pub(crate) async fn create_custom_source(
-        &self,
-        input: CreateCustomEnvironmentSource,
-    ) -> Result<CustomEnvironmentSource, EnvironmentError> {
-        self.environment(input.project_id, input.environment_id)
-            .await?;
-        let source_id = Uuid::new_v4();
-        let mut transaction = self.pool.begin().await?;
-        let sort_order: i64 = sqlx::query_scalar(
-            "SELECT COALESCE(MAX(sort_order) + 1, 0) FROM custom_environment_sources
-             WHERE project_id = ? AND environment_id = ?",
-        )
-        .bind(input.project_id.to_string())
-        .bind(input.environment_id.to_string())
-        .fetch_one(&mut *transaction)
-        .await?;
-        let result = sqlx::query(
-            "INSERT INTO custom_environment_sources (
-                id, project_id, environment_id, name, normalized_name, sort_order
-             ) VALUES (?, ?, ?, ?, ?, ?)",
-        )
-        .bind(source_id.to_string())
-        .bind(input.project_id.to_string())
-        .bind(input.environment_id.to_string())
-        .bind(&input.name)
-        .bind(normalize_source_name(&input.name))
-        .bind(sort_order)
-        .execute(&mut *transaction)
-        .await;
-        match result {
-            Ok(_) => {}
-            Err(error) if is_unique_violation(&error) => {
-                return Err(EnvironmentError::DuplicateCustomSource)
-            }
-            Err(error) => return Err(error.into()),
-        }
-        for name in &input.key_names {
-            insert_custom_key(
-                &mut transaction,
-                input.project_id,
-                input.environment_id,
-                source_id,
-                name,
-            )
-            .await?;
-        }
-        transaction.commit().await?;
-        self.custom_source(input.project_id, input.environment_id, source_id)
-            .await
-    }
-
-    pub(crate) async fn rename_custom_source(
-        &self,
-        project_id: Uuid,
-        environment_id: Uuid,
-        source_id: Uuid,
-        name: &str,
-    ) -> Result<CustomEnvironmentSource, EnvironmentError> {
-        let result = sqlx::query(
-            "UPDATE custom_environment_sources
-             SET name = ?, normalized_name = ?,
-                 updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
-             WHERE id = ? AND project_id = ? AND environment_id = ?",
-        )
-        .bind(name)
-        .bind(normalize_source_name(name))
-        .bind(source_id.to_string())
-        .bind(project_id.to_string())
-        .bind(environment_id.to_string())
-        .execute(&self.pool)
-        .await;
-        match result {
-            Ok(result) if result.rows_affected() == 0 => {
-                return Err(EnvironmentError::CustomSourceNotFound)
-            }
-            Ok(_) => {}
-            Err(error) if is_unique_violation(&error) => {
-                return Err(EnvironmentError::DuplicateCustomSource)
-            }
-            Err(error) => return Err(error.into()),
-        }
-        self.custom_source(project_id, environment_id, source_id)
-            .await
-    }
-
-    pub(crate) async fn delete_custom_source(
-        &self,
-        project_id: Uuid,
-        environment_id: Uuid,
-        source_id: Uuid,
-    ) -> Result<(), EnvironmentError> {
-        let mut transaction = self.pool.begin().await?;
-        let result = sqlx::query(
-            "DELETE FROM custom_environment_sources
-             WHERE id = ? AND project_id = ? AND environment_id = ?",
-        )
-        .bind(source_id.to_string())
-        .bind(project_id.to_string())
-        .bind(environment_id.to_string())
-        .execute(&mut *transaction)
-        .await?;
-        if result.rows_affected() == 0 {
-            return Err(EnvironmentError::CustomSourceNotFound);
-        }
-        cleanup_orphaned_definitions(&mut transaction, project_id).await?;
-        transaction.commit().await?;
-        Ok(())
-    }
-
-    pub(crate) async fn add_custom_key(
-        &self,
-        project_id: Uuid,
-        environment_id: Uuid,
-        source_id: Uuid,
-        name: &str,
-    ) -> Result<CustomEnvironmentKey, EnvironmentError> {
-        self.custom_source(project_id, environment_id, source_id)
-            .await?;
-        let mut transaction = self.pool.begin().await?;
-        let key_id = insert_custom_key(
-            &mut transaction,
-            project_id,
-            environment_id,
-            source_id,
-            name,
-        )
-        .await?;
-        transaction.commit().await?;
-        self.custom_key(project_id, key_id).await
-    }
-
-    pub(crate) async fn delete_custom_key(
-        &self,
-        project_id: Uuid,
-        environment_id: Uuid,
-        source_id: Uuid,
-        key_id: Uuid,
-    ) -> Result<(), EnvironmentError> {
-        let mut transaction = self.pool.begin().await?;
-        let result = sqlx::query(
-            "DELETE FROM custom_environment_keys
-             WHERE id = ? AND project_id = ? AND environment_id = ? AND source_id = ?",
-        )
-        .bind(key_id.to_string())
-        .bind(project_id.to_string())
-        .bind(environment_id.to_string())
-        .bind(source_id.to_string())
-        .execute(&mut *transaction)
-        .await?;
-        if result.rows_affected() == 0 {
-            return Err(EnvironmentError::CustomKeyNotFound);
-        }
-        cleanup_orphaned_definitions(&mut transaction, project_id).await?;
-        transaction.commit().await?;
-        Ok(())
-    }
-
-    pub(crate) async fn copy_custom_key(
-        &self,
-        input: CopyCustomEnvironmentKey,
-    ) -> Result<CustomEnvironmentKey, EnvironmentError> {
-        self.custom_source(
-            input.project_id,
-            input.target_environment_id,
-            input.target_source_id,
-        )
-        .await?;
-        let source_key = self.custom_key(input.project_id, input.key_id).await?;
-        self.add_custom_key(
-            input.project_id,
-            input.target_environment_id,
-            input.target_source_id,
-            &source_key.name,
-        )
-        .await
-    }
-
-    pub(crate) async fn copy_custom_source(
-        &self,
-        input: CopyCustomEnvironmentSource,
-    ) -> Result<CustomEnvironmentSource, EnvironmentError> {
-        let row = sqlx::query_as::<_, CustomSourceRow>(
-            "SELECT id, project_id, environment_id, name, sort_order, created_at, updated_at
-             FROM custom_environment_sources WHERE id = ? AND project_id = ?",
-        )
-        .bind(input.source_id.to_string())
-        .bind(input.project_id.to_string())
-        .fetch_optional(&self.pool)
-        .await?
-        .ok_or(EnvironmentError::CustomSourceNotFound)?;
-        let source = self
-            .custom_source(
-                input.project_id,
-                parse_uuid(&row.environment_id)?,
-                input.source_id,
-            )
-            .await?;
-        self.create_custom_source(CreateCustomEnvironmentSource {
-            project_id: input.project_id,
-            environment_id: input.target_environment_id,
-            name: input.target_name.unwrap_or(source.name),
-            key_names: source.keys.into_iter().map(|key| key.name).collect(),
-        })
-        .await
-    }
-
-    async fn custom_key(
-        &self,
-        project_id: Uuid,
-        key_id: Uuid,
-    ) -> Result<CustomEnvironmentKey, EnvironmentError> {
-        sqlx::query_as::<_, CustomKeyRow>(
-            "SELECT id, project_id, environment_id, source_id, name, normalized_name,
-                    created_at, updated_at
-             FROM custom_environment_keys WHERE id = ? AND project_id = ?",
-        )
-        .bind(key_id.to_string())
-        .bind(project_id.to_string())
-        .fetch_optional(&self.pool)
-        .await?
-        .ok_or(EnvironmentError::CustomKeyNotFound)?
-        .try_into()
     }
 
     pub(crate) async fn source_candidates(
@@ -862,17 +629,19 @@ impl SqliteEnvironmentRepository {
         separated.push_unseparated(")");
         builder.push(
             " UNION ALL
-             SELECT k.key_definition_id, k.environment_id, k.source_id,
+             SELECT l.key_definition_id, e.environment_id, c.source_id,
                     NULL AS line_number, 0 AS is_commented, 0 AS is_duplicate,
                     'custom' AS origin, s.name AS source_name,
                     NULL AS relative_path, s.sort_order
-             FROM custom_environment_keys k
-             JOIN custom_environment_sources s
-               ON s.project_id = k.project_id AND s.id = k.source_id
-             WHERE k.project_id = ",
+             FROM credential_project_links l
+             JOIN credentials c ON c.id = l.credential_id
+             JOIN credential_environment_links e
+               ON e.credential_id = l.credential_id AND e.project_id = l.project_id
+             JOIN credential_sources s ON s.id = c.source_id
+             WHERE l.project_id = ",
         );
         builder.push_bind(project_id.to_string());
-        builder.push(" AND k.key_definition_id IN (");
+        builder.push(" AND l.key_definition_id IN (");
         let mut separated = builder.separated(", ");
         for definition_id in &definition_ids {
             separated.push_bind(definition_id);
@@ -979,10 +748,12 @@ fn push_matrix_keys(
         builder.push_bind(environment_id.to_string());
         builder.push(
             ") OR EXISTS (
-                SELECT 1 FROM custom_environment_keys k
-                WHERE k.project_id = d.project_id
-                  AND k.key_definition_id = d.id
-                  AND k.environment_id = ",
+                SELECT 1 FROM credential_project_links l
+                JOIN credential_environment_links e
+                  ON e.credential_id = l.credential_id AND e.project_id = l.project_id
+                WHERE l.project_id = d.project_id
+                  AND l.key_definition_id = d.id
+                  AND e.environment_id = ",
         );
         builder.push_bind(environment_id.to_string());
         builder.push("))");
@@ -1013,10 +784,12 @@ fn push_matrix_keys(
         builder.push_bind(environment_id.to_string());
         builder.push(
             ") OR EXISTS (
-                SELECT 1 FROM custom_environment_keys k
-                WHERE k.project_id = d.project_id
-                  AND k.key_definition_id = d.id
-                  AND k.environment_id = ",
+                SELECT 1 FROM credential_project_links l
+                JOIN credential_environment_links e
+                  ON e.credential_id = l.credential_id AND e.project_id = l.project_id
+                WHERE l.project_id = d.project_id
+                  AND l.key_definition_id = d.id
+                  AND e.environment_id = ",
         );
         builder.push_bind(environment_id.to_string());
         builder.push("))");
@@ -1081,8 +854,8 @@ async fn cleanup_orphaned_definitions(
             SELECT 1 FROM environment_key_occurrences
             WHERE environment_key_occurrences.key_definition_id = environment_key_definitions.id
          ) AND NOT EXISTS (
-            SELECT 1 FROM custom_environment_keys
-            WHERE custom_environment_keys.key_definition_id = environment_key_definitions.id
+            SELECT 1 FROM credential_project_links
+            WHERE credential_project_links.key_definition_id = environment_key_definitions.id
          )",
     )
     .bind(project_id.to_string())
@@ -1135,46 +908,6 @@ fn normalize_path(value: &str) -> String {
     #[cfg(not(windows))]
     {
         value.to_owned()
-    }
-}
-
-fn normalize_source_name(value: &str) -> String {
-    value.trim().to_ascii_lowercase()
-}
-
-fn normalize_key_name(value: &str) -> String {
-    value.trim().to_ascii_uppercase()
-}
-
-async fn insert_custom_key(
-    transaction: &mut sqlx::Transaction<'_, Sqlite>,
-    project_id: Uuid,
-    environment_id: Uuid,
-    source_id: Uuid,
-    name: &str,
-) -> Result<Uuid, EnvironmentError> {
-    let normalized_name = normalize_key_name(name);
-    let definition_id =
-        find_or_create_key_definition(transaction, project_id, name, &normalized_name).await?;
-    let key_id = Uuid::new_v4();
-    let result = sqlx::query(
-        "INSERT INTO custom_environment_keys (
-            id, project_id, environment_id, source_id, key_definition_id, name, normalized_name
-         ) VALUES (?, ?, ?, ?, ?, ?, ?)",
-    )
-    .bind(key_id.to_string())
-    .bind(project_id.to_string())
-    .bind(environment_id.to_string())
-    .bind(source_id.to_string())
-    .bind(definition_id)
-    .bind(name)
-    .bind(normalized_name)
-    .execute(&mut **transaction)
-    .await;
-    match result {
-        Ok(_) => Ok(key_id),
-        Err(error) if is_unique_violation(&error) => Err(EnvironmentError::DuplicateCustomKey),
-        Err(error) => Err(error.into()),
     }
 }
 

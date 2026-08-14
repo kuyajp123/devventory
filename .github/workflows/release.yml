@@ -1,0 +1,67 @@
+name: Release Devventory
+
+# Production releases are considered only after main changes. The CLI rejects
+# every non-main ref, including manual dispatches started from another branch.
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: devventory-production-release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    name: Verify, sign, and publish
+    if: github.ref == 'refs/heads/main'
+    runs-on: windows-latest
+
+    steps:
+      - name: Check out complete release history
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          fetch-depth: 0
+          persist-credentials: true
+
+      - name: Set up Node.js
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: package-lock.json
+
+      - name: Install frontend and release dependencies
+        run: npm ci --ignore-scripts --no-audit --no-fund
+
+      - name: Install Playwright Chromium headless shell
+        run: npm exec playwright install chromium --only-shell
+
+      - name: Install Rust quality components
+        run: rustup component add clippy rustfmt
+
+      - name: Cache Rust dependencies and build output
+        uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2
+        with:
+          workspaces: |
+            src-tauri -> target
+          shared-key: devventory-release
+          cache-on-failure: true
+
+      - name: Install RustSec cargo-audit
+        uses: taiki-e/install-action@b20dedce73af6905cdc30d6611090c9b67557c8d # v2
+        with:
+          tool: cargo-audit
+
+      - name: Run recovery-first release engine
+        run: npm run release:hosted
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          SOURCE_GITHUB_TOKEN: ${{ github.token }}
+          RELEASE_TOKEN: ${{ secrets.RELEASE_TOKEN }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}

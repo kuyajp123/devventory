@@ -16,7 +16,7 @@ Devventory provides an offline-first desktop environment for developers to index
 
 ## Positioning
 
-An offline-first, local-first developer inventory tool that indexes metadata in SQLite while keeping project files in-place as the ultimate source of truth, avoiding cloud dependencies, compulsory authentication, or raw secret storage.
+An offline-first, local-first developer inventory tool that indexes metadata in SQLite while keeping project files in-place as the ultimate source of truth, avoiding cloud dependencies, compulsory authentication, or plaintext secret storage.
 
 ## Operating Context
 
@@ -32,13 +32,16 @@ An offline-first, local-first developer inventory tool that indexes metadata in 
 - Project-scoped file inventory with metadata indexing (path, size, category, MIME type, modified date, tags, hash).
 - Local Asset Library for importing, categorizing, and managing project assets and variants.
 - Environment key name parsing and tracking (persisting key definitions and schemas only).
+- A global Credential Vault for user-entered credentials, with metadata and project/environment associations in SQLite and optional values encrypted in a password-protected local Stronghold snapshot.
 - Bounded file system scanning and local file watcher event reconciliation.
 
 ### Constraints
 
 - Strictly offline-first: no external HTTP APIs, cloud synchronization, or remote database dependencies in the MVP.
 - Project files remain the source of truth; indexed files store metadata only and avoid full file duplication.
-- Environment values and sensitive secret values are NEVER stored in persistent storage (key names and structural metadata only).
+- Scanned environment-file values are never persisted; Environment Tracker, search, validation, dashboards, and exports consume key metadata only.
+- Optional values entered explicitly in Credential Vault are persisted only in encrypted Stronghold storage. SQLite stores an opaque secret reference, never the plaintext value.
+- Credential Vault has no password recovery path. Unlock state lasts only for the current process session; manual lock or application quit clears it.
 - Local filesystem paths remain device-specific and non-portable.
 - File inventory scans apply exclusions before descent, skip symbolic links/junctions, and run in bounded batches.
 
@@ -58,7 +61,7 @@ An offline-first, local-first developer inventory tool that indexes metadata in 
 
 1. **Offline-First Authority**: Every feature, search, and workflow functions completely offline without requiring network access, user login, or remote services.
 2. **In-Place Truth**: Project files remain inside original project directories; Devventory indexes non-destructive metadata and manages explicit asset imports without cloning or modifying user repositories unnecessarily.
-3. **Privacy by Design**: Sensitive values (such as secret environment variables) are excluded from persistence; only structural metadata and key definitions are stored.
+3. **Privacy by Design**: Scanned secret values are excluded from persistence and from every derived feature. Values explicitly entrusted to Credential Vault are encrypted locally, revealed only on demand while unlocked, and never stored in SQLite.
 4. **Focused Desktop Ergonomics**: High-density, fast keyboard-friendly UI tailored for developer speed, deep file scannability, and minimal cognitive load.
 
 ## Accessibility & Inclusion

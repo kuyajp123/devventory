@@ -6,6 +6,9 @@ export default defineConfig({
   forbidOnly: Boolean(process.env.CI),
   retries: process.env.CI ? 2 : 0,
   reporter: process.env.CI ? 'github' : 'list',
+  // Keep browser journeys parallel without overwhelming the single Vite server
+  // during simultaneous first-page module transforms.
+  workers: process.env.CI ? 1 : 2,
   use: {
     baseURL: 'http://127.0.0.1:1422',
     trace: 'on-first-retry',

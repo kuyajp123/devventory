@@ -7,6 +7,7 @@ use super::AppError;
 enum CommandErrorCode {
     AgentUsageConflict,
     AssetConflict,
+    CredentialVaultPasswordIncorrect,
     EnvironmentConflict,
     FilesystemUnavailable,
     InvalidInput,
@@ -49,6 +50,14 @@ impl CommandError {
     pub(crate) fn asset_conflict(message: &'static str) -> Self {
         Self {
             code: CommandErrorCode::AssetConflict,
+            message,
+            recoverable: true,
+        }
+    }
+
+    pub(crate) fn credential_vault_password_incorrect(message: &'static str) -> Self {
+        Self {
+            code: CommandErrorCode::CredentialVaultPasswordIncorrect,
             message,
             recoverable: true,
         }
@@ -218,6 +227,9 @@ impl CommandError {
         match self.code {
             CommandErrorCode::AgentUsageConflict => "AGENT_USAGE_CONFLICT",
             CommandErrorCode::AssetConflict => "ASSET_CONFLICT",
+            CommandErrorCode::CredentialVaultPasswordIncorrect => {
+                "CREDENTIAL_VAULT_PASSWORD_INCORRECT"
+            }
             CommandErrorCode::EnvironmentConflict => "ENVIRONMENT_CONFLICT",
             CommandErrorCode::FilesystemUnavailable => "FILESYSTEM_UNAVAILABLE",
             CommandErrorCode::InvalidInput => "INVALID_INPUT",

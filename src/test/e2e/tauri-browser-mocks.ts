@@ -3,13 +3,25 @@ import type { Project } from '@/features/projects';
 
 const MOCK_DATABASE_KEY = 'devventory.e2e.database';
 const LAST_OPENED_PROJECT_KEY = 'workspace.last_opened_project_id';
+const LOCKED_CREDENTIAL_VAULT_COMMANDS = new Set([
+  'create_credential_source',
+  'create_credentials',
+  'delete_credential',
+  'delete_credential_source',
+  'list_credential_sources',
+  'list_credentials',
+  'remove_credential_secret',
+  'replace_credential_secret',
+  'reveal_credential_secret',
+  'update_credential',
+  'update_credential_source',
+]);
 
 interface MockDatabase {
   agentAccounts: Array<Record<string, unknown>>;
-  customEnvironmentSourcesByEnvironment: Record<
-    string,
-    Array<Record<string, unknown>>
-  >;
+  credentialSources: Array<Record<string, unknown>>;
+  credentialVaultStatus: { isConfigured: boolean; isUnlocked: boolean };
+  credentials: Array<Record<string, unknown>>;
   environmentSourcesByEnvironment: Record<
     string,
     Array<Record<string, unknown>>
@@ -36,13 +48,16 @@ export function installTauriBrowserMocks() {
   mockWindows('main');
   const database = loadDatabase();
   const agentAccounts = database.agentAccounts;
+  const credentialSources = database.credentialSources;
+  const credentials = database.credentials;
+  // Mimic Stronghold: secrets live only in this mock process and never enter
+  // the localStorage-backed metadata fixture.
+  const credentialSecrets: Record<string, string> = {};
   const projects = database.projects;
   const inventoryScans = database.inventoryScans;
   const environmentsByProject = database.environmentsByProject;
   const environmentSourcesByEnvironment =
     database.environmentSourcesByEnvironment;
-  const customEnvironmentSourcesByEnvironment =
-    database.customEnvironmentSourcesByEnvironment;
   const managedAssets = database.managedAssets;
   const validationRulesByProject: Record<
     string,
@@ -73,10 +88,10 @@ export function installTauriBrowserMocks() {
   };
 
   function persist() {
+    database.credentialSources = credentialSources;
+    database.credentials = credentials;
     database.environmentsByProject = environmentsByProject;
     database.environmentSourcesByEnvironment = environmentSourcesByEnvironment;
-    database.customEnvironmentSourcesByEnvironment =
-      customEnvironmentSourcesByEnvironment;
     database.variantIdsByAsset = Object.fromEntries(variantIdsByAsset);
     localStorage.setItem(MOCK_DATABASE_KEY, JSON.stringify(database));
   }
@@ -84,6 +99,185 @@ export function installTauriBrowserMocks() {
   mockIPC((command, args) => {
     if (command === 'health_check') {
       return 'Devventory Rust backend is running';
+    }
+    if (command === 'get_credential_vault_status') {
+      return database.credentialVaultStatus;
+    }
+    if (command === 'unlock_credential_vault') {
+      database.credentialVaultStatus = {
+        isConfigured: true,
+        isUnlocked: true,
+      };
+      persist();
+      return database.credentialVaultStatus;
+    }
+    if (command === 'lock_credential_vault') {
+      database.credentialVaultStatus = {
+        ...database.credentialVaultStatus,
+        isUnlocked: false,
+      };
+      persist();
+      return database.credentialVaultStatus;
+    }
+    if (
+      LOCKED_CREDENTIAL_VAULT_COMMANDS.has(command) &&
+      !database.credentialVaultStatus.isUnlocked
+    ) {
+      throw new Error('Credential Vault is locked');
+    }
+    if (command === 'list_credential_sources') {
+      return credentialSources.map((source) => ({
+        ...source,
+        credentialCount: credentials.filter(
+          (credential) => credential.sourceId === source.id,
+        ).length,
+      }));
+    }
+    if (command === 'create_credential_source') {
+      const input = commandArguments(args).input as {
+        definitionKey?: string;
+        description?: string;
+        name: string;
+        projectIds: string[];
+      };
+      const source = credentialSourceResponse(input, credentialSources.length);
+      credentialSources.push(source);
+      persist();
+      return source;
+    }
+    if (command === 'update_credential_source') {
+      const input = commandArguments(args).input as {
+        description?: string;
+        name: string;
+        projectIds: string[];
+        sourceId: string;
+      };
+      const source = credentialSources.find(
+        (item) => item.id === input.sourceId,
+      );
+      if (!source) throw new Error('Missing mock credential source');
+      Object.assign(source, {
+        description: input.description ?? null,
+        name: input.name,
+        projectIds: input.projectIds,
+        updatedAt: '2026-08-13T00:00:00.000Z',
+      });
+      persist();
+      return {
+        ...source,
+        credentialCount: credentials.filter(
+          (credential) => credential.sourceId === source.id,
+        ).length,
+      };
+    }
+    if (command === 'delete_credential_source') {
+      const input = commandArguments(args).input as { sourceId: string };
+      const index = credentialSources.findIndex(
+        (item) => item.id === input.sourceId,
+      );
+      if (index >= 0) credentialSources.splice(index, 1);
+      for (let i = credentials.length - 1; i >= 0; i -= 1) {
+        if (credentials[i].sourceId === input.sourceId) {
+          delete credentialSecrets[credentials[i].id as string];
+          credentials.splice(i, 1);
+        }
+      }
+      persist();
+      return null;
+    }
+    if (command === 'list_credentials') {
+      const input = commandArguments(args).input as { sourceId?: string };
+      return input.sourceId
+        ? credentials.filter(
+            (credential) => credential.sourceId === input.sourceId,
+          )
+        : credentials;
+    }
+    if (command === 'create_credentials') {
+      const input = commandArguments(args).input as {
+        credentials: Array<{
+          environmentLinks: Array<{ environmentId: string; projectId: string }>;
+          key: string;
+          notes?: string;
+          projectIds: string[];
+          value?: string;
+        }>;
+        sourceId: string;
+      };
+      const created = input.credentials.map((draft, index) => {
+        const credential = credentialResponse(
+          input.sourceId,
+          draft,
+          credentials.length + index,
+        );
+        if (draft.value !== undefined) {
+          credentialSecrets[credential.id as string] = draft.value;
+        }
+        return credential;
+      });
+      credentials.push(...created);
+      persist();
+      return created;
+    }
+    if (command === 'update_credential') {
+      const input = commandArguments(args).input as {
+        credentialId: string;
+        environmentLinks: Array<{ environmentId: string; projectId: string }>;
+        key: string;
+        notes?: string;
+        projectIds: string[];
+      };
+      const credential = credentials.find(
+        (item) => item.id === input.credentialId,
+      );
+      if (!credential) throw new Error('Missing mock credential');
+      Object.assign(credential, {
+        environmentLinks: input.environmentLinks,
+        key: input.key,
+        normalizedKey: input.key.toUpperCase(),
+        notes: input.notes ?? null,
+        projectIds: input.projectIds,
+        updatedAt: '2026-08-13T00:00:00.000Z',
+      });
+      persist();
+      return credential;
+    }
+    if (command === 'replace_credential_secret') {
+      const input = commandArguments(args).input as {
+        credentialId: string;
+        value: string;
+      };
+      credentialSecrets[input.credentialId] = input.value;
+      const credential = credentials.find(
+        (item) => item.id === input.credentialId,
+      );
+      if (credential) credential.hasValue = true;
+      persist();
+      return null;
+    }
+    if (command === 'remove_credential_secret') {
+      const input = commandArguments(args).input as { credentialId: string };
+      delete credentialSecrets[input.credentialId];
+      const credential = credentials.find(
+        (item) => item.id === input.credentialId,
+      );
+      if (credential) credential.hasValue = false;
+      persist();
+      return null;
+    }
+    if (command === 'reveal_credential_secret') {
+      const input = commandArguments(args).input as { credentialId: string };
+      return credentialSecrets[input.credentialId] ?? '';
+    }
+    if (command === 'delete_credential') {
+      const input = commandArguments(args).input as { credentialId: string };
+      const index = credentials.findIndex(
+        (item) => item.id === input.credentialId,
+      );
+      if (index >= 0) credentials.splice(index, 1);
+      delete credentialSecrets[input.credentialId];
+      persist();
+      return null;
     }
     if (command === 'list_agent_accounts') {
       return agentAccounts;
@@ -545,7 +739,6 @@ export function installTauriBrowserMocks() {
         environmentsByProject[input.projectId] ?? []
       ).filter((environment) => environment.id !== input.environmentId);
       delete environmentSourcesByEnvironment[input.environmentId];
-      delete customEnvironmentSourcesByEnvironment[input.environmentId];
       persist();
       return null;
     }
@@ -569,148 +762,55 @@ export function installTauriBrowserMocks() {
       return environmentSourcesByEnvironment[input.environmentId] ?? [];
     }
     if (command === 'list_custom_environment_sources') {
-      const input = commandArguments(args).input as { environmentId: string };
-      return customEnvironmentSourcesByEnvironment[input.environmentId] ?? [];
-    }
-    if (command === 'create_custom_environment_source') {
       const input = commandArguments(args).input as {
         environmentId: string;
-        keyNames: string[];
-        name: string;
         projectId: string;
       };
-      const sources =
-        customEnvironmentSourcesByEnvironment[input.environmentId] ?? [];
-      const source = customEnvironmentSourceResponse(input, sources.length);
-      sources.push(source);
-      customEnvironmentSourcesByEnvironment[input.environmentId] = sources;
-      persist();
-      return source;
-    }
-    if (command === 'rename_custom_environment_source') {
-      const input = commandArguments(args).input as {
-        environmentId: string;
-        name: string;
-        sourceId: string;
-      };
-      const sources =
-        customEnvironmentSourcesByEnvironment[input.environmentId] ?? [];
-      const source = sources.find(
-        (candidate) => candidate.id === input.sourceId,
+      const linkedCredentials = credentials.filter((credential) =>
+        (
+          credential.environmentLinks as Array<{
+            environmentId: string;
+            projectId: string;
+          }>
+        ).some(
+          (link) =>
+            link.projectId === input.projectId &&
+            link.environmentId === input.environmentId,
+        ),
       );
-      if (!source) throw new Error('Missing mock custom source');
-      source.name = input.name;
-      source.updatedAt = '2026-08-11T00:00:00.000Z';
-      persist();
-      return source;
-    }
-    if (command === 'delete_custom_environment_source') {
-      const input = commandArguments(args).input as {
-        environmentId: string;
-        sourceId: string;
-      };
-      customEnvironmentSourcesByEnvironment[input.environmentId] = (
-        customEnvironmentSourcesByEnvironment[input.environmentId] ?? []
-      ).filter((source) => source.id !== input.sourceId);
-      persist();
-      return null;
-    }
-    if (command === 'add_custom_environment_key') {
-      const input = commandArguments(args).input as {
-        environmentId: string;
-        name: string;
-        projectId: string;
-        sourceId: string;
-      };
-      const source = findCustomSource(
-        customEnvironmentSourcesByEnvironment,
-        input.sourceId,
+      const sourceIds = Array.from(
+        new Set(linkedCredentials.map((credential) => credential.sourceId)),
       );
-      if (!source) throw new Error('Missing mock custom source');
-      const keys = source.keys as Array<Record<string, unknown>>;
-      const key = customEnvironmentKeyResponse(input, keys.length);
-      keys.push(key);
-      source.updatedAt = '2026-08-11T00:00:00.000Z';
-      persist();
-      return key;
-    }
-    if (command === 'delete_custom_environment_key') {
-      const input = commandArguments(args).input as {
-        keyId: string;
-        sourceId: string;
-      };
-      const source = findCustomSource(
-        customEnvironmentSourcesByEnvironment,
-        input.sourceId,
-      );
-      if (!source) throw new Error('Missing mock custom source');
-      source.keys = (source.keys as Array<Record<string, unknown>>).filter(
-        (key) => key.id !== input.keyId,
-      );
-      persist();
-      return null;
-    }
-    if (command === 'copy_custom_environment_key') {
-      const input = commandArguments(args).input as {
-        keyId: string;
-        projectId: string;
-        targetEnvironmentId: string;
-        targetSourceId: string;
-      };
-      const sourceKey = findCustomKey(
-        customEnvironmentSourcesByEnvironment,
-        input.keyId,
-      );
-      const targetSource = findCustomSource(
-        customEnvironmentSourcesByEnvironment,
-        input.targetSourceId,
-      );
-      if (!sourceKey || !targetSource)
-        throw new Error('Missing mock custom key');
-      const targetKeys = targetSource.keys as Array<Record<string, unknown>>;
-      const copied = customEnvironmentKeyResponse(
-        {
-          environmentId: input.targetEnvironmentId,
-          name: sourceKey.name as string,
-          projectId: input.projectId,
-          sourceId: input.targetSourceId,
-        },
-        targetKeys.length,
-      );
-      targetKeys.push(copied);
-      persist();
-      return copied;
-    }
-    if (command === 'copy_custom_environment_source') {
-      const input = commandArguments(args).input as {
-        projectId: string;
-        sourceId: string;
-        targetEnvironmentId: string;
-        targetName?: string;
-      };
-      const source = findCustomSource(
-        customEnvironmentSourcesByEnvironment,
-        input.sourceId,
-      );
-      if (!source) throw new Error('Missing mock custom source');
-      const targets =
-        customEnvironmentSourcesByEnvironment[input.targetEnvironmentId] ?? [];
-      const copy = customEnvironmentSourceResponse(
-        {
-          environmentId: input.targetEnvironmentId,
-          keyNames: (source.keys as Array<Record<string, unknown>>).map(
-            (key) => key.name as string,
-          ),
-          name: input.targetName ?? (source.name as string),
-          projectId: input.projectId,
-        },
-        targets.length,
-      );
-      targets.push(copy);
-      customEnvironmentSourcesByEnvironment[input.targetEnvironmentId] =
-        targets;
-      persist();
-      return copy;
+      const vaultSources = sourceIds.flatMap((sourceId, sortOrder) => {
+        const source = credentialSources.find(
+          (candidate) => candidate.id === sourceId,
+        );
+        if (!source) return [];
+        return [
+          {
+            createdAt: source.createdAt,
+            environmentId: input.environmentId,
+            id: source.id,
+            keys: linkedCredentials
+              .filter((credential) => credential.sourceId === sourceId)
+              .map((credential) => ({
+                createdAt: credential.createdAt,
+                environmentId: input.environmentId,
+                id: credential.id,
+                name: credential.key,
+                normalizedName: credential.normalizedKey,
+                projectId: input.projectId,
+                sourceId,
+                updatedAt: credential.updatedAt,
+              })),
+            name: source.name,
+            projectId: input.projectId,
+            sortOrder,
+            updatedAt: source.updatedAt,
+          },
+        ];
+      });
+      return vaultSources;
     }
     if (command === 'add_environment_source') {
       const input = commandArguments(args).input as {
@@ -778,35 +878,42 @@ export function installTauriBrowserMocks() {
         projectId: string;
       };
       const environments = environmentsByProject[input.projectId] ?? [];
-      const customKeyNames = Array.from(
-        new Set(
-          Object.values(customEnvironmentSourcesByEnvironment)
-            .flat()
-            .filter((source) => source.projectId === input.projectId)
-            .flatMap((source) =>
-              (source.keys as Array<Record<string, unknown>>).map(
-                (key) => key.name as string,
-              ),
-            ),
-        ),
-      ).sort();
+      const vaultKeyNames = credentials
+        .filter((credential) =>
+          (credential.projectIds as string[]).includes(input.projectId),
+        )
+        .map((credential) => credential.key as string);
+      const customKeyNames = Array.from(new Set(vaultKeyNames)).sort();
       const customRows = customKeyNames.map((keyName) => ({
         cells: environments.map((environment) => {
-          const details = (
-            customEnvironmentSourcesByEnvironment[environment.id as string] ??
-            []
-          ).flatMap((source) =>
-            (source.keys as Array<Record<string, unknown>>)
-              .filter((key) => key.name === keyName)
-              .map(() => ({
+          const details = credentials
+            .filter(
+              (credential) =>
+                credential.key === keyName &&
+                (
+                  credential.environmentLinks as Array<{
+                    environmentId: string;
+                    projectId: string;
+                  }>
+                ).some(
+                  (link) =>
+                    link.projectId === input.projectId &&
+                    link.environmentId === environment.id,
+                ),
+            )
+            .map((credential) => {
+              const source = credentialSources.find(
+                (candidate) => candidate.id === credential.sourceId,
+              );
+              return {
                 isCommented: false,
                 lineNumber: null,
                 origin: 'custom',
                 relativePath: null,
-                sourceId: source.id,
-                sourceName: source.name,
-              })),
-          );
+                sourceId: credential.sourceId,
+                sourceName: source?.name ?? 'Credential Vault',
+              };
+            });
           return {
             sourceDetails: details,
             state:
@@ -1192,7 +1299,9 @@ export function installTauriBrowserMocks() {
 function loadDatabase(): MockDatabase {
   const empty: MockDatabase = {
     agentAccounts: [],
-    customEnvironmentSourcesByEnvironment: {},
+    credentialSources: [],
+    credentialVaultStatus: { isConfigured: false, isUnlocked: false },
+    credentials: [],
     environmentSourcesByEnvironment: {},
     environmentsByProject: {},
     inventoryScans: {},
@@ -1209,8 +1318,12 @@ function loadDatabase(): MockDatabase {
     const parsed = JSON.parse(stored) as Partial<MockDatabase>;
     return {
       agentAccounts: parsed.agentAccounts ?? [],
-      customEnvironmentSourcesByEnvironment:
-        parsed.customEnvironmentSourcesByEnvironment ?? {},
+      credentialSources: parsed.credentialSources ?? [],
+      credentialVaultStatus: parsed.credentialVaultStatus ?? {
+        isConfigured: false,
+        isUnlocked: false,
+      },
+      credentials: parsed.credentials ?? [],
       inventoryScans: parsed.inventoryScans ?? {},
       environmentSourcesByEnvironment:
         parsed.environmentSourcesByEnvironment ?? {},
@@ -1242,6 +1355,53 @@ function environmentResponse(
   };
 }
 
+function credentialSourceResponse(
+  input: {
+    definitionKey?: string;
+    description?: string;
+    name: string;
+    projectIds: string[];
+  },
+  index: number,
+) {
+  return {
+    createdAt: '2026-08-13T00:00:00.000Z',
+    credentialCount: 0,
+    definitionKey: input.definitionKey ?? null,
+    description: input.description ?? null,
+    iconPath: null,
+    id: `54443f4c-f04c-4ccf-850b-fbe53d24fc${index.toString().padStart(2, '0')}`,
+    name: input.name,
+    projectIds: input.projectIds,
+    updatedAt: '2026-08-13T00:00:00.000Z',
+  };
+}
+
+function credentialResponse(
+  sourceId: string,
+  input: {
+    environmentLinks: Array<{ environmentId: string; projectId: string }>;
+    key: string;
+    notes?: string;
+    projectIds: string[];
+    value?: string;
+  },
+  index: number,
+) {
+  return {
+    createdAt: '2026-08-13T00:00:00.000Z',
+    environmentLinks: input.environmentLinks,
+    hasValue: input.value !== undefined,
+    id: `64443f4c-f04c-4ccf-850b-fbe53d24fc${index.toString().padStart(2, '0')}`,
+    key: input.key,
+    normalizedKey: input.key.toUpperCase(),
+    notes: input.notes ?? null,
+    projectIds: input.projectIds,
+    sourceId,
+    updatedAt: '2026-08-13T00:00:00.000Z',
+  };
+}
+
 function environmentSourceResponse(
   input: { environmentId: string; projectId: string; relativePath: string },
   sortOrder: number,
@@ -1263,82 +1423,6 @@ function environmentSourceResponse(
     sortOrder,
     updatedAt: '2026-08-05T00:00:00.000Z',
   };
-}
-
-function customEnvironmentSourceResponse(
-  input: {
-    environmentId: string;
-    keyNames: string[];
-    name: string;
-    projectId: string;
-  },
-  sortOrder: number,
-) {
-  const sourceId = `a5443f4c-f04c-4ccf-850b-fbe53d24fc${sortOrder
-    .toString()
-    .padStart(2, '0')}`;
-  return {
-    createdAt: '2026-08-11T00:00:00.000Z',
-    environmentId: input.environmentId,
-    id: sourceId,
-    keys: input.keyNames.map((name, index) =>
-      customEnvironmentKeyResponse(
-        {
-          environmentId: input.environmentId,
-          name,
-          projectId: input.projectId,
-          sourceId,
-        },
-        index,
-      ),
-    ),
-    name: input.name,
-    projectId: input.projectId,
-    sortOrder,
-    updatedAt: '2026-08-11T00:00:00.000Z',
-  };
-}
-
-function customEnvironmentKeyResponse(
-  input: {
-    environmentId: string;
-    name: string;
-    projectId: string;
-    sourceId: string;
-  },
-  index: number,
-) {
-  return {
-    createdAt: '2026-08-11T00:00:00.000Z',
-    environmentId: input.environmentId,
-    id: `b5443f4c-f04c-4ccf-850b-fbe53d24fc${index
-      .toString()
-      .padStart(2, '0')}`,
-    name: input.name,
-    normalizedName: input.name.toLocaleUpperCase(),
-    projectId: input.projectId,
-    sourceId: input.sourceId,
-    updatedAt: '2026-08-11T00:00:00.000Z',
-  };
-}
-
-function findCustomSource(
-  sourcesByEnvironment: Record<string, Array<Record<string, unknown>>>,
-  sourceId: string,
-) {
-  return Object.values(sourcesByEnvironment)
-    .flat()
-    .find((source) => source.id === sourceId);
-}
-
-function findCustomKey(
-  sourcesByEnvironment: Record<string, Array<Record<string, unknown>>>,
-  keyId: string,
-) {
-  return Object.values(sourcesByEnvironment)
-    .flat()
-    .flatMap((source) => source.keys as Array<Record<string, unknown>>)
-    .find((key) => key.id === keyId);
 }
 
 function validationIssueResponse(projectId: string, environmentId: string) {

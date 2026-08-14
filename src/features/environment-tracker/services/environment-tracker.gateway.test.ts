@@ -119,57 +119,21 @@ describe('environmentTrackerGateway', () => {
     ).rejects.toThrow();
   });
 
-  it('creates metadata-only custom sources and validates their keys', async () => {
+  it('lists the value-free Credential Vault projection for an environment', async () => {
     mockIPC((command, args) => {
-      expect(command).toBe('create_custom_environment_source');
+      expect(command).toBe('list_custom_environment_sources');
       expect(args).toEqual({
         input: {
           environmentId,
-          keyNames: ['devventory-firebase-adminsdk.json'],
-          name: 'Firebase Credentials',
           projectId,
         },
       });
-      return customSourceResponse();
+      return [customSourceResponse()];
     });
 
     await expect(
-      environmentTrackerGateway.createCustomSource({
-        environmentId,
-        keyNames: ['devventory-firebase-adminsdk.json'],
-        name: 'Firebase Credentials',
-        projectId,
-      }),
-    ).resolves.toMatchObject({
-      keys: [{ name: 'devventory-firebase-adminsdk.json' }],
-      name: 'Firebase Credentials',
-    });
-  });
-
-  it('copies a custom key to an explicitly selected target source', async () => {
-    const keyId = '78657c9e-3bdf-4bd2-a38c-ff9e24096875';
-    const targetSourceId = '26a169cf-6ccc-45ce-94e4-2982343c6317';
-    mockIPC((command, args) => {
-      expect(command).toBe('copy_custom_environment_key');
-      expect(args).toEqual({
-        input: {
-          keyId,
-          projectId,
-          targetEnvironmentId: environmentId,
-          targetSourceId,
-        },
-      });
-      return customKeyResponse({ id: keyId, sourceId: targetSourceId });
-    });
-
-    await expect(
-      environmentTrackerGateway.copyCustomKey({
-        keyId,
-        projectId,
-        targetEnvironmentId: environmentId,
-        targetSourceId,
-      }),
-    ).resolves.toMatchObject({ sourceId: targetSourceId });
+      environmentTrackerGateway.listCustomSources(projectId, environmentId),
+    ).resolves.toEqual([customSourceResponse()]);
   });
 });
 

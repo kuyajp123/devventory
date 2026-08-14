@@ -45,3 +45,26 @@ pub(super) async fn run(pool: &SqlitePool) -> Result<(), AppError> {
     MIGRATOR.run(pool).await?;
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::MIGRATOR;
+
+    #[test]
+    fn credential_vault_migration_14_keeps_its_published_checksum() {
+        let migration = MIGRATOR
+            .iter()
+            .find(|migration| migration.version == 14)
+            .expect("credential vault migration 14 should exist");
+        let checksum = migration
+            .checksum
+            .iter()
+            .map(|byte| format!("{byte:02X}"))
+            .collect::<String>();
+
+        assert_eq!(
+            checksum,
+            "5960A5F60ABC5EC035F593074C39C545804D32897B330B178717F61BC3C8FF92956A284AC3DCF87D7A3E2B5E25807B65"
+        );
+    }
+}

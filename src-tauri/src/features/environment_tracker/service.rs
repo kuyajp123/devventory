@@ -6,18 +6,14 @@ use crate::features::projects::{ProjectFileError, ProjectService, ResolvedProjec
 
 use super::error::EnvironmentError;
 use super::model::{
-    CopyCustomEnvironmentKey, CopyCustomEnvironmentSource, CreateCustomEnvironmentSource,
-    CreateEnvironment, CustomEnvironmentKey, CustomEnvironmentSource, Environment,
-    EnvironmentMatrixPage, EnvironmentMatrixQuery, EnvironmentSource,
-    EnvironmentSourceCandidatePage, EnvironmentSourceCandidateQuery, EnvironmentSourceParseStatus,
-    UpdateEnvironment,
+    CreateEnvironment, CustomEnvironmentSource, Environment, EnvironmentMatrixPage,
+    EnvironmentMatrixQuery, EnvironmentSource, EnvironmentSourceCandidatePage,
+    EnvironmentSourceCandidateQuery, EnvironmentSourceParseStatus, UpdateEnvironment,
 };
 use super::parser::{parse_environment_source, SafeParseIssueCode, MAX_ENVIRONMENT_SOURCE_BYTES};
 use super::repository::SqliteEnvironmentRepository;
 
 const MAX_ENVIRONMENT_SOURCES: usize = 64;
-const MAX_CUSTOM_SOURCES: usize = 64;
-const MAX_CUSTOM_KEYS_PER_SOURCE: usize = 200;
 
 #[derive(Debug, Clone)]
 pub(crate) struct EnvironmentService {
@@ -157,121 +153,6 @@ impl EnvironmentService {
         self.repository
             .list_custom_sources(project_id, environment_id)
             .await
-    }
-
-    pub(crate) async fn create_custom_source(
-        &self,
-        mut input: CreateCustomEnvironmentSource,
-    ) -> Result<CustomEnvironmentSource, EnvironmentError> {
-        input.name = validate_custom_source_name(input.name)?;
-        input.key_names = validate_custom_key_names(input.key_names)?;
-        if self
-            .repository
-            .list_custom_sources(input.project_id, input.environment_id)
-            .await?
-            .len()
-            >= MAX_CUSTOM_SOURCES
-        {
-            return Err(EnvironmentError::InvalidInput);
-        }
-        self.repository.create_custom_source(input).await
-    }
-
-    pub(crate) async fn rename_custom_source(
-        &self,
-        project_id: Uuid,
-        environment_id: Uuid,
-        source_id: Uuid,
-        name: String,
-    ) -> Result<CustomEnvironmentSource, EnvironmentError> {
-        self.repository
-            .rename_custom_source(
-                project_id,
-                environment_id,
-                source_id,
-                &validate_custom_source_name(name)?,
-            )
-            .await
-    }
-
-    pub(crate) async fn delete_custom_source(
-        &self,
-        project_id: Uuid,
-        environment_id: Uuid,
-        source_id: Uuid,
-    ) -> Result<(), EnvironmentError> {
-        self.repository
-            .delete_custom_source(project_id, environment_id, source_id)
-            .await
-    }
-
-    pub(crate) async fn add_custom_key(
-        &self,
-        project_id: Uuid,
-        environment_id: Uuid,
-        source_id: Uuid,
-        name: String,
-    ) -> Result<CustomEnvironmentKey, EnvironmentError> {
-        let name = validate_custom_key_name(name)?;
-        let source = self
-            .repository
-            .custom_source(project_id, environment_id, source_id)
-            .await?;
-        if source.keys.len() >= MAX_CUSTOM_KEYS_PER_SOURCE {
-            return Err(EnvironmentError::InvalidInput);
-        }
-        self.repository
-            .add_custom_key(project_id, environment_id, source_id, &name)
-            .await
-    }
-
-    pub(crate) async fn delete_custom_key(
-        &self,
-        project_id: Uuid,
-        environment_id: Uuid,
-        source_id: Uuid,
-        key_id: Uuid,
-    ) -> Result<(), EnvironmentError> {
-        self.repository
-            .delete_custom_key(project_id, environment_id, source_id, key_id)
-            .await
-    }
-
-    pub(crate) async fn copy_custom_key(
-        &self,
-        input: CopyCustomEnvironmentKey,
-    ) -> Result<CustomEnvironmentKey, EnvironmentError> {
-        let target = self
-            .repository
-            .custom_source(
-                input.project_id,
-                input.target_environment_id,
-                input.target_source_id,
-            )
-            .await?;
-        if target.keys.len() >= MAX_CUSTOM_KEYS_PER_SOURCE {
-            return Err(EnvironmentError::InvalidInput);
-        }
-        self.repository.copy_custom_key(input).await
-    }
-
-    pub(crate) async fn copy_custom_source(
-        &self,
-        mut input: CopyCustomEnvironmentSource,
-    ) -> Result<CustomEnvironmentSource, EnvironmentError> {
-        if let Some(name) = input.target_name.take() {
-            input.target_name = Some(validate_custom_source_name(name)?);
-        }
-        if self
-            .repository
-            .list_custom_sources(input.project_id, input.target_environment_id)
-            .await?
-            .len()
-            >= MAX_CUSTOM_SOURCES
-        {
-            return Err(EnvironmentError::InvalidInput);
-        }
-        self.repository.copy_custom_source(input).await
     }
 
     pub(crate) async fn source_candidates(
@@ -428,41 +309,6 @@ impl EnvironmentService {
 
 fn normalize_environment_name(name: &str) -> String {
     name.trim().to_ascii_lowercase()
-}
-
-fn validate_custom_source_name(value: String) -> Result<String, EnvironmentError> {
-    validate_custom_name(value, 120)
-}
-
-fn validate_custom_key_name(value: String) -> Result<String, EnvironmentError> {
-    validate_custom_name(value, 255)
-}
-
-fn validate_custom_name(value: String, max_length: usize) -> Result<String, EnvironmentError> {
-    let value = value.trim().to_owned();
-    if value.is_empty() || value.chars().count() > max_length || value.chars().any(char::is_control)
-    {
-        return Err(EnvironmentError::InvalidInput);
-    }
-    Ok(value)
-}
-
-fn validate_custom_key_names(values: Vec<String>) -> Result<Vec<String>, EnvironmentError> {
-    if values.len() > MAX_CUSTOM_KEYS_PER_SOURCE {
-        return Err(EnvironmentError::InvalidInput);
-    }
-    let mut seen = std::collections::HashSet::new();
-    values
-        .into_iter()
-        .map(validate_custom_key_name)
-        .map(|result| {
-            let name = result?;
-            if !seen.insert(name.to_ascii_uppercase()) {
-                return Err(EnvironmentError::DuplicateCustomKey);
-            }
-            Ok(name)
-        })
-        .collect()
 }
 
 fn read_bounded_source(path: &std::path::Path) -> Result<Vec<u8>, std::io::Error> {

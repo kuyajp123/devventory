@@ -1,32 +1,34 @@
 import {
   IconAlertTriangle,
-  IconCheck,
   IconChevronDown,
   IconChevronLeft,
   IconCircleCheck,
-  IconCode,
   IconDatabase,
-  IconDeviceLaptop,
   IconExternalLink,
-  IconFlame,
-  IconInfoCircle,
-  IconLayersDifference,
+  IconLock,
+  IconLockOpen,
   IconPlus,
+  IconShieldLock,
   IconWorld,
   IconX,
 } from '@tabler/icons-react';
 import { Spinner } from '@heroui/react';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import {
+  credentialKeySchema,
+  credentialVaultGateway,
+  type CredentialSource,
+  type VaultStatus,
+} from '@/features/credential-vault';
 import {
   environmentTrackerGateway,
-  type CustomEnvironmentSource,
   type Environment,
 } from '@/features/environment-tracker';
 import { projectSelectionGateway } from '@/features/projects';
 import { TauriCommandError } from '@/shared/infrastructure/tauri/tauri-error';
-import { customKeyFormSchema } from '@/features/environment-tracker/models/environment';
+import { preserveExactTextareaPaste } from '@/shared/ui';
 import {
-  openEnvironmentSettingsFromQuickAccess,
+  openCredentialVaultFromQuickAccess,
   openMainWindowFromQuickAccess,
 } from './services/quick-access.gateway';
 
@@ -35,318 +37,270 @@ interface EnvironmentKeyFlowProps {
 }
 
 export function EnvironmentKeyFlow({ onClose }: EnvironmentKeyFlowProps) {
-  const [isLoading, setIsLoading] = useState(true);
-  const [projectId, setProjectId] = useState<string | null>(null);
-  const [environments, setEnvironments] = useState<Environment[]>([]);
-  const [selectedEnvironmentId, setSelectedEnvironmentId] = useState('');
-  const [environmentConfirmed, setEnvironmentConfirmed] = useState(false);
-  const [customSources, setCustomSources] = useState<CustomEnvironmentSource[]>(
-    [],
-  );
-  const [selectedSourceId, setSelectedSourceId] = useState('');
-  const [customSourceConfirmed, setCustomSourceConfirmed] = useState(false);
-  const [keyName, setKeyName] = useState('');
   const [addedKeyName, setAddedKeyName] = useState('');
+  const [environments, setEnvironments] = useState<Environment[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [isSuccess, setIsSuccess] = useState(false);
+  const [keyName, setKeyName] = useState('');
+  const [masterPassword, setMasterPassword] = useState('');
+  const [projectId, setProjectId] = useState<string | null>(null);
+  const [selectedEnvironmentId, setSelectedEnvironmentId] = useState('');
+  const [selectedSourceId, setSelectedSourceId] = useState('');
+  const [sources, setSources] = useState<CredentialSource[]>([]);
+  const [value, setValue] = useState('');
+  const [vaultStatus, setVaultStatus] = useState<VaultStatus | null>(null);
   const keyInputRef = useRef<HTMLInputElement>(null);
-  const [needsInitialization, setNeedsInitialization] = useState(true);
 
   const selectedEnvironment = environments.find(
-    (env) => env.id === selectedEnvironmentId,
+    (environment) => environment.id === selectedEnvironmentId,
   );
-  const selectedSource = customSources.find(
+  const selectedSource = sources.find(
     (source) => source.id === selectedSourceId,
   );
 
-  const loadCustomSources = useCallback(
-    async (projId: string, envId: string, preSelectFirst = true) => {
+  useEffect(() => {
+    let cancelled = false;
+    async function load() {
+      setIsLoading(true);
       setError(null);
       try {
-        const sources = await environmentTrackerGateway.listCustomSources(
-          projId,
-          envId,
-        );
-        setCustomSources(sources);
-        if (sources.length === 0) {
-          setSelectedSourceId('');
-          setCustomSourceConfirmed(false);
-        } else if (preSelectFirst) {
-          const firstId = sources[0].id;
-          setSelectedSourceId(firstId);
-          setCustomSourceConfirmed(true);
+        const activeProjectId =
+          await projectSelectionGateway.getLastOpenedProjectId();
+        if (!activeProjectId) {
+          if (!cancelled) {
+            setError(
+              'Open a project in Devventory before adding an environment key.',
+            );
+            setIsLoading(false);
+          }
+          return;
         }
-      } catch (err) {
-        setError(commandError(err, 'Custom sources could not be loaded.'));
+        const [nextEnvironments, nextStatus] = await Promise.all([
+          environmentTrackerGateway.list(activeProjectId),
+          credentialVaultGateway.status(),
+        ]);
+        const nextSources = nextStatus.isUnlocked
+          ? await credentialVaultGateway.listSources()
+          : [];
+        if (cancelled) return;
+        setProjectId(activeProjectId);
+        setEnvironments(nextEnvironments);
+        setSources(nextSources);
+        setVaultStatus(nextStatus);
+        setSelectedEnvironmentId(nextEnvironments[0]?.id ?? '');
+        setSelectedSourceId(nextSources[0]?.id ?? '');
+      } catch (cause) {
+        if (!cancelled) {
+          setError(
+            commandError(cause, 'Credential metadata could not be loaded.'),
+          );
+        }
+      } finally {
+        if (!cancelled) setIsLoading(false);
       }
-    },
-    [],
-  );
-
-  const loadEnvironments = useCallback(async () => {
-    setIsLoading(true);
-    setError(null);
-    try {
-      const activeProjectId =
-        await projectSelectionGateway.getLastOpenedProjectId();
-      if (!activeProjectId) {
-        setProjectId(null);
-        setEnvironments([]);
-        setError('Open a project in Devventory before adding a custom key.');
-        setIsLoading(false);
-        return;
-      }
-      const nextEnvironments =
-        await environmentTrackerGateway.list(activeProjectId);
-      setProjectId(activeProjectId);
-      setEnvironments(nextEnvironments);
-      if (nextEnvironments.length > 0) {
-        const firstEnvId = nextEnvironments[0].id;
-        setSelectedEnvironmentId(firstEnvId);
-        setEnvironmentConfirmed(true);
-        await loadCustomSources(activeProjectId, firstEnvId, true);
-      }
-    } catch (err) {
-      setError(commandError(err, 'Environment metadata could not be loaded.'));
-    } finally {
-      setIsLoading(false);
     }
-  }, [loadCustomSources]);
+    void load();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   useEffect(() => {
-    if (needsInitialization) {
-      setNeedsInitialization(false);
-      void loadEnvironments();
-    }
-  }, [needsInitialization, loadEnvironments]);
+    if (!isLoading && selectedSourceId) keyInputRef.current?.focus();
+  }, [isLoading, selectedSourceId]);
 
-  useEffect(() => {
-    if (customSourceConfirmed && keyInputRef.current) {
-      keyInputRef.current.focus();
-    }
-  }, [customSourceConfirmed]);
-
-  const handleSelectEnvironment = useCallback(
-    async (envId: string) => {
-      setEnvironmentConfirmed(true);
-      setError(null);
-
-      if (envId !== selectedEnvironmentId) {
-        setSelectedEnvironmentId(envId);
-        setSelectedSourceId('');
-        setCustomSourceConfirmed(false);
-        setKeyName('');
-        if (projectId) {
-          await loadCustomSources(projectId, envId, true);
-        }
-      } else {
-        // Re-confirming same environment -> preserve source if still valid
-        if (projectId && customSources.length === 0) {
-          await loadCustomSources(projectId, envId, true);
-        }
-      }
-    },
-    [selectedEnvironmentId, projectId, customSources.length, loadCustomSources],
-  );
-
-  const handleSelectSource = useCallback(
-    (sourceId: string) => {
-      setCustomSourceConfirmed(true);
-      setError(null);
-      if (sourceId !== selectedSourceId) {
-        setSelectedSourceId(sourceId);
-        setKeyName('');
-      }
-    },
-    [selectedSourceId],
-  );
-
-  const handleSaveKey = useCallback(async () => {
-    const name = keyName.trim();
-    if (!projectId || !selectedEnvironmentId || !selectedSourceId || !name) {
-      return;
-    }
-    const parsed = customKeyFormSchema.safeParse({ name });
-    if (!parsed.success) {
-      setError('Enter a valid custom key name.');
+  async function unlockVault() {
+    if (!masterPassword) {
+      setError('Enter the Credential Vault master password.');
       return;
     }
     setIsSaving(true);
     setError(null);
     try {
-      await environmentTrackerGateway.addCustomKey({
-        environmentId: selectedEnvironmentId,
-        name: parsed.data.name,
-        projectId,
-        sourceId: selectedSourceId,
-      });
-      setAddedKeyName(parsed.data.name);
-      setKeyName('');
-      setIsSuccess(true);
-    } catch (err) {
-      setError(commandError(err, 'The custom key could not be added.'));
+      const nextStatus = await credentialVaultGateway.unlock(masterPassword);
+      const nextSources = await credentialVaultGateway.listSources();
+      setVaultStatus(nextStatus);
+      setSources(nextSources);
+      setSelectedSourceId(nextSources[0]?.id ?? '');
+      setMasterPassword('');
+    } catch (cause) {
+      setError(commandError(cause, 'Credential Vault could not be unlocked.'));
     } finally {
       setIsSaving(false);
     }
-  }, [keyName, projectId, selectedEnvironmentId, selectedSourceId]);
+  }
 
-  const handleAddAnother = useCallback(() => {
-    setKeyName('');
+  async function saveKey() {
+    if (!projectId || !selectedEnvironmentId || !selectedSourceId) return;
+    if (!vaultStatus?.isUnlocked) {
+      setError('Unlock Credential Vault before adding a credential.');
+      return;
+    }
+    const parsed = credentialKeySchema.safeParse(keyName);
+    if (!parsed.success) {
+      setError(
+        parsed.error.issues[0]?.message ?? 'Enter a valid credential key.',
+      );
+      return;
+    }
+    setIsSaving(true);
+    setError(null);
+    try {
+      await credentialVaultGateway.createCredentials(selectedSourceId, [
+        {
+          environmentLinks: [
+            { environmentId: selectedEnvironmentId, projectId },
+          ],
+          key: parsed.data,
+          projectIds: [projectId],
+          ...(value.length > 0 ? { value } : {}),
+        },
+      ]);
+      setAddedKeyName(parsed.data);
+      setKeyName('');
+      setValue('');
+      setIsSuccess(true);
+    } catch (cause) {
+      setError(commandError(cause, 'The credential could not be added.'));
+    } finally {
+      setIsSaving(false);
+    }
+  }
+
+  function addAnother() {
     setAddedKeyName('');
     setError(null);
     setIsSuccess(false);
-  }, []);
-
-  const handleOpenEnvironmentTracker = useCallback(() => {
-    void openMainWindowFromQuickAccess();
-  }, []);
-
-  const handleOpenEnvironmentSettings = useCallback(() => {
-    if (selectedEnvironmentId) {
-      void openEnvironmentSettingsFromQuickAccess(selectedEnvironmentId);
-    } else {
-      void openMainWindowFromQuickAccess();
-    }
-  }, [selectedEnvironmentId]);
-
-  const environmentOptions = environments.map((env) => ({
-    id: env.id,
-    name: env.name,
-    icon: getEnvironmentIcon(env.name),
-  }));
-
-  const sourceOptions = customSources.map((source) => ({
-    id: source.id,
-    name: source.name,
-    icon: <IconDatabase className="h-3.5 w-3.5 text-accent shrink-0" />,
-  }));
+    setKeyName('');
+    setValue('');
+  }
 
   if (isLoading) {
     return (
-      <div className="flex h-full flex-col">
-        <div className="flex items-center justify-between border-b border-border px-3 py-2">
-          <button
-            aria-label="Back to Quick Actions"
-            className="flex items-center gap-1 text-muted-foreground hover:text-foreground"
-            onClick={onClose}
-            type="button"
-          >
-            <IconChevronLeft className="h-3.5 w-3.5" />
-            <span className="font-mono text-[10px] uppercase tracking-wide">
-              Back
-            </span>
-          </button>
-        </div>
-        <div className="flex flex-1 items-center justify-center">
-          <Spinner aria-label="Loading environments" size="sm" />
-        </div>
-      </div>
+      <FlowFrame onClose={onClose}>
+        <Spinner aria-label="Loading credential sources" size="sm" />
+      </FlowFrame>
     );
   }
 
   if (environments.length === 0) {
     return (
-      <div className="flex h-full flex-col">
-        <div className="flex items-center justify-between border-b border-border px-3 py-2">
-          <button
-            aria-label="Back to Quick Actions"
-            className="flex items-center gap-1 text-muted-foreground hover:text-foreground"
-            onClick={onClose}
-            type="button"
-          >
-            <IconChevronLeft className="h-3.5 w-3.5" />
-            <span className="font-mono text-[10px] uppercase tracking-wide">
-              Back
-            </span>
-          </button>
-        </div>
-        <div className="flex flex-1 flex-col items-center justify-center px-4 text-center">
-          <h3 className="font-mono text-xs font-semibold text-foreground">
-            No environments yet
-          </h3>
-          <p className="mt-1 text-[11px] text-muted-foreground">
-            Create an environment before adding custom environment keys.
-          </p>
-          <button
-            className="mt-3 inline-flex items-center gap-1.5 rounded-lg border border-border px-3 py-1.5 font-mono text-xs font-medium text-foreground transition-colors hover:border-accent/40"
-            onClick={handleOpenEnvironmentTracker}
-            style={{ backgroundColor: 'var(--panel)' }}
-            type="button"
-          >
-            <IconExternalLink className="h-3.5 w-3.5 text-accent" />
-            Open Environment Tracker
-          </button>
-        </div>
-      </div>
+      <FlowFrame onClose={onClose}>
+        <EmptyFlow
+          action="Open Environment Tracker"
+          body="Create an environment before associating a credential key."
+          onAction={() => void openMainWindowFromQuickAccess()}
+          title="No environments yet"
+        />
+      </FlowFrame>
     );
   }
 
   return (
     <div className="flex h-full flex-col overflow-hidden">
-      {/* Task Header */}
-      <div className="flex shrink-0 items-center justify-between border-b border-border px-3 py-2.5">
-        <button
-          aria-label="Back to Quick Actions"
-          className="flex items-center gap-1 text-muted-foreground transition-colors hover:text-foreground"
-          onClick={onClose}
-          type="button"
-        >
-          <IconChevronLeft className="h-3.5 w-3.5" />
-          <span className="font-mono text-[10px] font-semibold uppercase tracking-wide">
-            Back
-          </span>
-        </button>
-        <span className="font-mono text-[10px] font-semibold uppercase tracking-wider text-foreground">
-          Add Environment Key
-        </span>
-        <button
-          aria-label="Close"
-          className="text-muted-foreground transition-colors hover:text-foreground"
-          onClick={onClose}
-          type="button"
-        >
-          <IconX className="h-3.5 w-3.5" />
-        </button>
-      </div>
-
-      {/* Main Task Body */}
+      <TaskHeader onClose={onClose} />
       <div className="flex-1 overflow-y-auto p-3">
-        {error && (
+        {error ? (
           <div
-            className="mb-2.5 rounded-lg border border-danger/30 bg-danger/10 p-2.5 text-[11px] leading-relaxed text-danger font-mono"
+            className="mb-2.5 rounded-lg border border-danger/30 bg-danger/10 p-2.5 font-mono text-[11px] leading-relaxed text-danger"
             role="alert"
           >
             {error}
           </div>
-        )}
+        ) : null}
 
-        {isSuccess ? (
-          /* Success Screen */
+        {!vaultStatus?.isConfigured ? (
+          <div className="rounded-lg border border-warning/40 bg-warning/10 p-3.5">
+            <div className="flex items-start gap-2.5">
+              <IconShieldLock className="mt-0.5 h-5 w-5 shrink-0 text-warning" />
+              <div>
+                <h4 className="font-mono text-xs font-semibold text-warning">
+                  Set up Credential Vault first
+                </h4>
+                <p className="mt-1 text-[11px] leading-relaxed text-muted-foreground">
+                  Create a master password before viewing sources or adding
+                  credentials.
+                </p>
+              </div>
+            </div>
+            <button
+              className="mt-3 flex items-center gap-1.5 rounded-lg bg-accent px-3 py-1.5 font-mono text-xs font-semibold text-white"
+              onClick={() => void openCredentialVaultFromQuickAccess()}
+              type="button"
+            >
+              <IconExternalLink className="h-3.5 w-3.5" />
+              Set up Credential Vault
+            </button>
+          </div>
+        ) : !vaultStatus.isUnlocked ? (
+          <div className="rounded-lg border border-border p-3.5">
+            <div className="flex items-start gap-2.5">
+              <IconLock className="mt-0.5 h-5 w-5 shrink-0 text-accent" />
+              <div>
+                <h4 className="font-mono text-xs font-semibold text-foreground">
+                  Credential Vault is locked
+                </h4>
+                <p className="mt-1 text-[11px] leading-relaxed text-muted-foreground">
+                  Unlock it before viewing sources or adding credentials.
+                </p>
+              </div>
+            </div>
+            <label className="mt-3 block">
+              <span className="mb-1 block font-mono text-[9px] font-semibold uppercase tracking-wider text-muted-foreground">
+                Vault master password
+              </span>
+              <input
+                aria-label="Vault master password"
+                className="h-9 w-full rounded-lg border border-border px-3 font-mono text-xs text-foreground focus:border-accent focus:outline-none"
+                disabled={isSaving}
+                onChange={(event) => setMasterPassword(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter') void unlockVault();
+                }}
+                style={{ backgroundColor: 'var(--panel)' }}
+                type="password"
+                value={masterPassword}
+              />
+            </label>
+            <button
+              className="mt-3 flex items-center gap-1.5 rounded-lg bg-accent px-4 py-2 font-mono text-xs font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50"
+              disabled={!masterPassword || isSaving}
+              onClick={() => void unlockVault()}
+              type="button"
+            >
+              {isSaving ? (
+                <Spinner size="sm" />
+              ) : (
+                <IconLockOpen className="h-3.5 w-3.5" />
+              )}
+              Unlock vault
+            </button>
+          </div>
+        ) : isSuccess ? (
           <div className="flex flex-col items-center justify-center py-6 text-center">
             <IconCircleCheck className="h-10 w-10 text-success" />
             <h3 className="mt-2.5 font-mono text-xs font-semibold text-foreground">
-              Environment key added
+              Credential key added
             </h3>
             <p className="mt-1 font-mono text-xs font-bold text-accent">
               {addedKeyName}
             </p>
-            <p className="mt-1 text-[11px] text-muted-foreground font-mono">
-              {selectedEnvironment?.name}
-              {' · '}
-              {selectedSource?.name}
+            <p className="mt-1 font-mono text-[11px] text-muted-foreground">
+              {selectedEnvironment?.name} · {selectedSource?.name}
             </p>
             <div className="mt-4 flex gap-2">
               <button
-                className="rounded-lg border border-border px-3 py-1.5 font-mono text-xs font-medium text-foreground transition-colors hover:border-accent/40"
-                onClick={handleAddAnother}
+                className="rounded-lg border border-border px-3 py-1.5 font-mono text-xs font-medium text-foreground"
+                onClick={addAnother}
                 style={{ backgroundColor: 'var(--panel)' }}
                 type="button"
               >
                 Add another
               </button>
               <button
-                className="rounded-lg bg-accent px-4 py-1.5 font-mono text-xs font-semibold text-white transition-colors hover:bg-accent/90"
+                className="rounded-lg bg-accent px-4 py-1.5 font-mono text-xs font-semibold text-white"
                 onClick={onClose}
                 type="button"
               >
@@ -354,119 +308,107 @@ export function EnvironmentKeyFlow({ onClose }: EnvironmentKeyFlowProps) {
               </button>
             </div>
           </div>
+        ) : sources.length === 0 ? (
+          <div className="rounded-lg border border-warning/40 bg-warning/10 p-3.5">
+            <div className="flex items-start gap-2.5">
+              <IconAlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-warning" />
+              <div>
+                <h4 className="font-mono text-xs font-semibold text-warning">
+                  No Credential Vault sources yet
+                </h4>
+                <p className="mt-1 text-[11px] leading-relaxed text-muted-foreground">
+                  Create a predefined or custom source in Credential Vault
+                  first.
+                </p>
+              </div>
+            </div>
+            <button
+              className="mt-3 flex items-center gap-1.5 rounded-lg bg-accent px-3 py-1.5 font-mono text-xs font-semibold text-white"
+              onClick={() => void openCredentialVaultFromQuickAccess()}
+              type="button"
+            >
+              <IconExternalLink className="h-3.5 w-3.5" />
+              Open Credential Vault
+            </button>
+          </div>
         ) : (
-          /* Form Screen */
           <div className="space-y-3">
-            {/* Step 1: Environment Selection */}
             <ThemedSelect
               label="Choose environment"
-              options={environmentOptions}
+              onSelect={(id) => {
+                setSelectedEnvironmentId(id);
+                setKeyName('');
+                setValue('');
+              }}
+              options={environments.map((environment) => ({
+                icon: <IconWorld className="h-3.5 w-3.5 text-accent" />,
+                id: environment.id,
+                name: environment.name,
+              }))}
               placeholder="Select environment..."
               selectedId={selectedEnvironmentId}
-              onSelect={(id) => void handleSelectEnvironment(id)}
             />
-
-            {/* Missing Custom Source Warning Card */}
-            {environmentConfirmed && customSources.length === 0 && (
-              <div className="rounded-lg border border-warning/40 bg-warning/10 p-3.5">
-                <div className="flex items-start gap-2.5">
-                  <IconAlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-warning" />
-                  <div>
-                    <h4 className="font-mono text-xs font-semibold text-warning">
-                      No custom sources in "{selectedEnvironment?.name}"
-                    </h4>
-                    <p className="mt-1 text-[11px] leading-relaxed text-muted-foreground">
-                      Create a Custom Source in the main app before adding a
-                      Custom Key.
-                    </p>
-                  </div>
-                </div>
-                <div className="mt-3 flex flex-wrap items-center gap-2">
-                  <button
-                    className="flex items-center gap-1.5 rounded-lg bg-accent px-3 py-1.5 font-mono text-xs font-semibold text-white transition-colors hover:bg-accent/90"
-                    onClick={handleOpenEnvironmentSettings}
-                    type="button"
-                  >
-                    <IconExternalLink className="h-3.5 w-3.5" />
-                    Open Environment Settings
-                  </button>
-                  <button
-                    aria-label="Change environment"
-                    className="rounded-lg border border-border px-3 py-1.5 font-mono text-xs text-muted-foreground transition-colors hover:text-foreground"
-                    onClick={onClose}
-                    style={{ backgroundColor: 'var(--panel)' }}
-                    type="button"
-                  >
-                    Cancel
-                  </button>
-                </div>
-              </div>
-            )}
-
-            {/* Step 2: Custom Source Selection */}
-            {environmentConfirmed && customSources.length > 0 && (
-              <ThemedSelect
-                label="Choose custom source"
-                options={sourceOptions}
-                placeholder="Select custom source..."
-                selectedId={selectedSourceId}
-                onSelect={(id) => handleSelectSource(id)}
+            <ThemedSelect
+              label="Choose credential source"
+              onSelect={(id) => {
+                setSelectedSourceId(id);
+                setKeyName('');
+                setValue('');
+              }}
+              options={sources.map((source) => ({
+                icon: <IconDatabase className="h-3.5 w-3.5 text-accent" />,
+                id: source.id,
+                name: source.name,
+              }))}
+              placeholder="Select source..."
+              selectedId={selectedSourceId}
+            />
+            <label className="block">
+              <span className="mb-1 block font-mono text-[9px] font-semibold uppercase tracking-wider text-muted-foreground">
+                Credential key
+              </span>
+              <input
+                aria-label="Credential key"
+                className="h-9 w-full rounded-lg border border-border px-3 font-mono text-xs text-foreground focus:border-accent focus:outline-none"
+                disabled={isSaving}
+                maxLength={255}
+                onChange={(event) => setKeyName(event.target.value)}
+                placeholder="SERVICE_ACCOUNT_JSON"
+                ref={keyInputRef}
+                style={{ backgroundColor: 'var(--panel)' }}
+                value={keyName}
               />
-            )}
-
-            {/* Step 3: Key Name Input & Actions */}
-            {environmentConfirmed &&
-              customSources.length > 0 &&
-              customSourceConfirmed && (
-                <div className="pt-1 space-y-3">
-                  <div>
-                    <label className="block font-mono text-[9px] font-semibold uppercase tracking-wider text-muted-foreground mb-1">
-                      Custom key name
-                    </label>
-                    <input
-                      ref={keyInputRef}
-                      aria-label="Custom key name"
-                      className="h-9 w-full rounded-lg border border-border px-3 font-mono text-xs text-foreground placeholder:text-muted-foreground/60 transition-colors focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent disabled:opacity-50"
-                      disabled={isSaving}
-                      onChange={(e) => setKeyName(e.target.value)}
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter' && keyName.trim()) {
-                          void handleSaveKey();
-                        }
-                      }}
-                      placeholder="SERVICE_ACCOUNT_JSON"
-                      style={{ backgroundColor: 'var(--panel)' }}
-                      value={keyName}
-                    />
-                    <p className="mt-1 text-[10px] text-muted-foreground/80">
-                      Key names only. Values are never requested or stored.
-                    </p>
-                  </div>
-
-                  <div className="flex items-center justify-between pt-1">
-                    <button
-                      className="flex items-center gap-1.5 rounded-lg bg-accent px-4 py-2 font-mono text-xs font-semibold text-white transition-colors hover:bg-accent/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:opacity-50 disabled:cursor-not-allowed"
-                      disabled={!keyName.trim() || isSaving}
-                      onClick={() => void handleSaveKey()}
-                      type="button"
-                    >
-                      {isSaving ? (
-                        <Spinner size="sm" />
-                      ) : (
-                        <>
-                          <IconPlus className="h-3.5 w-3.5" />
-                          <span>Add key</span>
-                        </>
-                      )}
-                    </button>
-
-                    <div className="flex items-center gap-1 text-[10px] text-muted-foreground/80">
-                      <IconInfoCircle className="h-3.5 w-3.5 shrink-0" />
-                      <span>After adding, only this field resets.</span>
-                    </div>
-                  </div>
-                </div>
+            </label>
+            <label className="block">
+              <span className="mb-1 block font-mono text-[9px] font-semibold uppercase tracking-wider text-muted-foreground">
+                Value (optional)
+              </span>
+              <textarea
+                aria-label="Credential value"
+                className="min-h-16 w-full resize-y rounded-lg border border-border px-3 py-2 font-mono text-xs text-foreground focus:border-accent focus:outline-none"
+                disabled={isSaving}
+                onChange={(event) => setValue(event.target.value)}
+                onPaste={(event) =>
+                  preserveExactTextareaPaste(event, value, setValue)
+                }
+                placeholder="Exact token, JSON, PEM, or multiline value"
+                style={{ backgroundColor: 'var(--panel)' }}
+                value={value}
+              />
+            </label>
+            <button
+              className="flex items-center gap-1.5 rounded-lg bg-accent px-4 py-2 font-mono text-xs font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50"
+              disabled={!keyName.trim() || isSaving}
+              onClick={() => void saveKey()}
+              type="button"
+            >
+              {isSaving ? (
+                <Spinner size="sm" />
+              ) : (
+                <IconPlus className="h-3.5 w-3.5" />
               )}
+              Add credential
+            </button>
           </div>
         )}
       </div>
@@ -474,144 +416,144 @@ export function EnvironmentKeyFlow({ onClose }: EnvironmentKeyFlowProps) {
   );
 }
 
+function TaskHeader({ onClose }: { onClose: () => void }) {
+  return (
+    <div className="flex shrink-0 items-center justify-between border-b border-border px-3 py-2.5">
+      <button
+        aria-label="Back to Quick Actions"
+        className="flex items-center gap-1 text-muted-foreground hover:text-foreground"
+        onClick={onClose}
+        type="button"
+      >
+        <IconChevronLeft className="h-3.5 w-3.5" />
+        <span className="font-mono text-[10px] font-semibold uppercase tracking-wide">
+          Back
+        </span>
+      </button>
+      <span className="font-mono text-[10px] font-semibold uppercase tracking-wider text-foreground">
+        Add Environment Key
+      </span>
+      <button aria-label="Close" onClick={onClose} type="button">
+        <IconX className="h-3.5 w-3.5 text-muted-foreground" />
+      </button>
+    </div>
+  );
+}
+
+function FlowFrame({
+  children,
+  onClose,
+}: {
+  children: React.ReactNode;
+  onClose: () => void;
+}) {
+  return (
+    <div className="flex h-full flex-col">
+      <TaskHeader onClose={onClose} />
+      <div className="flex flex-1 items-center justify-center p-4">
+        {children}
+      </div>
+    </div>
+  );
+}
+
+function EmptyFlow({
+  action,
+  body,
+  onAction,
+  title,
+}: {
+  action: string;
+  body: string;
+  onAction: () => void;
+  title: string;
+}) {
+  return (
+    <div className="text-center">
+      <h3 className="font-mono text-xs font-semibold text-foreground">
+        {title}
+      </h3>
+      <p className="mt-1 text-[11px] text-muted-foreground">{body}</p>
+      <button
+        className="mt-3 inline-flex items-center gap-1.5 rounded-lg border border-border px-3 py-1.5 font-mono text-xs font-medium text-foreground"
+        onClick={onAction}
+        type="button"
+      >
+        <IconExternalLink className="h-3.5 w-3.5 text-accent" /> {action}
+      </button>
+    </div>
+  );
+}
+
 function ThemedSelect({
   label,
-  placeholder,
-  options,
-  selectedId,
   onSelect,
-  disabled = false,
+  options,
+  placeholder,
+  selectedId,
 }: {
   label: string;
-  placeholder: string;
-  options: { id: string; name: string; icon?: React.ReactNode }[];
-  selectedId: string;
   onSelect: (id: string) => void;
-  disabled?: boolean;
+  options: Array<{ icon?: React.ReactNode; id: string; name: string }>;
+  placeholder: string;
+  selectedId: string;
 }) {
   const [isOpen, setIsOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
-
-  const selectedOption = options.find((opt) => opt.id === selectedId);
+  const selected = options.find((option) => option.id === selectedId);
 
   useEffect(() => {
     if (!isOpen) return;
-    const handleClickOutside = (e: MouseEvent) => {
-      if (
-        containerRef.current &&
-        !containerRef.current.contains(e.target as Node)
-      ) {
+    const close = (event: MouseEvent) => {
+      if (!containerRef.current?.contains(event.target as Node))
         setIsOpen(false);
-      }
     };
-    window.addEventListener('mousedown', handleClickOutside);
-    return () => window.removeEventListener('mousedown', handleClickOutside);
+    window.addEventListener('mousedown', close);
+    return () => window.removeEventListener('mousedown', close);
   }, [isOpen]);
 
-  const handleOptionClick = (id: string) => {
-    onSelect(id);
-    setIsOpen(false);
-  };
-
   return (
-    <div className="relative w-full" ref={containerRef}>
-      <span className="block font-mono text-[9px] font-semibold uppercase tracking-wider text-muted-foreground mb-1">
+    <div className="relative" ref={containerRef}>
+      <span className="mb-1 block font-mono text-[9px] font-semibold uppercase tracking-wider text-muted-foreground">
         {label}
       </span>
       <button
         aria-expanded={isOpen}
         aria-label={label}
-        className={`flex h-9 w-full items-center justify-between rounded-lg border px-3 font-mono text-xs transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-accent ${
-          isOpen
-            ? 'border-accent ring-1 ring-accent'
-            : 'border-border hover:border-accent/60'
-        } ${disabled ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}
-        disabled={disabled}
-        onClick={() => setIsOpen((prev) => !prev)}
-        style={{
-          backgroundColor: 'var(--panel)',
-          color: 'var(--text-primary)',
-        }}
+        className="flex h-9 w-full items-center justify-between rounded-lg border border-border px-3 font-mono text-xs text-foreground"
+        onClick={() => setIsOpen((current) => !current)}
+        style={{ backgroundColor: 'var(--panel)' }}
         type="button"
       >
-        <div className="flex items-center gap-2 truncate text-foreground">
-          {selectedOption ? (
-            <>
-              {selectedOption.icon}
-              <span className="truncate">{selectedOption.name}</span>
-            </>
-          ) : (
-            <span className="text-muted-foreground">{placeholder}</span>
-          )}
-        </div>
-        <IconChevronDown
-          className={`h-3.5 w-3.5 shrink-0 text-muted-foreground transition-transform ${
-            isOpen ? 'rotate-180 text-accent' : ''
-          }`}
-        />
+        <span className="flex min-w-0 items-center gap-2 truncate">
+          {selected?.icon}
+          {selected?.name ?? placeholder}
+        </span>
+        <IconChevronDown className="h-3.5 w-3.5 text-muted-foreground" />
       </button>
-
-      {isOpen && (
+      {isOpen ? (
         <div
-          className="absolute left-0 right-0 top-full z-50 mt-1 max-h-48 overflow-y-auto rounded-lg border border-border p-1 shadow-2xl"
-          style={{
-            backgroundColor: 'var(--elevated)',
-            color: 'var(--text-primary)',
-          }}
+          className="absolute z-50 mt-1 w-full rounded-lg border border-border p-1 shadow-lg"
+          style={{ backgroundColor: 'var(--panel)' }}
         >
-          {options.length === 0 ? (
-            <div className="px-3 py-2 font-mono text-xs text-muted-foreground">
-              No options available
-            </div>
-          ) : (
-            options.map((opt) => {
-              const isSelected = opt.id === selectedId;
-              return (
-                <button
-                  key={opt.id}
-                  className={`flex w-full items-center gap-2 rounded-md px-2.5 py-1.5 font-mono text-xs text-left transition-colors ${
-                    isSelected
-                      ? 'bg-accent/20 text-accent font-semibold'
-                      : 'text-foreground hover:bg-[var(--panel)] hover:text-accent'
-                  }`}
-                  onClick={() => handleOptionClick(opt.id)}
-                  style={{
-                    backgroundColor: isSelected
-                      ? 'color-mix(in srgb, var(--accent) 20%, transparent)'
-                      : 'transparent',
-                  }}
-                  type="button"
-                >
-                  {opt.icon}
-                  <span className="truncate flex-1">{opt.name}</span>
-                  {isSelected && (
-                    <IconCheck className="h-3.5 w-3.5 shrink-0 text-accent" />
-                  )}
-                </button>
-              );
-            })
-          )}
+          {options.map((option) => (
+            <button
+              className="flex w-full items-center gap-2 rounded px-2.5 py-2 text-left font-mono text-xs text-foreground hover:bg-accent/10"
+              key={option.id}
+              onClick={() => {
+                onSelect(option.id);
+                setIsOpen(false);
+              }}
+              type="button"
+            >
+              {option.icon}
+              {option.name}
+            </button>
+          ))}
         </div>
-      )}
+      ) : null}
     </div>
   );
-}
-
-function getEnvironmentIcon(name: string) {
-  const lower = name.toLowerCase();
-  if (lower.includes('prod'))
-    return <IconWorld className="h-3.5 w-3.5 text-accent shrink-0" />;
-  if (lower.includes('local'))
-    return <IconDeviceLaptop className="h-3.5 w-3.5 text-accent shrink-0" />;
-  if (lower.includes('stage'))
-    return (
-      <IconLayersDifference className="h-3.5 w-3.5 text-accent shrink-0" />
-    );
-  if (lower.includes('dev'))
-    return <IconCode className="h-3.5 w-3.5 text-accent shrink-0" />;
-  if (lower.includes('fire'))
-    return <IconFlame className="h-3.5 w-3.5 text-accent shrink-0" />;
-  return <IconWorld className="h-3.5 w-3.5 text-accent shrink-0" />;
 }
 
 function commandError(error: unknown, fallback: string): string {

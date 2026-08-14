@@ -1,5 +1,6 @@
 import { Toast } from '@heroui/react';
 import type { PropsWithChildren } from 'react';
+import { AppUpdaterSync } from '@/features/app-updater';
 import { InventoryEventSync } from '@/features/file-inventory';
 import { EnvironmentEventSync } from '@/features/environment-tracker';
 import { ActiveProjectProvider } from '@/features/projects';
@@ -10,6 +11,7 @@ export function AppProviders({ children }: PropsWithChildren) {
   return (
     <QueryProvider>
       <ActiveProjectProvider>
+        <AppUpdaterSync />
         <InventoryEventSync />
         <EnvironmentEventSync />
         <ValidationEventSync />
