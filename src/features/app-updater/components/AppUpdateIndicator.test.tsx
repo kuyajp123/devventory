@@ -4,6 +4,12 @@ import { AppUpdateIndicator } from './AppUpdateIndicator';
 import { useAppUpdaterStore } from '../stores/app-updater.store';
 import { useAppUpdaterActions } from '../hooks/useAppUpdaterActions';
 
+const mockNavigate = vi.fn();
+
+vi.mock('react-router', () => ({
+  useNavigate: () => mockNavigate,
+}));
+
 vi.mock('../hooks/useAppUpdaterActions', () => ({
   useAppUpdaterActions: vi.fn(),
 }));
@@ -67,7 +73,7 @@ describe('AppUpdateIndicator', () => {
     expect(screen.getByText('Update 0.2.0')).toBeInTheDocument();
   });
 
-  it('opens update modal when clicked', () => {
+  it('navigates to settings when clicked while update is available', () => {
     useAppUpdaterStore
       .getState()
       .setAvailableUpdate({ currentVersion: '0.1.0', version: '0.1.1' }, false);
@@ -75,6 +81,20 @@ describe('AppUpdateIndicator', () => {
     const button = screen.getByRole('button', {
       name: /Update available: Devventory 0.1.1/i,
     });
+    button.click();
+    expect(mockNavigate).toHaveBeenCalledWith('/settings/about-updates');
+  });
+
+  it('opens update modal when clicked while downloading', () => {
+    useAppUpdaterStore
+      .getState()
+      .setAvailableUpdate({ currentVersion: '0.1.0', version: '0.1.1' }, false);
+    useAppUpdaterStore.getState().recordDownloadEvent({
+      data: { contentLength: 1000 },
+      event: 'Started',
+    });
+    render(<AppUpdateIndicator />);
+    const button = screen.getByRole('button');
     button.click();
     expect(openUpdateModalMock).toHaveBeenCalledOnce();
   });
@@ -88,9 +108,11 @@ describe('AppUpdateIndicator', () => {
       event: 'Started',
     });
     render(<AppUpdateIndicator />);
-    // Should show a disabled button with spinner when downloading
-    const button = screen.getByRole('button');
-    expect(button).toBeDisabled();
+    const button = screen.getByRole('button', {
+      name: /Downloading update.../i,
+    });
+    expect(button).toBeInTheDocument();
+    expect(button.querySelector('.animate-spin')).toBeInTheDocument();
   });
 
   it('displays download percentage when known', () => {
@@ -135,13 +157,16 @@ describe('AppUpdateIndicator', () => {
     expect(screen.getByText('Restarting...')).toBeInTheDocument();
   });
 
-  it('cannot trigger duplicate actions while busy', () => {
+  it('clicking indicator while busy re-opens the progress modal', () => {
     useAppUpdaterStore
       .getState()
       .setAvailableUpdate({ currentVersion: '0.1.0', version: '0.1.1' }, false);
     useAppUpdaterStore.getState().setRelaunching();
-    const { container } = render(<AppUpdateIndicator />);
-    const button = container.querySelector('button');
-    expect(button).toBeDisabled();
+    render(<AppUpdateIndicator />);
+    const button = screen.getByRole('button', {
+      name: /Restarting Devventory.../i,
+    });
+    button.click();
+    expect(openUpdateModalMock).toHaveBeenCalledOnce();
   });
 });

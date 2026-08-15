@@ -37,7 +37,7 @@ export interface CredentialSourceValues {
   iconSourcePath?: string;
   name: string;
   projectIds: string[];
-  removeIcon: boolean;
+  removeIcon?: boolean;
 }
 
 export function CredentialSourceDialog({
@@ -110,14 +110,17 @@ export function CredentialSourceDialog({
       return;
     }
     setError(null);
-    await onSubmit({
+
+    const baseValues = {
       ...(definitionKey !== CUSTOM_DEFINITION ? { definitionKey } : {}),
       ...(description.trim() ? { description: description.trim() } : {}),
       ...(iconSourcePath ? { iconSourcePath } : {}),
       name: parsed.data,
       projectIds,
-      removeIcon,
-    });
+    };
+
+    // Only include removeIcon when updating an existing source
+    await onSubmit(source ? { ...baseValues, removeIcon } : baseValues);
   }
 
   const isCustom = definitionKey === CUSTOM_DEFINITION;

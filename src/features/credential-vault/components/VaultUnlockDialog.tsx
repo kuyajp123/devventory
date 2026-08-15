@@ -71,7 +71,10 @@ export function VaultUnlockDialog({
       <DialogBody>
         <Form
           className="space-y-4"
-          onSubmit={(event) => event.preventDefault()}
+          onSubmit={(event) => {
+            event.preventDefault();
+            if (!isUnlocking) void submit();
+          }}
           validationBehavior="aria"
         >
           {!isConfigured ? (

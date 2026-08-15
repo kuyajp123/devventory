@@ -23,7 +23,7 @@ export function AboutUpdatesSettingsSection() {
   const availableUpdate = useAppUpdaterStore((state) => state.availableUpdate);
   const error = useAppUpdaterStore((state) => state.error);
   const lastCheckedAt = useAppUpdaterStore((state) => state.lastCheckedAt);
-  const { checkForUpdates, openUpdateModal, loadCurrentVersion } =
+  const { checkForUpdates, installAvailableUpdate, loadCurrentVersion } =
     useAppUpdaterActions();
 
   // Load current version if not already available (independent of update check)
@@ -41,8 +41,8 @@ export function AboutUpdatesSettingsSection() {
     void checkForUpdates('manual');
   };
 
-  const handleViewUpdate = () => {
-    openUpdateModal();
+  const handleInstall = () => {
+    void installAvailableUpdate();
   };
 
   const getLastCheckedDisplay = () => {
@@ -131,21 +131,97 @@ export function AboutUpdatesSettingsSection() {
           )}
 
           {status === 'available' && availableUpdate && (
-            <div className="flex items-center justify-between gap-3 rounded-md border border-accent/40 bg-accent/10 p-3">
-              <div className="flex items-center gap-2">
+            <div className="space-y-4 rounded-md border border-accent/40 bg-panel p-4">
+              <div className="flex items-center gap-2 text-accent">
                 <IconDownload
                   aria-hidden="true"
-                  className="shrink-0 text-accent"
-                  size={18}
+                  className="shrink-0"
+                  size={ICON_SIZE.button}
                   stroke={ICON_STROKE}
                 />
-                <p className="text-xs text-accent">
-                  Version {availableUpdate.version} is available.
+                <h3 className="text-sm font-semibold text-foreground">
+                  Version {availableUpdate.version} is available
+                </h3>
+              </div>
+
+              {/* Version Comparison Info */}
+              <div className="grid grid-cols-2 gap-4 rounded-md border border-divider bg-surface p-3">
+                <div className="space-y-1">
+                  <p className="text-[10px] font-medium uppercase tracking-wider text-muted">
+                    Current Version
+                  </p>
+                  <p className="font-mono text-sm font-semibold text-foreground">
+                    {currentVersion ?? '—'}
+                  </p>
+                </div>
+                <div className="space-y-1">
+                  <p className="text-[10px] font-medium uppercase tracking-wider text-muted">
+                    New Version
+                  </p>
+                  <p className="font-mono text-sm font-semibold text-accent">
+                    {availableUpdate.version}
+                  </p>
+                </div>
+              </div>
+
+              {/* Publication Date */}
+              {availableUpdate.date && (
+                <div className="space-y-1">
+                  <p className="text-[10px] font-medium uppercase tracking-wider text-muted">
+                    Published
+                  </p>
+                  <p className="text-xs text-foreground">
+                    {new Date(availableUpdate.date).toLocaleDateString(
+                      undefined,
+                      {
+                        day: 'numeric',
+                        month: 'long',
+                        year: 'numeric',
+                      },
+                    )}
+                  </p>
+                </div>
+              )}
+
+              {/* Release Notes */}
+              {availableUpdate.body && (
+                <div className="space-y-1">
+                  <p className="text-[10px] font-medium uppercase tracking-wider text-muted">
+                    What's New
+                  </p>
+                  <div className="max-h-56 overflow-y-auto rounded-md border border-divider bg-workspace p-3">
+                    <pre className="whitespace-pre-wrap font-mono text-xs text-foreground">
+                      {availableUpdate.body}
+                    </pre>
+                  </div>
+                </div>
+              )}
+
+              {/* Warning */}
+              <div className="rounded-md border border-accent/30 bg-accent/5 p-3">
+                <p className="text-xs text-muted">
+                  <span className="font-medium text-accent">Note:</span> Save
+                  any unfinished edits. Devventory will restart to complete the
+                  update.
                 </p>
               </div>
-              <Button onPress={handleViewUpdate} size="sm" variant="primary">
-                View Update
-              </Button>
+
+              {/* Actions */}
+              <div className="flex items-center gap-3 pt-1">
+                <Button
+                  isDisabled={isBusy}
+                  onPress={handleInstall}
+                  size="sm"
+                  variant="primary"
+                >
+                  <IconDownload
+                    aria-hidden="true"
+                    size={ICON_SIZE.small}
+                    stroke={ICON_STROKE}
+                  />
+                  <span>Update Now</span>
+                </Button>
+              </div>
             </div>
           )}
 
@@ -188,7 +264,7 @@ export function AboutUpdatesSettingsSection() {
             isDisabled={isBusy || isChecking}
             onPress={handleCheckForUpdates}
             size="sm"
-            variant="primary"
+            variant="secondary"
           >
             {isChecking && (
               <IconLoader2

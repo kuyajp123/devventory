@@ -1,4 +1,4 @@
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen } from '@testing-library/react';
 import { describe, expect, it, beforeEach, vi } from 'vitest';
 import { AppUpdateModal } from './AppUpdateModal';
 import { useAppUpdaterStore } from '../stores/app-updater.store';
@@ -25,55 +25,13 @@ describe('AppUpdateModal', () => {
     });
   });
 
-  it('shows current and available versions', () => {
+  it('renders null when status is available (details shown directly in settings page)', () => {
     useAppUpdaterStore.getState().setCurrentVersion('0.1.0');
     useAppUpdaterStore
       .getState()
       .setAvailableUpdate({ currentVersion: '0.1.0', version: '0.1.1' }, true);
-    render(<AppUpdateModal />);
-    expect(screen.getByText('0.1.0')).toBeInTheDocument();
-    expect(screen.getByText('0.1.1')).toBeInTheDocument();
-  });
-
-  it('renders release notes as plain text', () => {
-    useAppUpdaterStore.getState().setCurrentVersion('0.1.0');
-    useAppUpdaterStore.getState().setAvailableUpdate(
-      {
-        currentVersion: '0.1.0',
-        version: '0.1.1',
-        body: 'Fixed bugs\nAdded features',
-      },
-      true,
-    );
-    render(<AppUpdateModal />);
-    // Check that the modal is open
-    expect(screen.getByRole('dialog')).toBeInTheDocument();
-  });
-
-  it('Later closes modal but preserves available update state', () => {
-    useAppUpdaterStore.getState().setCurrentVersion('0.1.0');
-    useAppUpdaterStore
-      .getState()
-      .setAvailableUpdate({ currentVersion: '0.1.0', version: '0.1.1' }, true);
-    render(<AppUpdateModal />);
-    const laterButton = screen.getByRole('button', { name: 'Later' });
-    fireEvent.click(laterButton);
-    expect(closeUpdateModalMock).toHaveBeenCalledOnce();
-    expect(useAppUpdaterStore.getState().availableUpdate).toEqual({
-      currentVersion: '0.1.0',
-      version: '0.1.1',
-    });
-  });
-
-  it('Update Now starts update workflow', () => {
-    useAppUpdaterStore.getState().setCurrentVersion('0.1.0');
-    useAppUpdaterStore
-      .getState()
-      .setAvailableUpdate({ currentVersion: '0.1.0', version: '0.1.1' }, true);
-    render(<AppUpdateModal />);
-    const updateNowButton = screen.getByRole('button', { name: /Update Now/i });
-    fireEvent.click(updateNowButton);
-    expect(installAvailableUpdateMock).toHaveBeenCalledOnce();
+    const { container } = render(<AppUpdateModal />);
+    expect(container.firstChild).toBeNull();
   });
 
   it('cannot be dismissed while downloading', () => {

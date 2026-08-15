@@ -147,10 +147,10 @@ export function ProjectSelector({ compact = false }: ProjectSelectorProps) {
 }
 
 function moduleDestination(pathname: string): string {
-  if (pathname === '/diagnostics') return '/diagnostics';
-  if (pathname === '/files') return '/files';
-  if (pathname === '/environments') return '/environments';
-  if (pathname === '/assets') return '/assets';
-  if (pathname.startsWith('/assets/')) return '/assets';
-  return '/dashboard';
+  // Asset detail pages contain project-scoped IDs — redirect to the list.
+  if (pathname.startsWith('/assets/') && pathname !== '/assets/') {
+    return '/assets';
+  }
+  // All other pages: stay on the current page.
+  return pathname;
 }

@@ -163,6 +163,8 @@ export function AppLayout() {
         </div>
 
         <div className="flex items-center gap-2 shrink-0">
+          <AppUpdateIndicator />
+
           <button
             aria-label="Open command palette"
             className="flex items-center gap-2 rounded border border-divider bg-workspace px-2.5 py-1 text-xs text-muted transition-colors hover:border-accent/40 hover:text-foreground"
@@ -177,8 +179,6 @@ export function AppLayout() {
               <IconCommand size={10} />K
             </kbd>
           </button>
-
-          <AppUpdateIndicator />
 
           <Button
             aria-label={

@@ -1,14 +1,19 @@
+import { useAppUiStore } from '@/app/stores/app-ui.store';
+import { useActiveProject } from '@/features/projects';
+import { ICON_SIZE, ICON_STROKE } from '@/shared/constants/icon.constants';
+import { DevventoryDialog, DialogBody } from '@/shared/ui';
 import {
-  IconActivityHeartbeat,
   IconAdjustments,
   IconDatabaseSearch,
   IconFiles,
   IconFolder,
   IconLayoutDashboard,
   IconLibrary,
+  IconLock,
   IconPlus,
   IconRobot,
   IconSearch,
+  IconSettings,
   IconShieldCheck,
   IconTerminal,
 } from '@tabler/icons-react';
@@ -20,10 +25,6 @@ import {
   useState,
 } from 'react';
 import { useNavigate } from 'react-router';
-import { useAppUiStore } from '@/app/stores/app-ui.store';
-import { useActiveProject } from '@/features/projects';
-import { ICON_SIZE, ICON_STROKE } from '@/shared/constants/icon.constants';
-import { DevventoryDialog, DialogBody } from '@/shared/ui';
 
 interface CommandItem {
   action: () => void;
@@ -100,11 +101,18 @@ export function GlobalCommandPalette() {
         label: 'Open Agent Usage',
       },
       {
-        action: () => run(() => void navigate('/diagnostics')),
+        action: () => run(() => void navigate('/credential-vault')),
         category: 'Global',
-        icon: IconActivityHeartbeat,
-        id: 'open-diagnostics',
-        label: 'Open Diagnostics',
+        icon: IconLock,
+        id: 'open-credential-vault',
+        label: 'Open Credential Vault',
+      },
+      {
+        action: () => run(() => void navigate('/settings')),
+        category: 'Global',
+        icon: IconSettings,
+        id: 'open-settings',
+        label: 'Open Settings',
       },
       {
         action: () => run(() => void navigate('/projects/new')),

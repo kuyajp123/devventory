@@ -1,5 +1,6 @@
 import { Button } from '@heroui/react';
 import { IconDownload, IconLoader2 } from '@tabler/icons-react';
+import { useNavigate } from 'react-router';
 import {
   useAppUpdaterStore,
   isAppUpdateBusy,
@@ -16,6 +17,7 @@ export function AppUpdateIndicator() {
   const availableUpdate = useAppUpdaterStore((state) => state.availableUpdate);
   const downloadProgress = useAppUpdaterStore((state) => state.download);
   const { openUpdateModal } = useAppUpdaterActions();
+  const navigate = useNavigate();
 
   const isBusy = isAppUpdateBusy(status);
 
@@ -67,13 +69,21 @@ export function AppUpdateIndicator() {
     return `Update ${availableUpdate.version}`;
   };
 
+  const handlePress = () => {
+    if (isBusy) {
+      openUpdateModal();
+    } else {
+      void navigate('/settings/about-updates');
+    }
+  };
+
   return (
     <Button
       aria-label={getLabel()}
       className="h-7 gap-1.5 px-2.5 text-xs font-medium"
-      isDisabled={isBusy}
+      isDisabled={false}
       isIconOnly={false}
-      onPress={openUpdateModal}
+      onPress={handlePress}
       size="sm"
       variant="primary"
     >
