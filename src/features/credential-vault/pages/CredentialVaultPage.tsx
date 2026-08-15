@@ -1,30 +1,56 @@
-import { useQueries } from '@tanstack/react-query';
-import { Alert, Button, Input, Spinner, TextField, toast } from '@heroui/react';
+import {
+  environmentTrackerGateway,
+  type Environment,
+} from '@/features/environment-tracker';
+import {
+  useActiveProject,
+  useProjectsQuery,
+  type Project,
+} from '@/features/projects';
+import { ICON_SIZE, ICON_STROKE } from '@/shared/constants/icon.constants';
+import { TauriCommandError } from '@/shared/infrastructure/tauri/tauri-error';
+import { ConfirmDialog } from '@/shared/ui';
+import {
+  Alert,
+  Button,
+  Input,
+  Label,
+  ListBox,
+  Select,
+  Spinner,
+  TextField,
+  toast,
+  type Key,
+} from '@heroui/react';
 import {
   IconCopy,
   IconEdit,
   IconEye,
   IconEyeOff,
+  IconFolder,
   IconKey,
   IconLock,
   IconLockOpen,
   IconPlus,
   IconSearch,
+  IconServer,
   IconShieldLock,
   IconTrash,
 } from '@tabler/icons-react';
+import { useQueries } from '@tanstack/react-query';
 import { useMemo, useState } from 'react';
+import { useNavigate } from 'react-router';
+import { CredentialEditorDialog } from '../components/CredentialEditorDialog';
 import {
-  environmentTrackerGateway,
-  type Environment,
-} from '@/features/environment-tracker';
-import { useProjectsQuery, type Project } from '@/features/projects';
-import { ICON_SIZE, ICON_STROKE } from '@/shared/constants/icon.constants';
-import { TauriCommandError } from '@/shared/infrastructure/tauri/tauri-error';
-import { ConfirmDialog } from '@/shared/ui';
+  CredentialSourceDialog,
+  type CredentialSourceValues,
+} from '../components/CredentialSourceDialog';
+import { CredentialValueDialog } from '../components/CredentialValueDialog';
+import { SourceLogo } from '../components/SourceLogo';
+import { VaultUnlockDialog } from '../components/VaultUnlockDialog';
 import {
-  useCreateCredentialSourceMutation,
   useCreateCredentialsMutation,
+  useCreateCredentialSourceMutation,
   useCredentialSourcesQuery,
   useCredentialsQuery,
   useCredentialVaultStatusQuery,
@@ -43,14 +69,6 @@ import {
   type CredentialSource,
 } from '../models/credential-vault';
 import { credentialVaultGateway } from '../services/credential-vault.gateway';
-import { CredentialEditorDialog } from '../components/CredentialEditorDialog';
-import {
-  CredentialSourceDialog,
-  type CredentialSourceValues,
-} from '../components/CredentialSourceDialog';
-import { CredentialValueDialog } from '../components/CredentialValueDialog';
-import { SourceLogo } from '../components/SourceLogo';
-import { VaultUnlockDialog } from '../components/VaultUnlockDialog';
 
 type DeleteTarget =
   | { kind: 'credential'; value: Credential }
@@ -58,6 +76,8 @@ type DeleteTarget =
   | null;
 
 export function CredentialVaultPage() {
+  const navigate = useNavigate();
+  const { selectProject } = useActiveProject();
   const status = useCredentialVaultStatusQuery();
   const isUnlocked = status.data?.isUnlocked ?? false;
   const sources = useCredentialSourcesQuery(isUnlocked);
@@ -99,7 +119,19 @@ export function CredentialVaultPage() {
   >(null);
   const [selectedSourceId, setSelectedSourceId] = useState<string | null>(null);
 
+  const projectList = useMemo(() => projects.data ?? [], [projects.data]);
   const sourceItems = useMemo(() => sources.data ?? [], [sources.data]);
+  const availableEnvironments = useMemo(() => {
+    if (projectFilter === 'all') return environments;
+    return environments.filter(
+      (environment) => environment.projectId === projectFilter,
+    );
+  }, [environments, projectFilter]);
+  const hasNoProjects = projects.isSuccess && projectList.length === 0;
+  const hasNoEnvironments =
+    projects.isSuccess &&
+    projectList.length > 0 &&
+    availableEnvironments.length === 0;
   const credentialItems = useMemo(
     () => credentials.data ?? [],
     [credentials.data],
@@ -116,10 +148,29 @@ export function CredentialVaultPage() {
             credential.key.toLowerCase().includes(needle),
         );
       const matchesProject =
-        projectFilter === 'all' || source.projectIds.includes(projectFilter);
-      return matchesSearch && matchesProject;
+        projectFilter === 'all' ||
+        source.projectIds.includes(projectFilter) ||
+        credentialItems.some(
+          (credential) =>
+            credential.sourceId === source.id &&
+            credential.projectIds.includes(projectFilter),
+        );
+      const matchesEnvironment =
+        environmentFilter === 'all' ||
+        credentialItems.some(
+          (credential) =>
+            credential.sourceId === source.id &&
+            (projectFilter === 'all' ||
+              credential.projectIds.includes(projectFilter)) &&
+            credential.environmentLinks.some(
+              (link) =>
+                link.environmentId === environmentFilter &&
+                (projectFilter === 'all' || link.projectId === projectFilter),
+            ),
+        );
+      return matchesSearch && matchesProject && matchesEnvironment;
     });
-  }, [credentialItems, projectFilter, search, sourceItems]);
+  }, [credentialItems, environmentFilter, projectFilter, search, sourceItems]);
 
   const activeSourceId =
     selectedSourceId &&
@@ -222,6 +273,7 @@ export function CredentialVaultPage() {
       if (editingSource) {
         await updateSource.mutateAsync({
           ...values,
+          removeIcon: values.removeIcon ?? false,
           sourceId: editingSource.id,
         });
         toast.success('Credential source updated.');
@@ -264,6 +316,19 @@ export function CredentialVaultPage() {
       }
       setDeleteTarget(null);
     }, 'The selected vault record could not be deleted.');
+  }
+
+  function handleProjectFilterChange(nextProjectFilter: string) {
+    setProjectFilter(nextProjectFilter);
+    if (nextProjectFilter !== 'all' && environmentFilter !== 'all') {
+      const isEnvironmentInProject = environments.some(
+        (env) =>
+          env.id === environmentFilter && env.projectId === nextProjectFilter,
+      );
+      if (!isEnvironmentInProject) {
+        setEnvironmentFilter('all');
+      }
+    }
   }
 
   const unlockDialog = shouldShowUnlock ? (
@@ -471,7 +536,7 @@ export function CredentialVaultPage() {
         </div>
       ) : null}
 
-      <div className="grid h-full min-h-0 grid-cols-[270px_minmax(0,1fr)] xl:grid-cols-[280px_minmax(0,1fr)_320px]">
+      <div className="grid h-full min-h-0 grid-cols-[240px_minmax(0,1fr)_280px]">
         <aside className="flex min-h-0 flex-col border-r border-divider bg-surface">
           <div className="space-y-2 border-b border-divider p-3">
             <TextField variant="secondary">
@@ -483,33 +548,31 @@ export function CredentialVaultPage() {
                 />
                 <Input
                   aria-label="Search credential sources and keys"
-                  className="h-8 pl-8 font-mono text-xs"
+                  className="h-8 pl-8 font-mono text-xs w-full"
                   onChange={(event) => setSearch(event.target.value)}
                   placeholder="Search sources or keys..."
                   value={search}
                 />
               </div>
             </TextField>
-            <div className="grid grid-cols-2 gap-2">
-              <FilterSelect
-                label="Filter by project"
-                onChange={setProjectFilter}
-                options={(projects.data ?? []).map((project) => ({
-                  label: project.name,
-                  value: project.id,
-                }))}
-                value={projectFilter}
-              />
-              <FilterSelect
-                label="Filter by environment"
-                onChange={setEnvironmentFilter}
-                options={environments.map((environment) => ({
-                  label: environment.name,
-                  value: environment.id,
-                }))}
-                value={environmentFilter}
-              />
-            </div>
+            <FilterSelect
+              label="Filter by project"
+              onChange={handleProjectFilterChange}
+              options={(projects.data ?? []).map((project) => ({
+                label: project.name,
+                value: project.id,
+              }))}
+              value={projectFilter}
+            />
+            <FilterSelect
+              label="Filter by environment"
+              onChange={setEnvironmentFilter}
+              options={availableEnvironments.map((environment) => ({
+                label: environment.name,
+                value: environment.id,
+              }))}
+              value={environmentFilter}
+            />
           </div>
           <div className="min-h-0 flex-1 overflow-y-auto p-2">
             {filteredSources.map((source) => (
@@ -668,7 +731,79 @@ export function CredentialVaultPage() {
                 ) : null}
               </div>
             </>
-          ) : (
+          ) : hasNoProjects ? (
+            <div className="flex flex-1 items-center justify-center p-8 text-center">
+              <div>
+                <IconFolder
+                  className="mx-auto text-accent"
+                  size={40}
+                  stroke={ICON_STROKE}
+                />
+                <h2 className="mt-4 text-lg font-semibold text-foreground">
+                  No projects found
+                </h2>
+                <p className="mt-2 max-w-md text-sm text-muted">
+                  Create a project to organize environment credentials, or add a
+                  global credential source directly.
+                </p>
+                <div className="mt-5 flex items-center justify-center gap-3">
+                  <Button
+                    onPress={() => setSourceDialogOpen(true)}
+                    variant="primary"
+                  >
+                    <IconPlus size={ICON_SIZE.small} stroke={ICON_STROKE} />
+                    Create first source
+                  </Button>
+                  <Button
+                    onPress={() => navigate('/projects/new')}
+                    variant="secondary"
+                  >
+                    Add project
+                  </Button>
+                </div>
+              </div>
+            </div>
+          ) : hasNoEnvironments ? (
+            <div className="flex flex-1 items-center justify-center p-8 text-center">
+              <div>
+                <IconServer
+                  className="mx-auto text-accent"
+                  size={40}
+                  stroke={ICON_STROKE}
+                />
+                <h2 className="mt-4 text-lg font-semibold text-foreground">
+                  No environments found
+                </h2>
+                <p className="mt-2 max-w-md text-sm text-muted">
+                  {projectFilter !== 'all'
+                    ? 'This project does not have any environments yet. Set up environments in the Environment Tracker, or create a source directly.'
+                    : 'No environments found across your projects. Set up environments in the Environment Tracker, or create a source directly.'}
+                </p>
+                <div className="mt-5 flex items-center justify-center gap-3">
+                  <Button
+                    onPress={() => setSourceDialogOpen(true)}
+                    variant="primary"
+                  >
+                    <IconPlus size={ICON_SIZE.small} stroke={ICON_STROKE} />
+                    Create first source
+                  </Button>
+                  <Button
+                    onPress={() => {
+                      if (projectFilter !== 'all') {
+                        void selectProject(projectFilter);
+                      }
+                      navigate('/environments?create=true', {
+                        state: { openCreateModal: true },
+                      });
+                    }}
+                    variant="secondary"
+                  >
+                    Set up environment
+                  </Button>
+                </div>
+              </div>
+            </div>
+          ) : sourceItems.length === 0 ? (
             <div className="flex flex-1 items-center justify-center p-8 text-center">
               <div>
                 <IconShieldLock
@@ -693,10 +828,46 @@ export function CredentialVaultPage() {
                 </Button>
               </div>
             </div>
+          ) : (
+            <div className="flex flex-1 items-center justify-center p-8 text-center">
+              <div>
+                <IconKey
+                  className="mx-auto text-muted"
+                  size={40}
+                  stroke={ICON_STROKE}
+                />
+                <h2 className="mt-4 text-lg font-semibold text-foreground">
+                  No sources match
+                </h2>
+                <p className="mt-2 max-w-md text-sm text-muted">
+                  Clear the search or filters to see other sources, or create a
+                  new source.
+                </p>
+                <div className="mt-5 flex items-center justify-center gap-3">
+                  <Button
+                    onPress={() => {
+                      setSearch('');
+                      setProjectFilter('all');
+                      setEnvironmentFilter('all');
+                    }}
+                    variant="secondary"
+                  >
+                    Clear filters
+                  </Button>
+                  <Button
+                    onPress={() => setSourceDialogOpen(true)}
+                    variant="primary"
+                  >
+                    <IconPlus size={ICON_SIZE.small} stroke={ICON_STROKE} />
+                    New source
+                  </Button>
+                </div>
+              </div>
+            </div>
           )}
         </main>
 
-        <aside className="hidden min-h-0 flex-col border-l border-divider bg-surface xl:flex">
+        <aside className="flex min-h-0 flex-col border-l border-divider bg-surface">
           {selectedCredential && selectedSource ? (
             <CredentialDetail
               credential={selectedCredential}
@@ -856,14 +1027,11 @@ function CredentialDetail({
         </div>
       </div>
       <div className="mt-4 grid grid-cols-2 gap-2">
-        <Button onPress={onEdit} size="sm" variant="secondary">
-          <IconEdit size={ICON_SIZE.small} stroke={ICON_STROKE} /> Edit
-        </Button>
         <Button
           isDisabled={!credential.hasValue || !isUnlocked}
           onPress={onReveal}
           size="sm"
-          variant="secondary"
+          variant="tertiary"
         >
           {revealedValue === null ? (
             <IconEye size={ICON_SIZE.small} stroke={ICON_STROKE} />
@@ -876,15 +1044,18 @@ function CredentialDetail({
           isDisabled={!credential.hasValue || !isUnlocked}
           onPress={onCopy}
           size="sm"
-          variant="secondary"
+          variant="tertiary"
         >
           <IconCopy size={ICON_SIZE.small} stroke={ICON_STROKE} /> Copy
+        </Button>
+        <Button onPress={onEdit} size="sm" variant="tertiary">
+          <IconEdit size={ICON_SIZE.small} stroke={ICON_STROKE} /> Edit
         </Button>
         <Button
           isDisabled={!isUnlocked}
           onPress={onReplaceValue}
           size="sm"
-          variant="primary"
+          variant="secondary"
         >
           <IconShieldLock size={ICON_SIZE.small} stroke={ICON_STROKE} />
           {credential.hasValue ? 'Replace' : 'Add value'}
@@ -940,7 +1111,7 @@ function CredentialDetail({
             Remove encrypted value
           </Button>
         ) : null}
-        <Button fullWidth onPress={onDelete} size="sm" variant="danger">
+        <Button fullWidth onPress={onDelete} size="sm" variant="danger-soft">
           <IconTrash size={ICON_SIZE.small} stroke={ICON_STROKE} />
           Delete credential
         </Button>
@@ -1030,6 +1201,8 @@ function TagList({ empty, values }: { empty: string; values: string[] }) {
   );
 }
 
+const ALL_FILTER_VALUE = 'all';
+
 function FilterSelect({
   label,
   onChange,
@@ -1042,19 +1215,43 @@ function FilterSelect({
   value: string;
 }) {
   return (
-    <select
+    <Select
       aria-label={label}
-      className="h-8 min-w-0 rounded border border-divider bg-workspace px-2 font-mono text-[10px] text-foreground outline-none focus:border-accent"
-      onChange={(event) => onChange(event.target.value)}
-      value={value}
+      className="min-w-0 w-full"
+      fullWidth
+      onChange={(selected: Key | null) =>
+        onChange(selected !== null ? String(selected) : ALL_FILTER_VALUE)
+      }
+      value={value || ALL_FILTER_VALUE}
+      variant="secondary"
     >
-      <option value="all">All</option>
-      {options.map((option) => (
-        <option key={option.value} value={option.value}>
-          {option.label}
-        </option>
-      ))}
-    </select>
+      <Label className="sr-only">{label}</Label>
+      <Select.Trigger
+        aria-label={label}
+        className="h-8 min-w-0 w-full justify-between font-mono text-[11px] [&_[data-slot=value]]:min-w-0 [&_[data-slot=value]]:truncate [&_[data-slot=value]]:text-left"
+      >
+        <Select.Value className="min-w-0 truncate text-left" />
+        <Select.Indicator className="shrink-0" />
+      </Select.Trigger>
+      <Select.Popover className="max-w-[var(--trigger-width)]">
+        <ListBox aria-label={label}>
+          <ListBox.Item id={ALL_FILTER_VALUE} textValue="All">
+            <Label className="truncate">All</Label>
+            <ListBox.ItemIndicator />
+          </ListBox.Item>
+          {options.map((option) => (
+            <ListBox.Item
+              id={option.value}
+              key={option.value}
+              textValue={option.label}
+            >
+              <Label className="truncate">{option.label}</Label>
+              <ListBox.ItemIndicator />
+            </ListBox.Item>
+          ))}
+        </ListBox>
+      </Select.Popover>
+    </Select>
   );
 }
 

@@ -13,13 +13,15 @@ describe('AboutUpdatesSettingsSection', () => {
   const openUpdateModalMock = vi.fn();
   const loadCurrentVersionMock = vi.fn();
 
+  const installAvailableUpdateMock = vi.fn();
+
   beforeEach(() => {
     vi.clearAllMocks();
     useAppUpdaterStore.getState().reset();
     vi.mocked(useAppUpdaterActions).mockReturnValue({
       checkForUpdates: checkForUpdatesMock,
       closeUpdateModal: vi.fn(),
-      installAvailableUpdate: vi.fn(),
+      installAvailableUpdate: installAvailableUpdateMock,
       loadCurrentVersion: loadCurrentVersionMock,
       openUpdateModal: openUpdateModalMock,
     });
@@ -78,24 +80,36 @@ describe('AboutUpdatesSettingsSection', () => {
     expect(screen.getByText("You're up to date.")).toBeInTheDocument();
   });
 
-  it('displays available-update state', () => {
-    useAppUpdaterStore
-      .getState()
-      .setAvailableUpdate({ currentVersion: '0.1.0', version: '0.1.1' }, false);
+  it('displays available-update state with version details and release notes', () => {
+    useAppUpdaterStore.getState().setCurrentVersion('0.1.0');
+    useAppUpdaterStore.getState().setAvailableUpdate(
+      {
+        body: 'Added new features and bug fixes',
+        currentVersion: '0.1.0',
+        date: '2026-08-15T00:00:00.000Z',
+        version: '0.1.1',
+      },
+      false,
+    );
     render(<AboutUpdatesSettingsSection />);
-    expect(screen.getByText('Version 0.1.1 is available.')).toBeInTheDocument();
+    expect(screen.getByText('Version 0.1.1 is available')).toBeInTheDocument();
+    expect(screen.getByText("What's New")).toBeInTheDocument();
+    expect(
+      screen.getByText('Added new features and bug fixes'),
+    ).toBeInTheDocument();
+    expect(screen.getByText(/Published/i)).toBeInTheDocument();
   });
 
-  it('View Update opens update modal', () => {
+  it('clicking Update Now triggers installAvailableUpdate directly', () => {
     useAppUpdaterStore
       .getState()
       .setAvailableUpdate({ currentVersion: '0.1.0', version: '0.1.1' }, false);
     render(<AboutUpdatesSettingsSection />);
-    const viewUpdateButton = screen.getByRole('button', {
-      name: 'View Update',
+    const updateNowButton = screen.getByRole('button', {
+      name: 'Update Now',
     });
-    fireEvent.click(viewUpdateButton);
-    expect(openUpdateModalMock).toHaveBeenCalledOnce();
+    fireEvent.click(updateNowButton);
+    expect(installAvailableUpdateMock).toHaveBeenCalledOnce();
   });
 
   it('displays error state', () => {

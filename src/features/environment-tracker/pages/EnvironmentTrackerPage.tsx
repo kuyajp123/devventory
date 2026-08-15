@@ -33,7 +33,12 @@ import {
   IconSettings,
 } from '@tabler/icons-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { NavLink, useLocation, useNavigate } from 'react-router';
+import {
+  NavLink,
+  useLocation,
+  useNavigate,
+  useSearchParams,
+} from 'react-router';
 import { EnvironmentFormModal } from '../components/EnvironmentFormModal';
 import { EnvironmentKeyDetails } from '../components/EnvironmentKeyDetails';
 import { EnvironmentMatrix } from '../components/EnvironmentMatrix';
@@ -75,6 +80,7 @@ export function EnvironmentTrackerPage() {
     activeProjectId: projectId,
     isHydrating,
   } = useActiveProject();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(1);
   const [view, setView] = useState<TrackerView>('compare');
@@ -82,9 +88,29 @@ export function EnvironmentTrackerPage() {
     string | null
   >(null);
   const [selectionStore] = useState(createEnvironmentMatrixSelectionStore);
-  const [editing, setEditing] = useState<'new' | null>(null);
+  const isCreateIntent =
+    searchParams.get('create') === 'true' ||
+    searchParams.get('action') === 'create' ||
+    Boolean(
+      (location.state as { openCreateModal?: boolean } | null)?.openCreateModal,
+    );
+  const [editing, setEditing] = useState<'new' | null>(() =>
+    isCreateIntent ? 'new' : null,
+  );
   const [sourceEnvironment, setSourceEnvironment] =
     useState<Environment | null>(null);
+
+  useEffect(() => {
+    if (
+      searchParams.get('create') === 'true' ||
+      searchParams.get('action') === 'create'
+    ) {
+      const nextParams = new URLSearchParams(searchParams);
+      nextParams.delete('create');
+      nextParams.delete('action');
+      setSearchParams(nextParams, { replace: true });
+    }
+  }, [searchParams, setSearchParams]);
   const previousProjectId = useRef(projectId);
   const matrixContainerRef = useRef<HTMLDivElement>(null);
   const activeTab: EnvironmentWorkspaceTab = location.pathname.endsWith(

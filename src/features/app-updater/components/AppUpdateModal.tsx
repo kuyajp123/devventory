@@ -17,11 +17,9 @@ export function AppUpdateModal() {
   const isOpen = useAppUpdaterStore((state) => state.isModalOpen);
   const status = useAppUpdaterStore((state) => state.status);
   const availableUpdate = useAppUpdaterStore((state) => state.availableUpdate);
-  const currentVersion = useAppUpdaterStore((state) => state.currentVersion);
   const downloadProgress = useAppUpdaterStore((state) => state.download);
   const error = useAppUpdaterStore((state) => state.error);
-  const { closeUpdateModal, installAvailableUpdate, checkForUpdates } =
-    useAppUpdaterActions();
+  const { closeUpdateModal, checkForUpdates } = useAppUpdaterActions();
 
   const isBusy = isAppUpdateBusy(status);
   const canDismiss = !isBusy;
@@ -34,10 +32,6 @@ export function AppUpdateModal() {
 
   const handleRetry = () => {
     void checkForUpdates('manual');
-  };
-
-  const handleInstall = () => {
-    void installAvailableUpdate();
   };
 
   // Error state
@@ -218,94 +212,5 @@ export function AppUpdateModal() {
     );
   }
 
-  // Available state - show update details
-  return (
-    <DevventoryDialog isOpen={isOpen} onOpenChange={handleOpenChange} size="md">
-      <DialogHeader
-        icon={
-          <IconDownload
-            aria-hidden="true"
-            className="text-accent"
-            size={ICON_SIZE.navigation}
-            stroke={ICON_STROKE}
-          />
-        }
-        title="Devventory Update Available"
-      />
-      <div className="space-y-4 px-4 py-3">
-        {/* Version Info */}
-        <div className="grid grid-cols-2 gap-4 rounded-md border border-divider bg-panel p-3">
-          <div className="space-y-1">
-            <p className="text-[10px] font-medium uppercase tracking-wider text-muted">
-              Current Version
-            </p>
-            <p className="font-mono text-sm font-semibold text-foreground">
-              {currentVersion ?? '—'}
-            </p>
-          </div>
-          <div className="space-y-1">
-            <p className="text-[10px] font-medium uppercase tracking-wider text-muted">
-              New Version
-            </p>
-            <p className="font-mono text-sm font-semibold text-accent">
-              {availableUpdate.version}
-            </p>
-          </div>
-        </div>
-
-        {/* Publication Date */}
-        {availableUpdate.date && (
-          <div className="space-y-1">
-            <p className="text-[10px] font-medium uppercase tracking-wider text-muted">
-              Published
-            </p>
-            <p className="text-xs text-foreground">
-              {new Date(availableUpdate.date).toLocaleDateString(undefined, {
-                day: 'numeric',
-                month: 'long',
-                year: 'numeric',
-              })}
-            </p>
-          </div>
-        )}
-
-        {/* Release Notes */}
-        {availableUpdate.body && (
-          <div className="space-y-1">
-            <p className="text-[10px] font-medium uppercase tracking-wider text-muted">
-              What's New
-            </p>
-            <div className="max-h-48 overflow-y-auto rounded-md border border-divider bg-workspace p-3">
-              <pre className="whitespace-pre-wrap font-mono text-xs text-foreground">
-                {availableUpdate.body}
-              </pre>
-            </div>
-          </div>
-        )}
-
-        {/* Warning */}
-        <div className="rounded-md border border-accent/40 bg-accent/10 p-3">
-          <p className="text-xs text-muted">
-            <span className="font-medium text-accent">Note:</span> Save any
-            unfinished edits. Devventory will restart to finish the update.
-          </p>
-        </div>
-
-        {/* Actions */}
-        <div className="flex justify-end gap-2">
-          <Button onPress={closeUpdateModal} size="sm" variant="ghost">
-            Later
-          </Button>
-          <Button onPress={handleInstall} size="sm" variant="primary">
-            <IconDownload
-              aria-hidden="true"
-              size={ICON_SIZE.small}
-              stroke={ICON_STROKE}
-            />
-            <span>Update Now</span>
-          </Button>
-        </div>
-      </div>
-    </DevventoryDialog>
-  );
+  return null;
 }

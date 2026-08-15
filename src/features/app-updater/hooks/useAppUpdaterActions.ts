@@ -107,6 +107,7 @@ export function useAppUpdaterActions() {
 
       // Same version - proceed with download and install
       errorStage = 'download';
+      store.openModal();
       const onProgress = (event: AppUpdateDownloadEvent) => {
         store.recordDownloadEvent(event);
       };

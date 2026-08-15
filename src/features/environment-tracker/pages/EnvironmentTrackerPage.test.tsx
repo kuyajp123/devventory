@@ -357,6 +357,14 @@ describe('EnvironmentTrackerPage', () => {
     expect(await screen.findByText('Validation issues')).toBeVisible();
     expect(screen.getByLabelText('Search issues')).toBeVisible();
   });
+
+  it('automatically opens the create environment dialog when routed with create query param', async () => {
+    renderTracker('/environments?create=true');
+
+    expect(
+      await screen.findByRole('dialog', { name: 'Create environment' }),
+    ).toBeVisible();
+  });
 });
 
 function renderTracker(initialEntry = '/environments') {
