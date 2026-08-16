@@ -4,7 +4,9 @@ use thiserror::Error;
 use uuid::Uuid;
 
 use crate::{
-    features::validation_center::{ValidationError, ValidationRule, ValidationService},
+    features::validation_center::{
+        ValidationError, ValidationIssueStatus, ValidationRule, ValidationService,
+    },
     shared::errors::command::CommandError,
 };
 
@@ -84,7 +86,8 @@ impl EnvironmentWorkspaceService {
                     .push(rule.clone());
             }
         }
-        let mut issues_by_cell = HashMap::new();
+        let mut open_issues_by_cell = HashMap::new();
+        let mut ignored_issues_by_cell = HashMap::new();
         for issue in issues {
             let Some(environment_id) = issue.environment_id else {
                 continue;
@@ -95,10 +98,17 @@ impl EnvironmentWorkspaceService {
             }) {
                 continue;
             }
-            issues_by_cell
-                .entry((normalized_key, environment_id))
-                .or_insert_with(Vec::new)
-                .push(issue);
+            if issue.status == ValidationIssueStatus::Ignored {
+                ignored_issues_by_cell
+                    .entry((normalized_key, environment_id))
+                    .or_insert_with(Vec::new)
+                    .push(issue);
+            } else {
+                open_issues_by_cell
+                    .entry((normalized_key, environment_id))
+                    .or_insert_with(Vec::new)
+                    .push(issue);
+            }
         }
 
         for row in &mut matrix.rows {
@@ -107,7 +117,10 @@ impl EnvironmentWorkspaceService {
                 cell.validation.rules = rules_by_cell
                     .remove(&(normalized_key.clone(), environment.id))
                     .unwrap_or_default();
-                cell.validation.open_issues = issues_by_cell
+                cell.validation.open_issues = open_issues_by_cell
+                    .remove(&(normalized_key.clone(), environment.id))
+                    .unwrap_or_default();
+                cell.validation.ignored_issues = ignored_issues_by_cell
                     .remove(&(normalized_key.clone(), environment.id))
                     .unwrap_or_default();
             }

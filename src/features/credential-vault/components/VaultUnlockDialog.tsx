@@ -1,3 +1,11 @@
+import { ICON_SIZE, ICON_STROKE } from '@/shared/constants/icon.constants';
+import { TauriCommandError } from '@/shared/infrastructure/tauri/tauri-error';
+import {
+  DevventoryDialog,
+  DialogBody,
+  DialogFooter,
+  DialogHeader,
+} from '@/shared/ui';
 import {
   Alert,
   Button,
@@ -10,14 +18,6 @@ import {
 } from '@heroui/react';
 import { IconLock } from '@tabler/icons-react';
 import { useState } from 'react';
-import { ICON_SIZE, ICON_STROKE } from '@/shared/constants/icon.constants';
-import {
-  DevventoryDialog,
-  DialogBody,
-  DialogFooter,
-  DialogHeader,
-} from '@/shared/ui';
-import { TauriCommandError } from '@/shared/infrastructure/tauri/tauri-error';
 
 export function VaultUnlockDialog({
   isConfigured,
@@ -120,8 +120,7 @@ export function VaultUnlockDialog({
             >
               {isConfigured
                 ? 'Checking your password securely on this computer.'
-                : 'Creating your encrypted vault on this computer.'}{' '}
-              This can take a few seconds on slower computers.
+                : 'Creating your encrypted vault on this computer.'}
             </p>
           ) : null}
           <p className="text-xs leading-relaxed text-muted">

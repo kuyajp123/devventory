@@ -150,6 +150,7 @@ export type EnvironmentMatrixValidationIssue = ValidationIssue;
 
 export const environmentMatrixCellValidationSchema = z
   .object({
+    ignoredIssues: z.array(validationIssueSchema).optional().default([]),
     openIssues: z.array(validationIssueSchema),
     rules: z.array(validationRuleSchema),
   })

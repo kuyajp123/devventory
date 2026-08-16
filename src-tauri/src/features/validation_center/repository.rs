@@ -398,7 +398,7 @@ impl SqliteValidationRepository {
              FROM validation_issues i
              LEFT JOIN environments e
                ON e.project_id = i.project_id AND e.id = i.environment_id
-             WHERE i.project_id = ? AND i.status = 'open'
+             WHERE i.project_id = ? AND i.status IN ('open', 'ignored')
                AND i.normalized_key IN (SELECT value FROM json_each(?))
                AND i.environment_id IN (SELECT value FROM json_each(?))
              ORDER BY CASE i.severity WHEN 'error' THEN 0 WHEN 'warning' THEN 1 ELSE 2 END,

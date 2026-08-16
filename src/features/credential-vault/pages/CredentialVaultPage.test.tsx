@@ -74,6 +74,12 @@ vi.mock('@/features/projects', async (importOriginal) => ({
     projects: vaultMocks.projects,
     selectProject: mockSelectProject,
   }),
+  useProjectQuery: (projectId: string) => ({
+    data: vaultMocks.projects.find((p) => p.id === projectId) ?? null,
+    isError: false,
+    isPending: false,
+    isSuccess: true,
+  }),
   useProjectsQuery: () => ({
     data: vaultMocks.projects,
     isError: false,
@@ -561,5 +567,80 @@ describe('CredentialVaultPage project filtering', () => {
         name: (name) => name.includes('Alpha Source') && !name.includes('Edit'),
       }),
     ).toBeVisible();
+  });
+
+  it('clears the search input when the SearchField clear button is clicked', async () => {
+    const user = userEvent.setup();
+    renderWithProviders(<CredentialVaultPage />);
+
+    const searchInput = await screen.findByLabelText(
+      'Search credential sources and keys',
+    );
+    await user.type(searchInput, 'test-query');
+    expect(searchInput).toHaveValue('test-query');
+
+    const clearButton = screen.getByRole('button', {
+      name: 'Clear credential search',
+    });
+    await user.click(clearButton);
+
+    expect(searchInput).toHaveValue('');
+  });
+
+  it('redirects to environment tracker and passes cell highlight parameters when redirection button is clicked', async () => {
+    const user = userEvent.setup();
+    mockNavigate.mockReset();
+    vaultMocks.status = { isConfigured: true, isUnlocked: true };
+    vaultMocks.projects = [projectAlpha, projectBeta];
+    vaultMocks.sources = [sourceAlpha, sourceBeta];
+    vaultMocks.environments = [
+      {
+        createdAt: '2026-08-13T00:00:00.000Z',
+        description: null,
+        id: '77777777-7777-4777-8777-777777777777',
+        name: 'Alpha Staging',
+        projectId: projectAlpha.id,
+        sortOrder: 0,
+        updatedAt: '2026-08-13T00:00:00.000Z',
+      },
+    ];
+    vaultMocks.credentials = [
+      {
+        createdAt: '2026-08-13T00:00:00.000Z',
+        environmentLinks: [
+          {
+            environmentId: '77777777-7777-4777-8777-777777777777',
+            projectId: projectAlpha.id,
+          },
+        ],
+        hasValue: true,
+        id: '55555555-5555-4555-8555-555555555555',
+        key: 'ALPHA_API_KEY',
+        normalizedKey: 'ALPHA_API_KEY',
+        notes: null,
+        projectIds: [projectAlpha.id],
+        sourceId: sourceAlpha.id,
+        updatedAt: '2026-08-13T00:00:00.000Z',
+      },
+    ];
+
+    renderWithProviders(<CredentialVaultPage />);
+
+    const redirectButton = await screen.findByRole('button', {
+      name: 'Open ALPHA_API_KEY in Environment Tracker',
+    });
+    await user.click(redirectButton);
+
+    expect(mockNavigate).toHaveBeenCalledWith(
+      '/environments?search=ALPHA_API_KEY&env=77777777-7777-4777-8777-777777777777',
+      {
+        state: {
+          highlightCell: {
+            environmentId: '77777777-7777-4777-8777-777777777777',
+            keyName: 'ALPHA_API_KEY',
+          },
+        },
+      },
+    );
   });
 });

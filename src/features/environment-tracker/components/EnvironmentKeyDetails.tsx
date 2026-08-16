@@ -8,6 +8,7 @@ import {
 } from '@tabler/icons-react';
 import { useEffect, useMemo, useState } from 'react';
 import { ICON_SIZE, ICON_STROKE } from '@/shared/constants/icon.constants';
+import type { ValidationIssue } from '@/shared/models/validation';
 import { SemanticStatusChip } from '@/shared/ui';
 import type {
   Environment,
@@ -31,12 +32,16 @@ export interface EnvironmentKeySelection {
 }
 
 export function EnvironmentKeyDetails({
+  isUpdatingIssue = false,
   onClose,
   onDefinitionClick,
+  onIssueStatusChange = () => {},
   selection,
 }: {
+  isUpdatingIssue?: boolean;
   onClose: () => void;
   onDefinitionClick?: (relativePath: string) => void;
+  onIssueStatusChange?: (issue: ValidationIssue) => void;
   selection: EnvironmentKeySelection | null;
 }) {
   if (!selection) {
@@ -45,21 +50,27 @@ export function EnvironmentKeyDetails({
 
   return (
     <EnvironmentKeyDetailsContent
+      isUpdatingIssue={isUpdatingIssue}
       key={`${selection.environment.id}:${selection.keyName}:${selection.selectedSourcePath ?? 'environment'}`}
       onClose={onClose}
       onDefinitionClick={onDefinitionClick}
+      onIssueStatusChange={onIssueStatusChange}
       selection={selection}
     />
   );
 }
 
 function EnvironmentKeyDetailsContent({
+  isUpdatingIssue,
   onClose,
   onDefinitionClick,
+  onIssueStatusChange,
   selection,
 }: {
+  isUpdatingIssue: boolean;
   onClose: () => void;
   onDefinitionClick?: (relativePath: string) => void;
+  onIssueStatusChange: (issue: ValidationIssue) => void;
   selection: EnvironmentKeySelection;
 }) {
   const [selectedDefinitionPath, setSelectedDefinitionPath] = useState<
@@ -172,7 +183,11 @@ function EnvironmentKeyDetailsContent({
         </section>
 
         <div className="border-t border-divider pt-4">
-          <EnvironmentValidationDetails validation={selection.validation} />
+          <EnvironmentValidationDetails
+            isUpdating={isUpdatingIssue}
+            onStatusChange={onIssueStatusChange}
+            validation={selection.validation}
+          />
         </div>
 
         <section>

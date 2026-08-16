@@ -78,7 +78,7 @@ interface EnvironmentMatrixBodyProps {
 const ABSENT_CELL: EnvironmentMatrixCell = {
   sourceDetails: [],
   state: 'absent',
-  validation: { openIssues: [], rules: [] },
+  validation: { ignoredIssues: [], openIssues: [], rules: [] },
 };
 
 const noopSortingStrategy = () => null;

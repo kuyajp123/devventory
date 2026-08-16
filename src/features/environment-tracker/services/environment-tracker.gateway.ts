@@ -1,3 +1,4 @@
+import { open } from '@tauri-apps/plugin-dialog';
 import { invokeCommand } from '@/shared/infrastructure/tauri/invoke-client';
 import {
   customEnvironmentSourceSchema,
@@ -9,6 +10,16 @@ import {
 } from '../models/environment';
 
 export const environmentTrackerGateway = {
+  async selectSourceFile(defaultPath?: string): Promise<string | null> {
+    const selected = await open({
+      defaultPath,
+      directory: false,
+      multiple: false,
+      title: 'Choose a configuration file',
+    });
+    return typeof selected === 'string' ? selected : null;
+  },
+
   async list(projectId: string) {
     const response = await invokeCommand<unknown>('list_environments', {
       input: { projectId },

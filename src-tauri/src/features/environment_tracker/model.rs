@@ -161,6 +161,7 @@ pub(crate) struct EnvironmentMatrixCell {
 pub(crate) struct EnvironmentMatrixCellValidation {
     pub(crate) rules: Vec<ValidationRule>,
     pub(crate) open_issues: Vec<ValidationIssue>,
+    pub(crate) ignored_issues: Vec<ValidationIssue>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
