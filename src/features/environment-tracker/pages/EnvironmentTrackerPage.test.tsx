@@ -35,6 +35,30 @@ vi.mock('@/features/projects', () => ({
     hasProjects: true,
     isHydrating: false,
   }),
+  useProjectQuery: () => ({
+    data: {
+      createdAt: '2026-08-01T00:00:00.000Z',
+      description: null,
+      exclusions: [],
+      id: projectId,
+      initialScan: {
+        completed: true,
+        directoriesVisited: 1,
+        durationMs: 1,
+        entriesExcluded: 0,
+        entriesUnreadable: 0,
+        filesDiscovered: 1,
+      },
+      name: 'Desktop app',
+      projectType: 'desktop',
+      rootPath: 'C:\\workspace\\app',
+      updatedAt: '2026-08-01T00:00:00.000Z',
+      watchedLocations: ['.'],
+    },
+    isError: false,
+    isPending: false,
+    isSuccess: true,
+  }),
 }));
 
 vi.mock('../services/environment-tracker.gateway', () => ({
@@ -176,7 +200,7 @@ describe('EnvironmentTrackerPage', () => {
                   sourceName: '.env.local',
                 },
               ],
-              validation: { openIssues: [], rules: [] },
+              validation: { ignoredIssues: [], openIssues: [], rules: [] },
             },
           ],
         },
@@ -265,7 +289,7 @@ describe('EnvironmentTrackerPage', () => {
                   sourceName: '.env.security-test.local',
                 },
               ],
-              validation: { openIssues: [], rules: [] },
+              validation: { ignoredIssues: [], openIssues: [], rules: [] },
             },
           ],
         },
@@ -354,8 +378,79 @@ describe('EnvironmentTrackerPage', () => {
     expect(screen.getByText('Project health')).toBeVisible();
 
     await user.click(screen.getByRole('tab', { name: /^Issues/ }));
-    expect(await screen.findByText('Validation issues')).toBeVisible();
-    expect(screen.getByLabelText('Search issues')).toBeVisible();
+    expect(await screen.findByLabelText('Search issues')).toBeVisible();
+  });
+
+  it('automatically selects and highlights a cell when navigated with search and env parameters', async () => {
+    const environment = environmentResponse();
+    vi.mocked(environmentTrackerGateway.list).mockResolvedValue([environment]);
+    vi.mocked(environmentTrackerGateway.matrix).mockResolvedValue({
+      environments: [environment],
+      page: 1,
+      pageSize: 50,
+      rows: [
+        {
+          cells: [
+            {
+              sourceDetails: [
+                {
+                  isCommented: false,
+                  lineNumber: 1,
+                  origin: 'file',
+                  relativePath: '.env.local',
+                  sourceId: '4b2cc20c-9360-44b8-85d3-d5f089582d6e',
+                  sourceName: '.env.local',
+                },
+              ],
+              state: 'present',
+              validation: { ignoredIssues: [], openIssues: [], rules: [] },
+            },
+          ],
+          keyName: 'AUTH_SECRET_KEY',
+        },
+      ],
+      totalItems: 1,
+      totalPages: 1,
+    });
+
+    renderTracker(`/environments?search=AUTH_SECRET_KEY&env=${environment.id}`);
+
+    expect(
+      await screen.findByText('Definitions in this environment'),
+    ).toBeVisible();
+    expect(
+      screen.getByRole('button', { name: /AUTH_SECRET_KEY in Development/ }),
+    ).toHaveAttribute('data-selected', 'true');
+    expect(
+      screen.getByRole('button', { name: 'Close key details' }),
+    ).toBeVisible();
+  });
+
+  it('clears the search input when the SearchField clear button is clicked', async () => {
+    const user = userEvent.setup();
+    const environment = environmentResponse();
+    vi.mocked(environmentTrackerGateway.list).mockResolvedValue([environment]);
+    vi.mocked(environmentTrackerGateway.matrix).mockResolvedValue({
+      environments: [environment],
+      page: 1,
+      pageSize: 50,
+      rows: [],
+      totalItems: 0,
+      totalPages: 1,
+    });
+    renderTracker();
+
+    const searchInput =
+      await screen.findByPlaceholderText('Search key name...');
+    await user.type(searchInput, 'MY_SECRET');
+    expect(searchInput).toHaveValue('MY_SECRET');
+
+    const clearButton = screen.getByRole('button', {
+      name: 'Clear key search',
+    });
+    await user.click(clearButton);
+
+    expect(searchInput).toHaveValue('');
   });
 
   it('automatically opens the create environment dialog when routed with create query param', async () => {
@@ -367,9 +462,13 @@ describe('EnvironmentTrackerPage', () => {
   });
 });
 
-function renderTracker(initialEntry = '/environments') {
+function renderTracker(
+  initialEntry:
+    | string
+    | { pathname: string; search?: string; state?: unknown } = '/environments',
+) {
   return renderWithProviders(
-    <MemoryRouter initialEntries={[initialEntry]}>
+    <MemoryRouter initialEntries={[initialEntry as string]}>
       <EnvironmentTrackerPage />
     </MemoryRouter>,
   );

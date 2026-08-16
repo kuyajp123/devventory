@@ -201,6 +201,7 @@ export function InspectEnvironmentMatrix({
                                 sourceDetails={details}
                                 validation={
                                   environmentCell?.validation ?? {
+                                    ignoredIssues: [],
                                     openIssues: [],
                                     rules: [],
                                   }

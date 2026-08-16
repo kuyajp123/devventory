@@ -922,7 +922,7 @@ export function installTauriBrowserMocks() {
                 : details.length === 1
                   ? 'present'
                   : 'absent',
-            validation: { openIssues: [], rules: [] },
+            validation: { ignoredIssues: [], openIssues: [], rules: [] },
           };
         }),
         keyName,
@@ -949,12 +949,20 @@ export function installTauriBrowserMocks() {
                           },
                         ],
                         state: 'present',
-                        validation: { openIssues: [], rules: [] },
+                        validation: {
+                          ignoredIssues: [],
+                          openIssues: [],
+                          rules: [],
+                        },
                       }
                     : {
                         sourceDetails: [],
                         state: 'absent',
-                        validation: { openIssues: [], rules: [] },
+                        validation: {
+                          ignoredIssues: [],
+                          openIssues: [],
+                          rules: [],
+                        },
                       };
                 }),
                 keyName: 'APP_MODE',

@@ -77,10 +77,11 @@ const selection: EnvironmentKeySelection = {
   environment,
   keyName: 'NARRATIVE_LIVE_REPORT_ID',
   sourceDetails,
-  validation: { openIssues: [], rules: [] },
+  validation: { ignoredIssues: [], openIssues: [], rules: [] },
 };
 
 const warningValidation = {
+  ignoredIssues: [],
   openIssues: [
     {
       environmentId: environment.id,
@@ -125,7 +126,7 @@ const inspectMatrix = {
         {
           sourceDetails: [sourceDetails[0]],
           state: 'present' as const,
-          validation: { openIssues: [], rules: [] },
+          validation: { ignoredIssues: [], openIssues: [], rules: [] },
         },
       ],
       keyName: 'SECURITY_EVENT_SECRET',
@@ -150,7 +151,7 @@ const compareMatrix = {
         {
           sourceDetails: [],
           state: 'absent' as const,
-          validation: { openIssues: [], rules: [] },
+          validation: { ignoredIssues: [], openIssues: [], rules: [] },
         },
       ],
       keyName: selection.keyName,
@@ -160,12 +161,12 @@ const compareMatrix = {
         {
           sourceDetails: [],
           state: 'absent' as const,
-          validation: { openIssues: [], rules: [] },
+          validation: { ignoredIssues: [], openIssues: [], rules: [] },
         },
         {
           sourceDetails: [sourceDetails[0]],
           state: 'present' as const,
-          validation: { openIssues: [], rules: [] },
+          validation: { ignoredIssues: [], openIssues: [], rules: [] },
         },
       ],
       keyName: 'SUPABASE_PROJECT_REF',

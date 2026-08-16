@@ -1,6 +1,7 @@
 import { Button, EmptyState, Spinner, Table } from '@heroui/react';
 import {
   IconCircleCheck,
+  IconExternalLink,
   IconEyeOff,
   IconListCheck,
 } from '@tabler/icons-react';
@@ -19,6 +20,7 @@ interface ValidationIssueTableProps {
   isUpdating: boolean;
   issues: ValidationIssue[];
   onFilterChange: (filters: ValidationIssueFilters) => void;
+  onNavigateToCell?: (issue: ValidationIssue) => void;
   onStatusChange: (issue: ValidationIssue) => void;
   totalItems: number;
   totalPages: number;
@@ -30,6 +32,7 @@ export function ValidationIssueTable({
   isUpdating,
   issues,
   onFilterChange,
+  onNavigateToCell,
   onStatusChange,
   totalItems,
   totalPages,
@@ -141,30 +144,48 @@ export function ValidationIssueTable({
                     {formatTimestamp(issue.lastSeenAt)}
                   </Table.Cell>
                   <Table.Cell>
-                    {issue.status !== 'resolved' && (
-                      <Button
-                        aria-label={`${issue.status === 'ignored' ? 'Reopen' : 'Ignore'} ${issue.keyName} issue`}
-                        isDisabled={isUpdating}
-                        onPress={() => onStatusChange(issue)}
-                        size="sm"
-                        variant="ghost"
-                      >
-                        {issue.status === 'ignored' ? (
-                          <IconCircleCheck
+                    <div className="flex items-center gap-1">
+                      {onNavigateToCell && (
+                        <Button
+                          aria-label={`Highlight ${issue.keyName} in environment matrix`}
+                          isDisabled={!issue.environmentId}
+                          onPress={() => onNavigateToCell(issue)}
+                          size="sm"
+                          variant="ghost"
+                        >
+                          <IconExternalLink
                             aria-hidden="true"
                             size={ICON_SIZE.small}
                             stroke={ICON_STROKE}
                           />
-                        ) : (
-                          <IconEyeOff
-                            aria-hidden="true"
-                            size={ICON_SIZE.small}
-                            stroke={ICON_STROKE}
-                          />
-                        )}
-                        {issue.status === 'ignored' ? 'Reopen' : 'Ignore'}
-                      </Button>
-                    )}
+                          View
+                        </Button>
+                      )}
+                      {issue.status !== 'resolved' && (
+                        <Button
+                          aria-label={`${issue.status === 'ignored' ? 'Reopen' : 'Ignore'} ${issue.keyName} issue`}
+                          isDisabled={isUpdating}
+                          onPress={() => onStatusChange(issue)}
+                          size="sm"
+                          variant="ghost"
+                        >
+                          {issue.status === 'ignored' ? (
+                            <IconCircleCheck
+                              aria-hidden="true"
+                              size={ICON_SIZE.small}
+                              stroke={ICON_STROKE}
+                            />
+                          ) : (
+                            <IconEyeOff
+                              aria-hidden="true"
+                              size={ICON_SIZE.small}
+                              stroke={ICON_STROKE}
+                            />
+                          )}
+                          {issue.status === 'ignored' ? 'Reopen' : 'Ignore'}
+                        </Button>
+                      )}
+                    </div>
                   </Table.Cell>
                 </Table.Row>
               )}

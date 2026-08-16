@@ -1,5 +1,6 @@
 import { screen } from '@testing-library/react';
-import { describe, expect, it } from 'vitest';
+import userEvent from '@testing-library/user-event';
+import { describe, expect, it, vi } from 'vitest';
 import { renderWithProviders } from '@/test/render';
 import type {
   EnvironmentMatrixValidationIssue,
@@ -12,6 +13,7 @@ describe('EnvironmentValidationDetails', () => {
     renderWithProviders(
       <EnvironmentValidationDetails
         validation={{
+          ignoredIssues: [],
           openIssues: [
             issue({
               id: '4ce13759-a72a-4595-8133-2d7100f42f01',
@@ -38,12 +40,98 @@ describe('EnvironmentValidationDetails', () => {
     ).toBeVisible();
     expect(screen.getByText('.env.production:12')).toBeVisible();
     expect(screen.getByText('Production database connection')).toBeVisible();
+    expect(screen.getAllByRole('button', { name: /ignore/i })).toHaveLength(2);
+  });
+
+  it('calls onStatusChange when clicking ignore button', async () => {
+    const user = userEvent.setup();
+    const onStatusChange = vi.fn();
+    const testIssue = issue({
+      id: '4ce13759-a72a-4595-8133-2d7100f42f01',
+      keyName: 'DATABASE_URL',
+      status: 'open',
+    });
+
+    renderWithProviders(
+      <EnvironmentValidationDetails
+        onStatusChange={onStatusChange}
+        validation={{
+          ignoredIssues: [],
+          openIssues: [testIssue],
+          rules: [],
+        }}
+      />,
+    );
+
+    const ignoreButton = screen.getByRole('button', {
+      name: 'Ignore DATABASE_URL issue',
+    });
+    expect(ignoreButton).toBeVisible();
+    await user.click(ignoreButton);
+    expect(onStatusChange).toHaveBeenCalledWith(testIssue);
+  });
+
+  it('renders ignored issues in dedicated section with reopen button and handles click', async () => {
+    const user = userEvent.setup();
+    const onStatusChange = vi.fn();
+    const testIssue = issue({
+      id: '4ce13759-a72a-4595-8133-2d7100f42f01',
+      keyName: 'DATABASE_URL',
+      status: 'ignored',
+    });
+
+    renderWithProviders(
+      <EnvironmentValidationDetails
+        onStatusChange={onStatusChange}
+        validation={{
+          ignoredIssues: [testIssue],
+          openIssues: [],
+          rules: [],
+        }}
+      />,
+    );
+
+    expect(screen.getByText('1 ignored')).toBeVisible();
+    expect(screen.getByText('Ignored issues')).toBeVisible();
+    expect(screen.getByText('Required key is missing.')).toBeVisible();
+
+    const reopenButton = screen.getByRole('button', {
+      name: 'Reopen DATABASE_URL issue',
+    });
+    expect(reopenButton).toBeVisible();
+    await user.click(reopenButton);
+    expect(onStatusChange).toHaveBeenCalledWith(testIssue);
+  });
+
+  it('renders reopen button and disables it when isUpdating is true', () => {
+    const testIssue = issue({
+      id: '4ce13759-a72a-4595-8133-2d7100f42f01',
+      keyName: 'DATABASE_URL',
+      status: 'ignored',
+    });
+
+    renderWithProviders(
+      <EnvironmentValidationDetails
+        isUpdating={true}
+        validation={{
+          ignoredIssues: [testIssue],
+          openIssues: [],
+          rules: [],
+        }}
+      />,
+    );
+
+    const reopenButton = screen.getByRole('button', {
+      name: 'Reopen DATABASE_URL issue',
+    });
+    expect(reopenButton).toBeVisible();
+    expect(reopenButton).toBeDisabled();
   });
 
   it('uses a compact neutral explanation when the cell has no active issue', () => {
     renderWithProviders(
       <EnvironmentValidationDetails
-        validation={{ openIssues: [], rules: [] }}
+        validation={{ ignoredIssues: [], openIssues: [], rules: [] }}
       />,
     );
 

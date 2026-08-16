@@ -13,18 +13,18 @@ import { ConfirmDialog } from '@/shared/ui';
 import {
   Alert,
   Button,
-  Input,
   Label,
   ListBox,
+  SearchField,
   Select,
   Spinner,
-  TextField,
   toast,
   type Key,
 } from '@heroui/react';
 import {
   IconCopy,
   IconEdit,
+  IconExternalLink,
   IconEye,
   IconEyeOff,
   IconFolder,
@@ -32,7 +32,6 @@ import {
   IconLock,
   IconLockOpen,
   IconPlus,
-  IconSearch,
   IconServer,
   IconShieldLock,
   IconTrash,
@@ -77,7 +76,7 @@ type DeleteTarget =
 
 export function CredentialVaultPage() {
   const navigate = useNavigate();
-  const { selectProject } = useActiveProject();
+  const { activeProjectId, selectProject } = useActiveProject();
   const status = useCredentialVaultStatusQuery();
   const isUnlocked = status.data?.isUnlocked ?? false;
   const sources = useCredentialSourcesQuery(isUnlocked);
@@ -172,6 +171,50 @@ export function CredentialVaultPage() {
     });
   }, [credentialItems, environmentFilter, projectFilter, search, sourceItems]);
 
+  const sourceGroups = useMemo(() => {
+    const groupsMap = new Map<
+      string,
+      { id: string; sources: CredentialSource[]; title: string }
+    >();
+
+    for (const source of filteredSources) {
+      let groupId: string;
+      let groupTitle: string;
+
+      if (source.projectIds.length === 0) {
+        groupId = '__global__';
+        groupTitle = 'Global';
+      } else if (source.projectIds.length === 1) {
+        const projectId = source.projectIds[0]!;
+        groupId = projectId;
+        const project = projectList.find((item) => item.id === projectId);
+        groupTitle = project?.name ?? 'Unknown Project';
+      } else {
+        groupId = '__shared__';
+        groupTitle = 'Multiple Projects';
+      }
+
+      let group = groupsMap.get(groupId);
+      if (!group) {
+        group = {
+          id: groupId,
+          sources: [],
+          title: groupTitle,
+        };
+        groupsMap.set(groupId, group);
+      }
+      group.sources.push(source);
+    }
+
+    return Array.from(groupsMap.values()).sort((a, b) => {
+      if (a.id === '__global__') return 1;
+      if (b.id === '__global__') return -1;
+      if (a.id === '__shared__') return 1;
+      if (b.id === '__shared__') return -1;
+      return a.title.localeCompare(b.title);
+    });
+  }, [filteredSources, projectList]);
+
   const activeSourceId =
     selectedSourceId &&
     filteredSources.some((source) => source.id === selectedSourceId)
@@ -180,6 +223,46 @@ export function CredentialVaultPage() {
 
   const selectedSource =
     sourceItems.find((source) => source.id === activeSourceId) ?? null;
+
+  const handleNavigateToEnvironmentTracker = (
+    targetCredential: Credential,
+    explicitProjectId?: string,
+    explicitEnvironmentId?: string,
+  ) => {
+    const targetProjectId =
+      explicitProjectId ||
+      targetCredential.environmentLinks[0]?.projectId ||
+      targetCredential.projectIds[0] ||
+      selectedSource?.projectIds[0] ||
+      activeProjectId;
+
+    if (targetProjectId && targetProjectId !== activeProjectId) {
+      void selectProject(targetProjectId);
+    }
+
+    const targetEnvironmentId =
+      explicitEnvironmentId ||
+      targetCredential.environmentLinks.find(
+        (link) => !targetProjectId || link.projectId === targetProjectId,
+      )?.environmentId ||
+      targetCredential.environmentLinks[0]?.environmentId;
+
+    const params = new URLSearchParams();
+    params.set('search', targetCredential.key);
+    if (targetEnvironmentId) {
+      params.set('env', targetEnvironmentId);
+    }
+
+    void navigate(`/environments?${params.toString()}`, {
+      state: {
+        highlightCell: {
+          environmentId: targetEnvironmentId,
+          keyName: targetCredential.key,
+        },
+      },
+    });
+  };
+
   const filteredCredentials = useMemo(
     () =>
       credentialItems.filter((credential) => {
@@ -442,6 +525,34 @@ export function CredentialVaultPage() {
     );
   }
 
+  const renderSourceButton = (source: CredentialSource) => (
+    <button
+      className={`mb-1 flex w-full items-center gap-3 rounded-md border px-3 py-3 text-left transition-colors ${
+        source.id === activeSourceId
+          ? 'border-accent/35 bg-accent/10'
+          : 'border-transparent hover:border-divider hover:bg-panel'
+      }`}
+      key={source.id}
+      onClick={() => {
+        setSelectedSourceId(source.id);
+        setSelectedCredentialId(null);
+        setRevealedSecret(null);
+      }}
+      type="button"
+    >
+      <SourceLogo source={source} />
+      <span className="min-w-0 flex-1">
+        <span className="block truncate text-sm font-medium text-foreground">
+          {source.name}
+        </span>
+        <span className="mt-0.5 block font-mono text-[10px] text-muted">
+          {source.credentialCount} credential
+          {source.credentialCount === 1 ? '' : 's'}
+        </span>
+      </span>
+    </button>
+  );
+
   return (
     <div className="-mx-4 -mb-4 flex h-full min-h-0 flex-1 flex-col overflow-hidden sm:-mx-6 sm:-mb-6 lg:-mx-8 lg:-mb-8">
       <header className="flex shrink-0 flex-wrap items-center justify-between gap-4 border-b border-divider px-4 pb-4 sm:px-6 lg:px-8">
@@ -539,22 +650,25 @@ export function CredentialVaultPage() {
       <div className="grid h-full min-h-0 grid-cols-[240px_minmax(0,1fr)_280px]">
         <aside className="flex min-h-0 flex-col border-r border-divider bg-surface">
           <div className="space-y-2 border-b border-divider p-3">
-            <TextField variant="secondary">
-              <div className="relative">
-                <IconSearch
-                  className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-muted"
-                  size={14}
-                  stroke={ICON_STROKE}
-                />
-                <Input
+            <SearchField
+              className="w-full"
+              onChange={setSearch}
+              value={search}
+              variant="secondary"
+            >
+              <Label className="sr-only">
+                Search credential sources and keys
+              </Label>
+              <SearchField.Group>
+                <SearchField.SearchIcon />
+                <SearchField.Input
                   aria-label="Search credential sources and keys"
-                  className="h-8 pl-8 font-mono text-xs w-full"
-                  onChange={(event) => setSearch(event.target.value)}
+                  className="font-mono text-xs"
                   placeholder="Search sources or keys..."
-                  value={search}
                 />
-              </div>
-            </TextField>
+                <SearchField.ClearButton aria-label="Clear credential search" />
+              </SearchField.Group>
+            </SearchField>
             <FilterSelect
               label="Filter by project"
               onChange={handleProjectFilterChange}
@@ -575,33 +689,21 @@ export function CredentialVaultPage() {
             />
           </div>
           <div className="min-h-0 flex-1 overflow-y-auto p-2">
-            {filteredSources.map((source) => (
-              <button
-                className={`mb-1 flex w-full items-center gap-3 rounded-md border px-3 py-3 text-left transition-colors ${
-                  source.id === activeSourceId
-                    ? 'border-accent/35 bg-accent/10'
-                    : 'border-transparent hover:border-divider hover:bg-panel'
-                }`}
-                key={source.id}
-                onClick={() => {
-                  setSelectedSourceId(source.id);
-                  setSelectedCredentialId(null);
-                  setRevealedSecret(null);
-                }}
-                type="button"
-              >
-                <SourceLogo source={source} />
-                <span className="min-w-0 flex-1">
-                  <span className="block truncate text-sm font-medium text-foreground">
-                    {source.name}
-                  </span>
-                  <span className="mt-0.5 block font-mono text-[10px] text-muted">
-                    {source.credentialCount} credential
-                    {source.credentialCount === 1 ? '' : 's'}
-                  </span>
-                </span>
-              </button>
+            {sourceGroups.map((group, index) => (
+              <div key={group.id}>
+                {index > 0 ? (
+                  <div className="my-2.5 border-t border-divider" />
+                ) : null}
+                <div
+                  className="mb-1.5 px-1 font-mono text-[10px] font-semibold uppercase tracking-wider text-muted truncate"
+                  title={group.title}
+                >
+                  {group.title}
+                </div>
+                {group.sources.map(renderSourceButton)}
+              </div>
             ))}
+
             {filteredSources.length === 0 ? (
               <div className="p-4 text-center">
                 <IconKey
@@ -884,6 +986,9 @@ export function CredentialVaultPage() {
                 setEditingCredential(selectedCredential);
                 setCredentialDialogOpen(true);
               }}
+              onNavigateToEnvironmentTracker={
+                handleNavigateToEnvironmentTracker
+              }
               onRemoveValue={() =>
                 void safely(async () => {
                   await removeSecret.mutateAsync(selectedCredential.id);
@@ -995,6 +1100,7 @@ function CredentialDetail({
   onCopy,
   onDelete,
   onEdit,
+  onNavigateToEnvironmentTracker,
   onRemoveValue,
   onReplaceValue,
   onReveal,
@@ -1008,6 +1114,11 @@ function CredentialDetail({
   onCopy: () => void;
   onDelete: () => void;
   onEdit: () => void;
+  onNavigateToEnvironmentTracker: (
+    credential: Credential,
+    explicitProjectId?: string,
+    explicitEnvironmentId?: string,
+  ) => void;
   onRemoveValue: () => void;
   onReplaceValue: () => void;
   onReveal: () => void;
@@ -1019,11 +1130,22 @@ function CredentialDetail({
     <div className="min-h-0 flex-1 overflow-y-auto p-4">
       <div className="flex items-center gap-3">
         <SourceLogo source={source} />
-        <div className="min-w-0">
+        <div className="min-w-0 flex-1">
           <p className="truncate text-xs text-muted">{source.name}</p>
-          <h2 className="truncate font-mono text-sm font-semibold text-foreground">
-            {credential.key}
-          </h2>
+          <div className="flex items-center justify-between gap-2 min-w-0">
+            <h2 className="truncate font-mono text-sm font-semibold text-foreground">
+              {credential.key}
+            </h2>
+            <Button
+              aria-label={`Open ${credential.key} in Environment Tracker`}
+              isIconOnly
+              onPress={() => onNavigateToEnvironmentTracker(credential)}
+              size="sm"
+              variant="tertiary"
+            >
+              <IconExternalLink size={ICON_SIZE.small} stroke={ICON_STROKE} />
+            </Button>
+          </div>
         </div>
       </div>
       <div className="mt-4 grid grid-cols-2 gap-2">
@@ -1077,20 +1199,58 @@ function CredentialDetail({
       </DetailSection>
 
       <DetailSection title="Associations">
-        <TagList
-          empty="No projects"
-          values={credential.projectIds.map(
-            (id) => projects.find((item) => item.id === id)?.name ?? id,
-          )}
-        />
-        <TagList
-          empty="No environments"
-          values={credential.environmentLinks.map(
-            (link) =>
-              environments.find((item) => item.id === link.environmentId)
-                ?.name ?? link.environmentId,
-          )}
-        />
+        <div className="space-y-3">
+          <div>
+            <p className="mb-1.5 font-mono text-[10px] font-semibold uppercase tracking-wider text-muted">
+              Projects
+            </p>
+            <TagList
+              empty="No projects"
+              values={credential.projectIds.map(
+                (id) => projects.find((item) => item.id === id)?.name ?? id,
+              )}
+            />
+          </div>
+          <div>
+            <p className="mb-1.5 font-mono text-[10px] font-semibold uppercase tracking-wider text-muted">
+              Environments
+            </p>
+            {credential.environmentLinks.length > 0 ? (
+              <div className="flex flex-wrap gap-1.5">
+                {credential.environmentLinks.map((link) => {
+                  const env = environments.find(
+                    (item) => item.id === link.environmentId,
+                  );
+                  const envName = env?.name ?? link.environmentId;
+                  const proj = projects.find(
+                    (item) => item.id === link.projectId,
+                  );
+                  const label = proj ? `${envName} (${proj.name})` : envName;
+                  return (
+                    <button
+                      className="inline-flex items-center gap-1.5 rounded border border-accent/25 bg-accent/8 px-2 py-1 text-[10px] text-accent transition-colors hover:border-accent/50 hover:bg-accent/15"
+                      key={`${link.projectId}-${link.environmentId}`}
+                      onClick={() =>
+                        onNavigateToEnvironmentTracker(
+                          credential,
+                          link.projectId,
+                          link.environmentId,
+                        )
+                      }
+                      title={`Open ${credential.key} in Environment Tracker (${label})`}
+                      type="button"
+                    >
+                      <span>{label}</span>
+                      <IconExternalLink size={11} stroke={ICON_STROKE} />
+                    </button>
+                  );
+                })}
+              </div>
+            ) : (
+              <p className="text-xs text-muted">No environments</p>
+            )}
+          </div>
+        </div>
       </DetailSection>
 
       <DetailSection title="Notes">

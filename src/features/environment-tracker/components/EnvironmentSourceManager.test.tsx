@@ -6,6 +6,33 @@ import type { Environment, EnvironmentSource } from '../models/environment';
 import { environmentTrackerGateway } from '../services/environment-tracker.gateway';
 import { EnvironmentSourceManager } from './EnvironmentSourceManager';
 
+vi.mock('@/features/projects', () => ({
+  useProjectQuery: () => ({
+    data: {
+      createdAt: '2026-08-01T00:00:00.000Z',
+      description: null,
+      exclusions: [],
+      id: '30af17bd-2dd6-4b89-a5e7-8517191815a7',
+      initialScan: {
+        completed: true,
+        directoriesVisited: 1,
+        durationMs: 1,
+        entriesExcluded: 0,
+        entriesUnreadable: 0,
+        filesDiscovered: 1,
+      },
+      name: 'Desktop app',
+      projectType: 'desktop',
+      rootPath: 'C:\\workspace\\app',
+      updatedAt: '2026-08-01T00:00:00.000Z',
+      watchedLocations: ['.'],
+    },
+    isError: false,
+    isPending: false,
+    isSuccess: true,
+  }),
+}));
+
 vi.mock('../services/environment-tracker.gateway', () => ({
   environmentTrackerGateway: {
     addSource: vi.fn(),
@@ -14,6 +41,7 @@ vi.mock('../services/environment-tracker.gateway', () => ({
     listCustomSources: vi.fn(),
     listSources: vi.fn(),
     reorderSources: vi.fn(),
+    selectSourceFile: vi.fn(),
     sourceCandidates: vi.fn(),
     update: vi.fn(),
   },
@@ -145,6 +173,9 @@ describe('EnvironmentSourceManager', () => {
 
   it('opens a safe, actionable explanation when a newly added source has a parse issue', async () => {
     const user = userEvent.setup();
+    vi.mocked(environmentTrackerGateway.selectSourceFile).mockResolvedValue(
+      'C:\\workspace\\app\\Backend\\.env',
+    );
     renderWithProviders(
       <EnvironmentSourceManager
         environment={environment}
@@ -155,16 +186,10 @@ describe('EnvironmentSourceManager', () => {
 
     // Navigate to Add Source section
     await user.click(screen.getByRole('button', { name: 'Add Source' }));
-    // Switch to Add by Path tab
-    await user.click(screen.getByRole('tab', { name: 'Add by Path' }));
-
-    await user.type(
-      screen.getByRole('textbox', {
-        name: 'Project-relative configuration path',
-      }),
-      'Backend/.env',
-    );
-    await user.click(screen.getByRole('button', { name: 'Add source' }));
+    // Switch to Choose File tab
+    await user.click(screen.getByRole('tab', { name: 'Choose File' }));
+    // Click Choose file button
+    await user.click(screen.getByRole('button', { name: 'Choose file' }));
 
     await waitFor(() =>
       expect(environmentTrackerGateway.addSource).toHaveBeenCalledWith(

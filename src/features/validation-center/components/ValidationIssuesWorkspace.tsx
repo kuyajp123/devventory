@@ -1,5 +1,6 @@
 import { Card } from '@heroui/react';
 import type { Environment } from '@/features/environment-tracker';
+import type { ValidationIssue } from '@/shared/models/validation';
 import type { ValidationWorkspaceController } from '../hooks/use-validation-workspace';
 import { defaultValidationIssueFilters } from '../hooks/use-validation-workspace';
 import { ValidationIssueFiltersPanel } from './ValidationIssueFilters';
@@ -8,24 +9,17 @@ import { ValidationIssueTable } from './ValidationIssueTable';
 export function ValidationIssuesWorkspace({
   controller,
   environments,
+  onNavigateToCell,
 }: {
   controller: ValidationWorkspaceController;
   environments: Environment[];
+  onNavigateToCell?: (issue: ValidationIssue) => void;
 }) {
   const issues = controller.issues.data?.items ?? [];
 
   return (
     <div className="flex h-full min-h-0 flex-col p-4 sm:px-6 lg:px-8">
       <Card className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-[4px] border border-divider bg-surface shadow-none">
-        <Card.Header className="shrink-0 border-b border-divider px-4 py-3">
-          <Card.Title className="text-sm font-semibold">
-            Validation issues
-          </Card.Title>
-          <Card.Description className="text-xs text-muted">
-            Open, ignored, and resolved findings remain reviewable without
-            changing structural matrix status.
-          </Card.Description>
-        </Card.Header>
         <Card.Content className="flex min-h-0 flex-1 flex-col p-0">
           {controller.issues.isError ? (
             <div className="shrink-0 border-b border-danger/40 bg-danger/10 p-3 text-xs text-danger">
@@ -53,6 +47,7 @@ export function ValidationIssuesWorkspace({
               isUpdating={controller.setIssueStatus.isPending}
               issues={issues}
               onFilterChange={controller.setFilters}
+              onNavigateToCell={onNavigateToCell}
               onStatusChange={(issue) =>
                 void controller.changeIssueStatus(issue)
               }

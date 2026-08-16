@@ -7,18 +7,18 @@ import {
 } from '@/features/validation-center';
 import { ICON_SIZE, ICON_STROKE } from '@/shared/constants/icon.constants';
 import { TauriCommandError } from '@/shared/infrastructure/tauri/tauri-error';
+import type { ValidationIssue } from '@/shared/models/validation';
 import { AppPagination } from '@/shared/ui/AppPagination';
 import {
   Alert,
   Button,
   EmptyState,
-  Input,
   Label,
   ListBox,
+  SearchField,
   Select,
   Skeleton,
   Spinner,
-  TextField,
   toast,
   Tooltip,
   type Key,
@@ -29,7 +29,6 @@ import {
   IconFiles,
   IconPlus,
   IconRefresh,
-  IconSearch,
   IconSettings,
 } from '@tabler/icons-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -81,24 +80,66 @@ export function EnvironmentTrackerPage() {
     isHydrating,
   } = useActiveProject();
   const [searchParams, setSearchParams] = useSearchParams();
-  const [search, setSearch] = useState('');
+  const currentSearchParam = searchParams.get('search');
+  const [prevSearchParam, setPrevSearchParam] = useState(currentSearchParam);
+  const [search, setSearch] = useState(currentSearchParam ?? '');
   const [page, setPage] = useState(1);
   const [view, setView] = useState<TrackerView>('compare');
   const [selectedEnvironmentId, setSelectedEnvironmentId] = useState<
     string | null
   >(null);
   const [selectionStore] = useState(createEnvironmentMatrixSelectionStore);
+  const locationState = location.state as {
+    highlightCell?: { keyName: string; environmentId?: string };
+    openCreateModal?: boolean;
+  } | null;
   const isCreateIntent =
     searchParams.get('create') === 'true' ||
     searchParams.get('action') === 'create' ||
-    Boolean(
-      (location.state as { openCreateModal?: boolean } | null)?.openCreateModal,
-    );
+    Boolean(locationState?.openCreateModal);
   const [editing, setEditing] = useState<'new' | null>(() =>
     isCreateIntent ? 'new' : null,
   );
   const [sourceEnvironment, setSourceEnvironment] =
     useState<Environment | null>(null);
+
+  const targetHighlightKey =
+    locationState?.highlightCell?.keyName ??
+    searchParams.get('key') ??
+    (currentSearchParam || undefined);
+  const targetHighlightEnvId =
+    locationState?.highlightCell?.environmentId ??
+    searchParams.get('env') ??
+    searchParams.get('environmentId') ??
+    undefined;
+
+  const pendingCellHighlightRef = useRef<{
+    keyName: string;
+    environmentId: string;
+  } | null>(
+    targetHighlightKey
+      ? {
+          environmentId: targetHighlightEnvId ?? '',
+          keyName: targetHighlightKey,
+        }
+      : null,
+  );
+
+  useEffect(() => {
+    if (targetHighlightKey) {
+      pendingCellHighlightRef.current = {
+        environmentId: targetHighlightEnvId ?? '',
+        keyName: targetHighlightKey,
+      };
+    }
+  }, [targetHighlightKey, targetHighlightEnvId]);
+
+  if (currentSearchParam !== prevSearchParam) {
+    setPrevSearchParam(currentSearchParam);
+    if (currentSearchParam !== null) {
+      setSearch(currentSearchParam);
+    }
+  }
 
   useEffect(() => {
     if (
@@ -216,6 +257,7 @@ export function EnvironmentTrackerPage() {
     setView('compare');
     setPage(1);
     setSearch('');
+    pendingCellHighlightRef.current = null;
   }, [projectId, selectionStore]);
 
   async function saveEnvironment(values: EnvironmentFormValues) {
@@ -333,6 +375,96 @@ export function EnvironmentTrackerPage() {
     environments.isPending ||
     activeMatrix.isPending ||
     (view === 'inspect' && selectedCustomSources.isPending);
+
+  const handleNavigateToIssueCell = useCallback(
+    (issue: ValidationIssue) => {
+      if (!issue.environmentId) return;
+      setSearch(issue.keyName);
+      setPage(1);
+      setView('compare');
+      pendingCellHighlightRef.current = {
+        environmentId: issue.environmentId,
+        keyName: issue.keyName,
+      };
+      void navigate('/environments');
+    },
+    [navigate],
+  );
+
+  useEffect(() => {
+    const pending = pendingCellHighlightRef.current;
+    if (!pending || !matrixData || activeTab !== 'environments') return;
+
+    const matchingRow = matrixData.rows.find(
+      (row) => row.keyName === pending.keyName,
+    );
+    if (!matchingRow) return;
+
+    let envIndex = pending.environmentId
+      ? matrixData.environments.findIndex(
+          (env) => env.id === pending.environmentId,
+        )
+      : -1;
+
+    if (envIndex === -1 && matrixData.environments.length > 0) {
+      const presentIndex = matchingRow.cells.findIndex(
+        (c) => c.state !== 'absent',
+      );
+      envIndex = presentIndex !== -1 ? presentIndex : 0;
+    }
+
+    const matchingEnvironment = matrixData.environments[envIndex];
+    const matchingCell = matchingRow.cells[envIndex];
+
+    if (matchingEnvironment && matchingCell) {
+      selectionStore.setSelection({
+        environment: matchingEnvironment,
+        keyName: matchingRow.keyName,
+        sourceDetails: matchingCell.sourceDetails,
+        validation: matchingCell.validation,
+      });
+      pendingCellHighlightRef.current = null;
+
+      requestAnimationFrame(() => {
+        const container = matrixContainerRef.current;
+        if (!container) return;
+        const cellId = `${matchingRow.keyName}:${matchingEnvironment.id}`;
+        const cellElement = container.querySelector(
+          `[data-cell-id="${CSS.escape(cellId)}"]`,
+        );
+        if (cellElement && typeof cellElement.scrollIntoView === 'function') {
+          cellElement.scrollIntoView({
+            behavior: 'smooth',
+            block: 'center',
+            inline: 'center',
+          });
+        }
+      });
+    }
+  }, [matrixData, activeTab, selectionStore]);
+
+  useEffect(() => {
+    if (!matrixData || activeTab !== 'environments') return;
+    selectionStore.setSelection((currentSelection) => {
+      if (!currentSelection) return null;
+      const row = matrixData.rows.find(
+        (r) => r.keyName === currentSelection.keyName,
+      );
+      if (!row) return currentSelection;
+      const envIndex = matrixData.environments.findIndex(
+        (e) => e.id === currentSelection.environment.id,
+      );
+      if (envIndex === -1) return currentSelection;
+      const matchingCell = row.cells[envIndex];
+      if (!matchingCell) return currentSelection;
+
+      return {
+        ...currentSelection,
+        sourceDetails: matchingCell.sourceDetails,
+        validation: matchingCell.validation,
+      };
+    });
+  }, [matrixData, activeTab, selectionStore]);
 
   if (isHydrating) return <EnvironmentTrackerSkeleton />;
   if (!activeProject || !projectId) {
@@ -463,26 +595,26 @@ export function EnvironmentTrackerPage() {
           {/* Continuous Single-Row Table Toolbar */}
           <div className="flex h-12 shrink-0 items-center justify-between gap-3 border-b border-divider bg-surface px-4 sm:px-6 lg:px-8">
             <div className="flex items-center gap-3 min-w-0">
-              <TextField className="w-40 lg:w-56 2xl:w-72" variant="secondary">
-                <div className="relative">
-                  <IconSearch
-                    aria-hidden="true"
-                    className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted"
-                    size={ICON_SIZE.button}
-                    stroke={ICON_STROKE}
-                  />
-                  <Input
-                    className="pl-9 w-full font-mono text-xs h-8"
-                    onChange={(event) => {
-                      setSearch(event.target.value);
-                      selectionStore.setSelection(null);
-                      setPage(1);
-                    }}
+              <SearchField
+                className="w-40 lg:w-56 2xl:w-72"
+                onChange={(value) => {
+                  setSearch(value);
+                  selectionStore.setSelection(null);
+                  setPage(1);
+                }}
+                value={search}
+                variant="secondary"
+              >
+                <Label className="sr-only">Search key name</Label>
+                <SearchField.Group>
+                  <SearchField.SearchIcon />
+                  <SearchField.Input
+                    className="font-mono text-xs"
                     placeholder="Search key name..."
-                    value={search}
                   />
-                </div>
-              </TextField>
+                  <SearchField.ClearButton aria-label="Clear key search" />
+                </SearchField.Group>
+              </SearchField>
 
               <div
                 aria-label="Environment Tracker view"
@@ -699,7 +831,11 @@ export function EnvironmentTrackerPage() {
 
                 {/* Key Details Side Panel (narrowing table workspace when selected) */}
                 <EnvironmentKeyDetailsPanel
+                  isUpdatingIssue={validation.setIssueStatus.isPending}
                   onDefinitionClick={handleDefinitionClick}
+                  onIssueStatusChange={(issue) =>
+                    void validation.changeIssueStatus(issue)
+                  }
                   selectionStore={selectionStore}
                 />
               </>
@@ -737,6 +873,7 @@ export function EnvironmentTrackerPage() {
           <ValidationIssuesWorkspace
             controller={validation}
             environments={environmentItems}
+            onNavigateToCell={handleNavigateToIssueCell}
           />
         </div>
       ) : null}
@@ -831,10 +968,14 @@ function EnvironmentWorkspaceTabLink({
 }
 
 function EnvironmentKeyDetailsPanel({
+  isUpdatingIssue,
   onDefinitionClick,
+  onIssueStatusChange,
   selectionStore,
 }: {
+  isUpdatingIssue: boolean;
   onDefinitionClick: (relativePath: string) => void;
+  onIssueStatusChange: (issue: ValidationIssue) => void;
   selectionStore: EnvironmentMatrixSelectionStore;
 }) {
   const selection = useEnvironmentMatrixSelectionStore(selectionStore);
@@ -844,8 +985,10 @@ function EnvironmentKeyDetailsPanel({
   return (
     <div className="w-80 sm:w-96 shrink-0 h-full">
       <EnvironmentKeyDetails
+        isUpdatingIssue={isUpdatingIssue}
         onClose={() => selectionStore.setSelection(null)}
         onDefinitionClick={onDefinitionClick}
+        onIssueStatusChange={onIssueStatusChange}
         selection={selection}
       />
     </div>

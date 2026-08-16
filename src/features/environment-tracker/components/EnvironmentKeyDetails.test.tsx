@@ -62,6 +62,6 @@ function selection(
     },
     selectedSourcePath: SOURCE_ID,
     sourceDetails,
-    validation: { openIssues: [], rules: [] },
+    validation: { ignoredIssues: [], openIssues: [], rules: [] },
   };
 }

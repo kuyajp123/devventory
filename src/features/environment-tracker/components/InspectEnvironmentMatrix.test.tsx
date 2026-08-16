@@ -193,7 +193,7 @@ function matrixResponse(): EnvironmentMatrixPage {
               },
             ],
             state: 'present',
-            validation: { openIssues: [], rules: [] },
+            validation: { ignoredIssues: [], openIssues: [], rules: [] },
           },
         ],
         keyName: 'APP_BASE_URL',

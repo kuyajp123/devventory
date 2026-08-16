@@ -32,10 +32,10 @@ import {
   IconGripVertical,
   IconListCheck,
   IconPlus,
-  IconSearch,
   IconTrash,
 } from '@tabler/icons-react';
 import { useMemo, useState } from 'react';
+import { useProjectQuery } from '@/features/projects';
 import { TauriCommandError } from '@/shared/infrastructure/tauri/tauri-error';
 import { ICON_SIZE, ICON_STROKE } from '@/shared/constants/icon.constants';
 import { AppPagination } from '@/shared/ui/AppPagination';
@@ -59,6 +59,7 @@ import {
   type Environment,
   type EnvironmentSource,
 } from '../models/environment';
+import { environmentTrackerGateway } from '../services/environment-tracker.gateway';
 import { EnvironmentSourceIssuePopover } from './EnvironmentSourceIssuePopover';
 import {
   EnvironmentDangerZoneSection,
@@ -79,6 +80,22 @@ interface EnvironmentSourceManagerProps {
   projectId: string;
 }
 
+function toRelativeProjectPath(
+  fullPath: string,
+  rootPath: string,
+): string | null {
+  const normFull = fullPath.replace(/\\/g, '/');
+  const normRoot = rootPath.replace(/\\/g, '/').replace(/\/+$/, '');
+
+  if (normFull.toLowerCase().startsWith(normRoot.toLowerCase() + '/')) {
+    return normFull.slice(normRoot.length + 1);
+  }
+  if (normFull.toLowerCase() === normRoot.toLowerCase()) {
+    return '';
+  }
+  return null;
+}
+
 export function EnvironmentSourceManager({
   environment,
   onEnvironmentChange,
@@ -87,6 +104,9 @@ export function EnvironmentSourceManager({
   onStartDeleteEnvironment,
   projectId,
 }: EnvironmentSourceManagerProps) {
+  const project = useProjectQuery(projectId);
+  const projectRoot = project.data?.rootPath;
+  const projectName = project.data?.name ?? 'current project';
   const environmentId = environment?.id ?? '';
   const sources = useEnvironmentSourcesQuery(projectId, environmentId);
   const addSource = useAddEnvironmentSourceMutation(projectId);
@@ -98,7 +118,6 @@ export function EnvironmentSourceManager({
   const [addSourceTab, setAddSourceTab] = useState<AddSourceSubTab>('indexed');
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(1);
-  const [relativePath, setRelativePath] = useState('');
   const [openIssueSourceId, setOpenIssueSourceId] = useState<string | null>(
     null,
   );
@@ -145,7 +164,7 @@ export function EnvironmentSourceManager({
     }
   }
 
-  function add(path = relativePath) {
+  function add(path: string) {
     const normalized = path.trim();
     if (!environment || !normalized) return;
     addSource.mutate(
@@ -155,11 +174,36 @@ export function EnvironmentSourceManager({
           toast.danger(errorMessage(error, 'The source could not be added.')),
         onSuccess: (source) => {
           setOpenIssueSourceId(source.id);
-          setRelativePath('');
           toast.success('Configuration source added');
         },
       },
     );
+  }
+
+  async function handleChooseFile() {
+    if (!environment) return;
+    try {
+      const selected =
+        await environmentTrackerGateway.selectSourceFile(projectRoot);
+      if (!selected) return;
+
+      const relative = projectRoot
+        ? toRelativeProjectPath(selected, projectRoot)
+        : selected;
+
+      if (!relative) {
+        toast.danger(
+          `Selected file must be inside the project folder (${projectName}).`,
+        );
+        return;
+      }
+
+      add(relative);
+    } catch (error) {
+      toast.danger(
+        errorMessage(error, 'The configuration file could not be selected.'),
+      );
+    }
   }
 
   function remove(sourceId: string) {
@@ -416,23 +460,23 @@ export function EnvironmentSourceManager({
                   </h2>
                   <p className="text-xs text-muted">
                     Attach configuration files from indexed project files or by
-                    relative path.
+                    choosing a file from your project.
                   </p>
                 </div>
 
                 <Tabs
                   aria-label="Add source methods"
-                  selectedKey={addSourceTab}
                   onSelectionChange={(key) =>
                     setAddSourceTab(key as AddSourceSubTab)
                   }
+                  selectedKey={addSourceTab}
                   variant="secondary"
                 >
                   <Tabs.List>
                     <Tabs.Tab id="indexed">Indexed Files</Tabs.Tab>
-                    <Tabs.Tab id="manual">Add by Path</Tabs.Tab>
+                    <Tabs.Tab id="manual">Choose File</Tabs.Tab>
                   </Tabs.List>
-                  <Tabs.Panel id="indexed" className="pt-3 space-y-3">
+                  <Tabs.Panel className="pt-3 space-y-3" id="indexed">
                     <TextField fullWidth variant="secondary">
                       <Label className="sr-only">Search indexed files</Label>
                       <Input
@@ -493,36 +537,38 @@ export function EnvironmentSourceManager({
                       </>
                     )}
                   </Tabs.Panel>
-                  <Tabs.Panel id="manual" className="pt-3 space-y-3">
+                  <Tabs.Panel className="pt-3 space-y-3" id="manual">
                     <p className="text-xs text-muted leading-relaxed">
                       Must be inside the current project root, readable, regular
                       file (not a symlink/junction).
                     </p>
-                    <div className="flex flex-col gap-2 sm:flex-row">
-                      <TextField className="min-w-0 flex-1" variant="secondary">
-                        <Label className="sr-only">
-                          Project-relative configuration path
-                        </Label>
-                        <Input
-                          onChange={(event) =>
-                            setRelativePath(event.target.value)
-                          }
-                          placeholder="config/local.env"
-                          value={relativePath}
-                        />
-                      </TextField>
+                    <div className="flex flex-col items-center justify-center gap-3 rounded-md border border-dashed border-divider bg-surface p-6 text-center">
+                      <IconFileCode
+                        aria-hidden="true"
+                        className="text-muted"
+                        size={ICON_SIZE.emptyState}
+                        stroke={ICON_STROKE}
+                      />
+                      <div className="space-y-1">
+                        <p className="text-xs font-medium text-foreground">
+                          Choose a configuration file
+                        </p>
+                        <p className="text-[11px] text-muted">
+                          Browse your project to attach an environment file.
+                        </p>
+                      </div>
                       <Button
-                        isDisabled={isBusy || !relativePath.trim()}
-                        onPress={() => add()}
-                        variant="primary"
+                        isDisabled={isBusy}
+                        onPress={() => void handleChooseFile()}
                         size="sm"
+                        variant="primary"
                       >
-                        <IconSearch
+                        <IconFileCode
                           aria-hidden="true"
                           size={ICON_SIZE.small}
                           stroke={ICON_STROKE}
                         />
-                        Add source
+                        Choose file
                       </Button>
                     </div>
                   </Tabs.Panel>
