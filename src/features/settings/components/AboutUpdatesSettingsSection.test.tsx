@@ -100,6 +100,22 @@ describe('AboutUpdatesSettingsSection', () => {
     expect(screen.getByText(/Published/i)).toBeInTheDocument();
   });
 
+  it('cleans raw markdown release header and displays fallback when no notes body exists', () => {
+    useAppUpdaterStore.getState().setAvailableUpdate(
+      {
+        body: '## [1.1.0](https://github.com/kuyajp123/devventory/compare/v1.0.1...v1.1.0) (2026-08-16)',
+        currentVersion: '0.1.0',
+        date: '2026-08-16T00:00:00.000Z',
+        version: '1.1.0',
+      },
+      false,
+    );
+    render(<AboutUpdatesSettingsSection />);
+    expect(
+      screen.getByText('Includes bug fixes and performance improvements.'),
+    ).toBeInTheDocument();
+  });
+
   it('clicking Update Now triggers installAvailableUpdate directly', () => {
     useAppUpdaterStore
       .getState()

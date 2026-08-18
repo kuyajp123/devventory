@@ -19,6 +19,9 @@ import {
 import {
   buildExactResetAt,
   buildRelativeResetAt,
+  computeExactFromRelative,
+  computeRelativeFromExact,
+  computeRelativeFromResetAt,
   formatResetSummary,
   parseExistingResetAt,
   parseTextDate,
@@ -221,6 +224,11 @@ export function QuotaWindowFlow({ onClose }: QuotaWindowFlowProps) {
     [resetFormFields, loadAccounts],
   );
 
+  const activeTimezone = useMemo(
+    () => selectedQuota?.timezone ?? selectedAccount?.defaultTimezone ?? 'UTC',
+    [selectedQuota?.timezone, selectedAccount?.defaultTimezone],
+  );
+
   const handleSelectQuota = useCallback(
     (quotaId: string) => {
       setSelectedQuotaId(quotaId);
@@ -239,9 +247,12 @@ export function QuotaWindowFlow({ onClose }: QuotaWindowFlowProps) {
         setExactDate(exact.calDate.toString());
         setExactTime(exact.time);
         setResetMode('exact');
-        setDays('0');
-        setHours(String(DEFAULT_RESET_HOURS));
-        setMinutes('0');
+
+        // Automatically compute relative duration from existing resetAt
+        const rel = computeRelativeFromResetAt(quota.resetAt);
+        setDays(rel.days);
+        setHours(rel.hours);
+        setMinutes(rel.minutes);
       }
     },
     [accountQuotas],
@@ -250,8 +261,21 @@ export function QuotaWindowFlow({ onClose }: QuotaWindowFlowProps) {
   const handleSetResetTime = useCallback(() => {
     setHasResetTime(true);
     setResetMode('exact');
+    setDays('0');
+    setHours(String(DEFAULT_RESET_HOURS));
+    setMinutes('0');
+    const exact = computeExactFromRelative(
+      0,
+      DEFAULT_RESET_HOURS,
+      0,
+      activeTimezone,
+    );
+    if (exact) {
+      setExactDate(exact.exactDate);
+      setExactTime(exact.exactTime);
+    }
     setError(null);
-  }, []);
+  }, [activeTimezone]);
 
   const handleRemoveResetTime = useCallback(() => {
     setHasResetTime(false);
@@ -264,6 +288,22 @@ export function QuotaWindowFlow({ onClose }: QuotaWindowFlowProps) {
     setError(null);
   }, []);
 
+  const handleStartEditReset = useCallback(() => {
+    if (selectedQuota) {
+      const exact = parseExistingResetAt(
+        selectedQuota.resetAt,
+        selectedQuota.timezone,
+      );
+      setExactDate(exact.calDate.toString());
+      setExactTime(exact.time);
+      const rel = computeRelativeFromResetAt(selectedQuota.resetAt);
+      setDays(rel.days);
+      setHours(rel.hours);
+      setMinutes(rel.minutes);
+    }
+    setIsEditingReset(true);
+  }, [selectedQuota]);
+
   const handleCancelResetChange = useCallback(() => {
     setIsEditingReset(false);
     if (selectedQuota) {
@@ -273,16 +313,135 @@ export function QuotaWindowFlow({ onClose }: QuotaWindowFlowProps) {
       );
       setExactDate(exact.calDate.toString());
       setExactTime(exact.time);
+      const rel = computeRelativeFromResetAt(selectedQuota.resetAt);
+      setDays(rel.days);
+      setHours(rel.hours);
+      setMinutes(rel.minutes);
     } else {
       setExactDate('');
       setExactTime('');
+      setDays('0');
+      setHours(String(DEFAULT_RESET_HOURS));
+      setMinutes('0');
     }
     setResetMode('exact');
-    setDays('0');
-    setHours(String(DEFAULT_RESET_HOURS));
-    setMinutes('0');
     setError(null);
   }, [selectedQuota]);
+
+  const handleModeChange = useCallback(
+    (newMode: ResetMode) => {
+      if (newMode === 'relative') {
+        const calDate = parseTextDate(exactDate);
+        if (calDate && exactTime) {
+          const rel = computeRelativeFromExact(
+            calDate,
+            exactTime,
+            activeTimezone,
+          );
+          if (rel) {
+            setDays(rel.days);
+            setHours(rel.hours);
+            setMinutes(rel.minutes);
+          }
+        }
+      } else if (newMode === 'exact') {
+        const exact = computeExactFromRelative(
+          days,
+          hours,
+          minutes,
+          activeTimezone,
+        );
+        if (exact) {
+          setExactDate(exact.exactDate);
+          setExactTime(exact.exactTime);
+        }
+      }
+      setResetMode(newMode);
+    },
+    [exactDate, exactTime, days, hours, minutes, activeTimezone],
+  );
+
+  const handleExactDateChange = useCallback(
+    (val: string) => {
+      setExactDate(val);
+      const calDate = parseTextDate(val);
+      if (calDate && exactTime) {
+        const rel = computeRelativeFromExact(
+          calDate,
+          exactTime,
+          activeTimezone,
+        );
+        if (rel) {
+          setDays(rel.days);
+          setHours(rel.hours);
+          setMinutes(rel.minutes);
+        }
+      }
+    },
+    [exactTime, activeTimezone],
+  );
+
+  const handleExactTimeChange = useCallback(
+    (val: string) => {
+      setExactTime(val);
+      const calDate = parseTextDate(exactDate);
+      if (calDate && val) {
+        const rel = computeRelativeFromExact(calDate, val, activeTimezone);
+        if (rel) {
+          setDays(rel.days);
+          setHours(rel.hours);
+          setMinutes(rel.minutes);
+        }
+      }
+    },
+    [exactDate, activeTimezone],
+  );
+
+  const handleDaysChange = useCallback(
+    (val: string) => {
+      setDays(val);
+      const exact = computeExactFromRelative(
+        val,
+        hours,
+        minutes,
+        activeTimezone,
+      );
+      if (exact) {
+        setExactDate(exact.exactDate);
+        setExactTime(exact.exactTime);
+      }
+    },
+    [hours, minutes, activeTimezone],
+  );
+
+  const handleHoursChange = useCallback(
+    (val: string) => {
+      setHours(val);
+      const exact = computeExactFromRelative(
+        days,
+        val,
+        minutes,
+        activeTimezone,
+      );
+      if (exact) {
+        setExactDate(exact.exactDate);
+        setExactTime(exact.exactTime);
+      }
+    },
+    [days, minutes, activeTimezone],
+  );
+
+  const handleMinutesChange = useCallback(
+    (val: string) => {
+      setMinutes(val);
+      const exact = computeExactFromRelative(days, hours, val, activeTimezone);
+      if (exact) {
+        setExactDate(exact.exactDate);
+        setExactTime(exact.exactTime);
+      }
+    },
+    [days, hours, activeTimezone],
+  );
 
   const handleSave = useCallback(async () => {
     if (flowMode === 'new') {
@@ -862,12 +1021,12 @@ export function QuotaWindowFlow({ onClose }: QuotaWindowFlowProps) {
                     hours={hours}
                     minutes={minutes}
                     onCancelOrRemove={handleRemoveResetTime}
-                    onDaysChange={setDays}
-                    onExactDateChange={setExactDate}
-                    onExactTimeChange={setExactTime}
-                    onHoursChange={setHours}
-                    onMinutesChange={setMinutes}
-                    onModeChange={setResetMode}
+                    onDaysChange={handleDaysChange}
+                    onExactDateChange={handleExactDateChange}
+                    onExactTimeChange={handleExactTimeChange}
+                    onHoursChange={handleHoursChange}
+                    onMinutesChange={handleMinutesChange}
+                    onModeChange={handleModeChange}
                     removeLabel="Remove reset time"
                     resetMode={resetMode}
                   />
@@ -892,7 +1051,7 @@ export function QuotaWindowFlow({ onClose }: QuotaWindowFlowProps) {
                   <button
                     className="flex items-center gap-1.5 text-[11px] font-mono text-accent hover:text-accent/80 transition-colors pt-0.5"
                     disabled={isSaving}
-                    onClick={() => setIsEditingReset(true)}
+                    onClick={handleStartEditReset}
                     type="button"
                   >
                     Change reset time
@@ -907,12 +1066,12 @@ export function QuotaWindowFlow({ onClose }: QuotaWindowFlowProps) {
                   hours={hours}
                   minutes={minutes}
                   onCancelOrRemove={handleCancelResetChange}
-                  onDaysChange={setDays}
-                  onExactDateChange={setExactDate}
-                  onExactTimeChange={setExactTime}
-                  onHoursChange={setHours}
-                  onMinutesChange={setMinutes}
-                  onModeChange={setResetMode}
+                  onDaysChange={handleDaysChange}
+                  onExactDateChange={handleExactDateChange}
+                  onExactTimeChange={handleExactTimeChange}
+                  onHoursChange={handleHoursChange}
+                  onMinutesChange={handleMinutesChange}
+                  onModeChange={handleModeChange}
                   removeLabel="Cancel reset change"
                   resetMode={resetMode}
                 />

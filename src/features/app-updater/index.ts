@@ -4,6 +4,7 @@ export { useAppUpdaterActions } from './hooks/useAppUpdaterActions';
 export { AppUpdateIndicator } from './components/AppUpdateIndicator';
 export { AppUpdateModal } from './components/AppUpdateModal';
 export { AppUpdaterSync } from './components/AppUpdaterSync';
+export { formatReleaseNotes } from './utils/format-release-notes';
 export type {
   AvailableAppUpdate,
   AppUpdateStatus,

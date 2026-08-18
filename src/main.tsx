@@ -4,9 +4,12 @@ import { getCurrentWindow } from '@tauri-apps/api/window';
 import { AppProviders } from './app/providers/AppProviders';
 import App from './app/App';
 import { QuickAccessApp } from './features/quick-access';
+import { setupContextMenuPrevention } from './app/utils/context-menu';
 import './index.css';
 
 async function bootstrap() {
+  setupContextMenuPrevention();
+
   if (import.meta.env.MODE === 'e2e') {
     const { installTauriBrowserMocks } =
       await import('./test/e2e/tauri-browser-mocks');

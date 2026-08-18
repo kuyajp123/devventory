@@ -1,3 +1,4 @@
+import { convertFileSrc } from '@tauri-apps/api/core';
 import { open as openFileDialog } from '@tauri-apps/plugin-dialog';
 import {
   Button,
@@ -13,7 +14,12 @@ import {
   TextArea,
   TextField,
 } from '@heroui/react';
-import { IconDatabase, IconPhoto } from '@tabler/icons-react';
+import {
+  IconDatabase,
+  IconPhoto,
+  IconPhotoOff,
+  IconTrash,
+} from '@tabler/icons-react';
 import { useMemo, useState } from 'react';
 import type { Project } from '@/features/projects';
 import { ICON_SIZE, ICON_STROKE } from '@/shared/constants/icon.constants';
@@ -66,6 +72,7 @@ export function CredentialSourceDialog({
     source?.projectIds ?? [],
   );
   const [removeIcon, setRemoveIcon] = useState(false);
+  const [failedPreviewSrc, setFailedPreviewSrc] = useState<string | null>(null);
   const selectedDefinition = useMemo(
     () =>
       PREDEFINED_CREDENTIAL_SOURCES.find(
@@ -73,6 +80,18 @@ export function CredentialSourceDialog({
       ) ?? null,
     [definitionKey],
   );
+
+  const previewIconPath =
+    iconSourcePath || (!removeIcon ? source?.iconPath : null);
+
+  const previewUrl = useMemo(() => {
+    if (!previewIconPath) return null;
+    try {
+      return convertFileSrc(previewIconPath);
+    } catch {
+      return null;
+    }
+  }, [previewIconPath]);
 
   function changeDefinition(value: React.Key | null) {
     if (value === null || source) return;
@@ -100,6 +119,14 @@ export function CredentialSourceDialog({
     if (typeof selected === 'string') {
       setIconSourcePath(selected);
       setRemoveIcon(false);
+      setFailedPreviewSrc(null);
+    }
+  }
+
+  function clearIcon() {
+    setIconSourcePath(null);
+    if (source?.iconPath) {
+      setRemoveIcon(true);
     }
   }
 
@@ -217,33 +244,93 @@ export function CredentialSourceDialog({
                     into local app data.
                   </p>
                 </div>
-                <Button
-                  isDisabled={isSaving}
-                  onPress={() => void chooseIcon()}
-                  size="sm"
-                  variant="secondary"
-                >
-                  <IconPhoto size={ICON_SIZE.small} stroke={ICON_STROKE} />
-                  Choose image
-                </Button>
+                {!previewIconPath ? (
+                  <Button
+                    isDisabled={isSaving}
+                    onPress={() => void chooseIcon()}
+                    size="sm"
+                    variant="secondary"
+                  >
+                    <IconPhoto size={ICON_SIZE.small} stroke={ICON_STROKE} />
+                    Choose image
+                  </Button>
+                ) : null}
               </div>
-              {iconSourcePath ? (
-                <p
-                  className="mt-2 truncate font-mono text-[11px] text-muted"
-                  title={iconSourcePath}
-                >
-                  {iconSourcePath}
-                </p>
-              ) : null}
-              {source?.iconPath && !iconSourcePath ? (
-                <Checkbox isSelected={removeIcon} onChange={setRemoveIcon}>
-                  <Checkbox.Content>
-                    <Checkbox.Control>
-                      <Checkbox.Indicator />
-                    </Checkbox.Control>
-                    <Label>Remove the current custom icon</Label>
-                  </Checkbox.Content>
-                </Checkbox>
+
+              {previewIconPath ? (
+                <div className="mt-3 flex items-center gap-3 rounded-lg border border-divider bg-surface p-2.5">
+                  <div className="flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-md border border-divider bg-workspace/80 p-1">
+                    {previewUrl && failedPreviewSrc !== previewUrl ? (
+                      <img
+                        alt="Custom icon preview"
+                        className="h-full w-full rounded object-contain"
+                        onError={() => setFailedPreviewSrc(previewUrl)}
+                        src={previewUrl}
+                      />
+                    ) : (
+                      <div
+                        className="flex flex-col items-center justify-center text-muted"
+                        title="Unable to preview image"
+                      >
+                        <IconPhotoOff
+                          size={ICON_SIZE.button}
+                          stroke={ICON_STROKE}
+                        />
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="min-w-0 flex-1 space-y-0.5">
+                    <p
+                      className="truncate text-xs font-semibold text-foreground"
+                      title={
+                        previewIconPath.split(/[/\\]/).pop() ?? previewIconPath
+                      }
+                    >
+                      {previewIconPath.split(/[/\\]/).pop() ?? previewIconPath}
+                    </p>
+                    <p
+                      className="truncate font-mono text-[11px] text-muted"
+                      title={previewIconPath}
+                    >
+                      {previewIconPath}
+                    </p>
+                    <div>
+                      {iconSourcePath ? (
+                        <span className="inline-block text-[10px] font-medium text-accent">
+                          New image selected
+                        </span>
+                      ) : (
+                        <span className="inline-block text-[10px] text-muted">
+                          Current icon
+                        </span>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="flex shrink-0 items-center gap-1">
+                    <Button
+                      aria-label="Change image"
+                      isDisabled={isSaving}
+                      onPress={() => void chooseIcon()}
+                      size="sm"
+                      variant="secondary"
+                    >
+                      <IconPhoto size={ICON_SIZE.small} stroke={ICON_STROKE} />
+                      Change
+                    </Button>
+                    <Button
+                      aria-label="Remove image"
+                      className="text-danger hover:bg-danger/10"
+                      isDisabled={isSaving}
+                      onPress={clearIcon}
+                      size="sm"
+                      variant="ghost"
+                    >
+                      <IconTrash size={ICON_SIZE.small} stroke={ICON_STROKE} />
+                    </Button>
+                  </div>
+                </div>
               ) : null}
             </div>
           ) : (

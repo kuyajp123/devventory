@@ -545,6 +545,99 @@ describe('QuotaWindowFlow', () => {
     ).toHaveTextContent('Select quota window...');
   });
 
+  it('computes remaining days, hours, minutes from existing quota resetAt in Reset in tab when editing', async () => {
+    const user = userEvent.setup();
+    const onClose = vi.fn();
+
+    render(<QuotaWindowFlow onClose={onClose} />);
+
+    // Switch to Edit mode and select quota
+    const editTab = await screen.findByRole('button', { name: 'Edit quota' });
+    await user.click(editTab);
+
+    const platformTrigger = screen.getByRole('button', { name: 'Platform' });
+    await user.click(platformTrigger);
+    await user.click(screen.getByRole('button', { name: 'Antigravity' }));
+
+    const identifierTrigger = screen.getByRole('button', {
+      name: 'Identifier',
+    });
+    await user.click(identifierTrigger);
+    await user.click(screen.getByRole('button', { name: 'paul@gmail.com' }));
+
+    const quotaTrigger = screen.getByRole('button', { name: 'Quota Window' });
+    await user.click(quotaTrigger);
+    await user.click(screen.getByRole('button', { name: 'Weekly' }));
+
+    // Click Change reset time
+    await user.click(screen.getByRole('button', { name: 'Change reset time' }));
+
+    // Switch to "Reset in" tab
+    await user.click(screen.getByRole('button', { name: 'Reset in' }));
+
+    // Input fields should contain computed duration
+    const daysInput = screen.getByLabelText('Days');
+    const hoursInput = screen.getByLabelText('Hours');
+    const minutesInput = screen.getByLabelText('Minutes');
+
+    expect(
+      Number((daysInput as HTMLInputElement).value),
+    ).toBeGreaterThanOrEqual(0);
+    expect(
+      Number((hoursInput as HTMLInputElement).value),
+    ).toBeGreaterThanOrEqual(0);
+    expect(
+      Number((minutesInput as HTMLInputElement).value),
+    ).toBeGreaterThanOrEqual(0);
+  });
+
+  it('synchronizes values between Exact date & time and Reset in tabs', async () => {
+    const user = userEvent.setup();
+    const onClose = vi.fn();
+
+    render(<QuotaWindowFlow onClose={onClose} />);
+
+    // Select account
+    const platformTrigger = await screen.findByRole('button', {
+      name: 'Platform',
+    });
+    await user.click(platformTrigger);
+    await user.click(screen.getByRole('button', { name: 'Antigravity' }));
+
+    const identifierTrigger = screen.getByRole('button', {
+      name: 'Identifier',
+    });
+    await user.click(identifierTrigger);
+    await user.click(screen.getByRole('button', { name: 'paul@gmail.com' }));
+
+    // Set reset time
+    await user.click(screen.getByRole('button', { name: 'Set reset time' }));
+
+    // Switch to "Reset in" tab and enter 2 days, 5 hours, 30 minutes
+    await user.click(screen.getByRole('button', { name: 'Reset in' }));
+
+    const daysInput = screen.getByLabelText('Days');
+    await user.clear(daysInput);
+    await user.type(daysInput, '2');
+
+    const hoursInput = screen.getByLabelText('Hours');
+    await user.clear(hoursInput);
+    await user.type(hoursInput, '5');
+
+    const minutesInput = screen.getByLabelText('Minutes');
+    await user.clear(minutesInput);
+    await user.type(minutesInput, '30');
+
+    // Switch back to "Exact date & time" tab
+    await user.click(screen.getByRole('button', { name: 'Exact date & time' }));
+
+    const dateInput = screen.getByLabelText('Reset date') as HTMLInputElement;
+    const timeInput = screen.getByLabelText('Reset time') as HTMLInputElement;
+
+    expect(dateInput.value).not.toBe('');
+    expect(timeInput.value).not.toBe('');
+  });
+
   it('calls onClose when Done or Back button is clicked', async () => {
     const user = userEvent.setup();
     const onClose = vi.fn();
