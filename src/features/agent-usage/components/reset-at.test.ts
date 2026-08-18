@@ -3,6 +3,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   buildExactResetAt,
   buildRelativeResetAt,
+  computeExactFromRelative,
+  computeRelativeFromExact,
+  computeRelativeFromResetAt,
   format24HourTo12HourText,
   formatCalendarDateToText,
   formatResetSummary,
@@ -219,7 +222,7 @@ describe('parseTextTime', () => {
     expect(parseTextTime('9:00 PM')).toBe('21:00');
   });
 
-  it('defaults to AM when meridiem not specified', () => {
+  it('treats bare HH:MM as 24-hour format (passthrough)', () => {
     expect(parseTextTime('09:00')).toBe('09:00');
     expect(parseTextTime('9:00')).toBe('09:00');
   });
@@ -246,6 +249,21 @@ describe('parseTextTime', () => {
     expect(parseTextTime('not-a-time')).toBeNull();
     expect(parseTextTime('')).toBeNull();
   });
+
+  it('parses 24-hour format from native time input (no AM/PM suffix)', () => {
+    expect(parseTextTime('18:11')).toBe('18:11');
+    expect(parseTextTime('13:00')).toBe('13:00');
+    expect(parseTextTime('23:59')).toBe('23:59');
+    expect(parseTextTime('00:00')).toBe('00:00');
+    expect(parseTextTime('14:30')).toBe('14:30');
+    expect(parseTextTime('0:00')).toBe('00:00');
+  });
+
+  it('rejects 24-hour values above 23:59', () => {
+    expect(parseTextTime('24:00')).toBeNull();
+    expect(parseTextTime('25:00')).toBeNull();
+    expect(parseTextTime('18:60')).toBeNull();
+  });
 });
 
 describe('formatting helpers', () => {
@@ -270,5 +288,78 @@ describe('formatting helpers', () => {
     const formatted = formatResetSummary('2026-08-14T01:00:00Z', MANILA);
     expect(formatted).toContain('Aug 14, 2026');
     expect(formatted).toContain('09:00 AM');
+  });
+});
+
+describe('computeRelativeFromResetAt', () => {
+  const baseTime = new Date('2026-08-10T06:00:00Z').getTime();
+
+  it('computes remaining days, hours, minutes from future resetAt', () => {
+    // 2 days, 3 hours, 45 minutes from baseTime
+    const target = new Date(
+      baseTime + (2 * 24 * 60 + 3 * 60 + 45) * 60 * 1000,
+    ).toISOString();
+    const result = computeRelativeFromResetAt(target, baseTime);
+    expect(result).toEqual({ days: '2', hours: '3', minutes: '45' });
+  });
+
+  it('returns 0s for past or invalid timestamps', () => {
+    const past = new Date(baseTime - 60000).toISOString();
+    expect(computeRelativeFromResetAt(past, baseTime)).toEqual({
+      days: '0',
+      hours: '0',
+      minutes: '0',
+    });
+    expect(computeRelativeFromResetAt('invalid-date', baseTime)).toEqual({
+      days: '0',
+      hours: '0',
+      minutes: '0',
+    });
+  });
+});
+
+describe('computeRelativeFromExact', () => {
+  const baseTime = new Date('2026-08-10T06:00:00Z').getTime(); // 14:00 Manila (UTC+8)
+
+  it('converts CalendarDate and time to relative days, hours, minutes', () => {
+    // Target: 2026-08-11 16:30 Manila (1 day, 2 hours, 30 minutes from 2026-08-10 14:00 Manila)
+    const calDate = new CalendarDate(2026, 8, 11);
+    const result = computeRelativeFromExact(calDate, '16:30', MANILA, baseTime);
+    expect(result).toEqual({ days: '1', hours: '2', minutes: '30' });
+  });
+
+  it('works with 12-hour AM/PM format time input', () => {
+    const calDate = new CalendarDate(2026, 8, 11);
+    const result = computeRelativeFromExact(
+      calDate,
+      '04:30 PM',
+      MANILA,
+      baseTime,
+    );
+    expect(result).toEqual({ days: '1', hours: '2', minutes: '30' });
+  });
+
+  it('returns null for invalid time string', () => {
+    const calDate = new CalendarDate(2026, 8, 11);
+    expect(
+      computeRelativeFromExact(calDate, 'invalid', MANILA, baseTime),
+    ).toBeNull();
+  });
+});
+
+describe('computeExactFromRelative', () => {
+  const baseTime = new Date('2026-08-10T06:00:00Z').getTime(); // 14:00 Manila (UTC+8)
+
+  it('converts days, hours, minutes to exactDate and exactTime', () => {
+    // +1 day, 2 hours, 30 minutes from 2026-08-10 14:00 Manila -> 2026-08-11 16:30
+    const result = computeExactFromRelative(1, 2, 30, MANILA, baseTime);
+    expect(result).toEqual({
+      exactDate: '2026-08-11',
+      exactTime: '16:30',
+    });
+  });
+
+  it('returns null when total duration is 0 or negative', () => {
+    expect(computeExactFromRelative(0, 0, 0, MANILA, baseTime)).toBeNull();
   });
 });

@@ -61,16 +61,21 @@ export function parseTextTime(timeText: string): string | null {
 
   let hour = parseInt(match[1], 10);
   const minute = parseInt(match[2], 10);
-  const meridiem = match[3] || 'AM'; // Default to AM if not specified
+  const meridiem = match[3] as 'AM' | 'PM' | undefined;
 
-  if (hour < 0 || hour > 12) return null;
   if (minute < 0 || minute > 59) return null;
 
-  // Convert to 24-hour format
-  if (meridiem === 'PM' && hour !== 12) {
-    hour += 12;
-  } else if (meridiem === 'AM' && hour === 12) {
-    hour = 0;
+  if (meridiem) {
+    // 12-hour format with explicit AM/PM: hour must be 1–12
+    if (hour < 1 || hour > 12) return null;
+    if (meridiem === 'PM' && hour !== 12) {
+      hour += 12;
+    } else if (meridiem === 'AM' && hour === 12) {
+      hour = 0;
+    }
+  } else {
+    // 24-hour format (native <input type="time"> always emits HH:MM)
+    if (hour < 0 || hour > 23) return null;
   }
 
   return `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`;
@@ -150,6 +155,109 @@ export function parseExistingResetAt(
   const calDate = toCalendarDate(zoned);
   const time = `${String(zoned.hour).padStart(2, '0')}:${String(zoned.minute).padStart(2, '0')}`;
   return { calDate, time };
+}
+
+/**
+ * Given a target UTC ISO timestamp and the current timestamp, computes
+ * the remaining duration split into { days, hours, minutes }.
+ *
+ * Used when initializing "Reset in" from an existing quota.
+ */
+export function computeRelativeFromResetAt(
+  resetAt: string,
+  now: number = Date.now(),
+): { days: string; hours: string; minutes: string } {
+  const targetTime = new Date(resetAt).getTime();
+  const diffMs = targetTime - now;
+  if (Number.isNaN(diffMs) || diffMs <= 0) {
+    return { days: '0', hours: '0', minutes: '0' };
+  }
+  const totalMinutes = Math.round(diffMs / (60 * 1000));
+  const days = Math.floor(totalMinutes / (24 * 60));
+  const hours = Math.floor((totalMinutes % (24 * 60)) / 60);
+  const minutes = totalMinutes % 60;
+  return {
+    days: String(days),
+    hours: String(hours),
+    minutes: String(minutes),
+  };
+}
+
+/**
+ * Converts a CalendarDate and time string (in a given timezone) into remaining
+ * duration { days, hours, minutes } relative to `now`.
+ */
+export function computeRelativeFromExact(
+  calDate: CalendarDate,
+  timeStr: string,
+  timezone: string,
+  now: number = Date.now(),
+): { days: string; hours: string; minutes: string } | null {
+  const normalizedTime = parseTextTime(timeStr);
+  if (!normalizedTime) return null;
+  const match = /^(\d{1,2}):(\d{2})$/.exec(normalizedTime);
+  if (!match) return null;
+
+  const hour = parseInt(match[1], 10);
+  const minute = parseInt(match[2], 10);
+  if (hour > 23 || minute > 59) return null;
+
+  try {
+    const zoned = toZoned(calDate, timezone).set({
+      hour,
+      millisecond: 0,
+      minute,
+      second: 0,
+    });
+    const targetMs = new Date(zoned.toAbsoluteString()).getTime();
+    const diffMs = targetMs - now;
+    if (Number.isNaN(diffMs) || diffMs <= 0) {
+      return { days: '0', hours: '0', minutes: '0' };
+    }
+    const totalMinutes = Math.round(diffMs / (60 * 1000));
+    const days = Math.floor(totalMinutes / (24 * 60));
+    const hours = Math.floor((totalMinutes % (24 * 60)) / 60);
+    const minutes = totalMinutes % 60;
+    return {
+      days: String(days),
+      hours: String(hours),
+      minutes: String(minutes),
+    };
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Converts relative duration (days, hours, minutes) from `now` into an exact
+ * date (CalendarDate as string YYYY-MM-DD) and 24-hour time (HH:MM) in the given timezone.
+ */
+export function computeExactFromRelative(
+  days: number | string,
+  hours: number | string,
+  minutes: number | string,
+  timezone: string,
+  now: number = Date.now(),
+): { exactDate: string; exactTime: string } | null {
+  const d = Math.max(0, Math.trunc(Number(days) || 0));
+  const h = Math.max(0, Math.trunc(Number(hours) || 0));
+  const m = Math.max(0, Math.trunc(Number(minutes) || 0));
+  const totalMinutes = d * 24 * 60 + h * 60 + m;
+  if (totalMinutes <= 0) return null;
+
+  try {
+    const targetDate = new Date(now + totalMinutes * 60 * 1000);
+    const { calDate, time } = parseExistingResetAt(
+      targetDate.toISOString(),
+      timezone,
+    );
+    return {
+      exactDate: calDate.toString(),
+      exactTime: time,
+    };
+  } catch {
+    return null;
+  }
 }
 
 /**
