@@ -1,3 +1,10 @@
+import { formatReleaseNotes } from '@/features/app-updater';
+import { useAppUpdaterActions } from '@/features/app-updater/hooks/useAppUpdaterActions';
+import {
+  isAppUpdateBusy,
+  useAppUpdaterStore,
+} from '@/features/app-updater/stores/app-updater.store';
+import { ICON_SIZE, ICON_STROKE } from '@/shared/constants/icon.constants';
 import { Button } from '@heroui/react';
 import {
   IconAlertCircle,
@@ -7,12 +14,6 @@ import {
   IconLoader2,
 } from '@tabler/icons-react';
 import { useEffect } from 'react';
-import {
-  useAppUpdaterStore,
-  isAppUpdateBusy,
-} from '@/features/app-updater/stores/app-updater.store';
-import { useAppUpdaterActions } from '@/features/app-updater/hooks/useAppUpdaterActions';
-import { ICON_SIZE, ICON_STROKE } from '@/shared/constants/icon.constants';
 
 export function AboutUpdatesSettingsSection() {
   const status = useAppUpdaterStore((state) => state.status);
@@ -132,16 +133,34 @@ export function AboutUpdatesSettingsSection() {
 
           {status === 'available' && availableUpdate && (
             <div className="space-y-4 rounded-md border border-accent/40 bg-panel p-4">
-              <div className="flex items-center gap-2 text-accent">
-                <IconDownload
-                  aria-hidden="true"
-                  className="shrink-0"
-                  size={ICON_SIZE.button}
-                  stroke={ICON_STROKE}
-                />
-                <h3 className="text-sm font-semibold text-foreground">
-                  Version {availableUpdate.version} is available
-                </h3>
+              <div className="flex items-center justify-between text-accent">
+                <div className="flex items-center gap-2">
+                  <IconDownload
+                    aria-hidden="true"
+                    className="shrink-0"
+                    size={ICON_SIZE.button}
+                    stroke={ICON_STROKE}
+                  />
+                  <h3 className="text-sm font-semibold text-foreground">
+                    Version {availableUpdate.version} is available
+                  </h3>
+                </div>
+                {/* Actions */}
+                <div className="flex items-center gap-3 pt-1">
+                  <Button
+                    isDisabled={isBusy}
+                    onPress={handleInstall}
+                    size="sm"
+                    variant="primary"
+                  >
+                    <IconDownload
+                      aria-hidden="true"
+                      size={ICON_SIZE.small}
+                      stroke={ICON_STROKE}
+                    />
+                    <span>Update Now</span>
+                  </Button>
+                </div>
               </div>
 
               {/* Version Comparison Info */}
@@ -184,18 +203,16 @@ export function AboutUpdatesSettingsSection() {
               )}
 
               {/* Release Notes */}
-              {availableUpdate.body && (
-                <div className="space-y-1">
-                  <p className="text-[10px] font-medium uppercase tracking-wider text-muted">
-                    What's New
-                  </p>
-                  <div className="max-h-56 overflow-y-auto rounded-md border border-divider bg-workspace p-3">
-                    <pre className="whitespace-pre-wrap font-mono text-xs text-foreground">
-                      {availableUpdate.body}
-                    </pre>
-                  </div>
+              <div className="space-y-1">
+                <p className="text-[10px] font-medium uppercase tracking-wider text-muted">
+                  What's New
+                </p>
+                <div className="max-h-56 overflow-y-auto rounded-md border border-divider bg-workspace p-3">
+                  <pre className="whitespace-pre-wrap font-mono text-xs text-foreground">
+                    {formatReleaseNotes(availableUpdate.body)}
+                  </pre>
                 </div>
-              )}
+              </div>
 
               {/* Warning */}
               <div className="rounded-md border border-accent/30 bg-accent/5 p-3">
@@ -204,23 +221,6 @@ export function AboutUpdatesSettingsSection() {
                   any unfinished edits. Devventory will restart to complete the
                   update.
                 </p>
-              </div>
-
-              {/* Actions */}
-              <div className="flex items-center gap-3 pt-1">
-                <Button
-                  isDisabled={isBusy}
-                  onPress={handleInstall}
-                  size="sm"
-                  variant="primary"
-                >
-                  <IconDownload
-                    aria-hidden="true"
-                    size={ICON_SIZE.small}
-                    stroke={ICON_STROKE}
-                  />
-                  <span>Update Now</span>
-                </Button>
               </div>
             </div>
           )}
