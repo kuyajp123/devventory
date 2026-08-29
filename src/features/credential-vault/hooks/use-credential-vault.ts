@@ -137,3 +137,11 @@ export function useDeleteCredentialMutation() {
     onSuccess: invalidate,
   });
 }
+
+export function useImportEnvSecretsMutation() {
+  const invalidate = useVaultInvalidation();
+  return useMutation({
+    mutationFn: credentialVaultGateway.importEnvFileToVault,
+    onSuccess: invalidate,
+  });
+}

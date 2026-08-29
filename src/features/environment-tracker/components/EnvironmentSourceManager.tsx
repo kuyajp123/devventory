@@ -28,10 +28,12 @@ import {
 import {
   IconAdjustments,
   IconAlertTriangle,
+  IconExternalLink,
   IconFileCode,
   IconGripVertical,
   IconListCheck,
   IconPlus,
+  IconShieldLock,
   IconTrash,
 } from '@tabler/icons-react';
 import { useMemo, useState } from 'react';
@@ -48,6 +50,7 @@ import {
 } from '@/shared/ui';
 import {
   useAddEnvironmentSourceMutation,
+  useCustomEnvironmentSourcesQuery,
   useDeleteEnvironmentSourceMutation,
   useEnvironmentSourceCandidatesQuery,
   useEnvironmentSourcesQuery,
@@ -74,7 +77,7 @@ type AddSourceSubTab = 'indexed' | 'manual';
 interface EnvironmentSourceManagerProps {
   environment: Environment | null;
   onEnvironmentChange?: (environment: Environment) => void;
-  onOpenCredentialVault?: () => void;
+  onOpenCredentialVault?: (sourceId?: string) => void;
   onOpenChange: (isOpen: boolean) => void;
   onStartDeleteEnvironment?: (environment: Environment) => void;
   projectId: string;
@@ -109,10 +112,17 @@ export function EnvironmentSourceManager({
   const projectName = project.data?.name ?? 'current project';
   const environmentId = environment?.id ?? '';
   const sources = useEnvironmentSourcesQuery(projectId, environmentId);
+  const customSources = useCustomEnvironmentSourcesQuery(
+    projectId,
+    environmentId,
+  );
   const addSource = useAddEnvironmentSourceMutation(projectId);
   const deleteSource = useDeleteEnvironmentSourceMutation(projectId);
   const reorderSources = useReorderEnvironmentSourcesMutation(projectId);
   const updateEnvironment = useUpdateEnvironmentMutation(projectId);
+
+  const totalSourcesCount =
+    (sources.data?.length ?? 0) + (customSources.data?.length ?? 0);
 
   const [activeSection, setActiveSection] = useState<ConfigSection>('sources');
   const [addSourceTab, setAddSourceTab] = useState<AddSourceSubTab>('indexed');
@@ -298,9 +308,9 @@ export function EnvironmentSourceManager({
                 />
                 Configured Sources
               </span>
-              {sources.data && (
+              {(sources.data || customSources.data) && (
                 <span className="font-mono text-[10px] text-muted">
-                  {sources.data.length}
+                  {totalSourcesCount}
                 </span>
               )}
             </button>
@@ -376,18 +386,18 @@ export function EnvironmentSourceManager({
                     </p>
                     <p className="mt-1 text-xs leading-relaxed text-muted">
                       Custom sources, keys, encrypted values, and their project
-                      or environment associations now live in Credential Vault.
+                      or environment associations live in Credential Vault.
                     </p>
                   </div>
                   <Button
-                    onPress={onOpenCredentialVault}
+                    onPress={() => onOpenCredentialVault?.()}
                     size="sm"
                     variant="secondary"
                   >
                     Open vault
                   </Button>
                 </div>
-                {sources.isPending && (
+                {(sources.isPending || customSources.isPending) && (
                   <Spinner
                     aria-label="Loading configuration sources"
                     size="sm"
@@ -404,45 +414,117 @@ export function EnvironmentSourceManager({
                     </Alert.Content>
                   </Alert>
                 )}
-                {sources.data?.length === 0 && (
-                  <div className="rounded-md border border-dashed border-divider p-6 text-center text-xs text-muted">
-                    No configuration sources configured yet. Go to{' '}
-                    <strong className="text-foreground">Add Source</strong> to
-                    attach files.
+
+                {/* Linked Credential Vault Sources */}
+                {customSources.data && customSources.data.length > 0 && (
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between">
+                      <h3 className="font-mono text-[11px] font-semibold uppercase tracking-wider text-muted">
+                        Credential Vault Sources ({customSources.data.length})
+                      </h3>
+                      <span className="font-mono text-[10px] text-accent">
+                        Linked to this environment
+                      </span>
+                    </div>
+                    <ul className="space-y-2">
+                      {customSources.data.map((customSource) => (
+                        <li
+                          key={customSource.id}
+                          className="flex items-center justify-between gap-3 rounded-md border border-accent/30 bg-accent/5 p-2.5 text-xs"
+                        >
+                          <div className="flex min-w-0 items-center gap-2.5">
+                            <div className="flex size-7 shrink-0 items-center justify-center rounded border border-accent/30 bg-accent/10 text-accent">
+                              <IconShieldLock
+                                size={ICON_SIZE.small}
+                                stroke={ICON_STROKE}
+                              />
+                            </div>
+                            <div className="min-w-0">
+                              <p className="truncate font-mono font-medium text-foreground">
+                                {customSource.name}
+                              </p>
+                              <p className="font-mono text-[10px] text-muted">
+                                {customSource.keys.length}{' '}
+                                {customSource.keys.length === 1
+                                  ? 'key'
+                                  : 'keys'}{' '}
+                                linked
+                              </p>
+                            </div>
+                          </div>
+                          <Button
+                            onPress={() =>
+                              onOpenCredentialVault?.(customSource.id)
+                            }
+                            size="sm"
+                            variant="secondary"
+                          >
+                            <IconExternalLink
+                              size={ICON_SIZE.small}
+                              stroke={ICON_STROKE}
+                            />
+                            Manage in vault
+                          </Button>
+                        </li>
+                      ))}
+                    </ul>
                   </div>
                 )}
+
+                {/* File Sources */}
                 {sources.data && sources.data.length > 0 && (
-                  <DndContext
-                    collisionDetection={closestCenter}
-                    onDragEnd={reorder}
-                    sensors={sensors}
-                  >
-                    <SortableContext
-                      items={sourceIds}
-                      strategy={verticalListSortingStrategy}
+                  <div className="space-y-2">
+                    {customSources.data && customSources.data.length > 0 && (
+                      <h3 className="font-mono text-[11px] font-semibold uppercase tracking-wider text-muted">
+                        File Sources ({sources.data.length})
+                      </h3>
+                    )}
+                    <DndContext
+                      collisionDetection={closestCenter}
+                      onDragEnd={reorder}
+                      sensors={sensors}
                     >
-                      <ul className="space-y-2">
-                        {sources.data.map((source) => (
-                          <SortableSource
-                            isIssueOpen={source.id === openIssueSourceId}
-                            key={source.id}
-                            onIssueOpenChange={(isOpen) => {
-                              setOpenIssueSourceId((currentId) =>
-                                isOpen
-                                  ? source.id
-                                  : currentId === source.id
-                                    ? null
-                                    : currentId,
-                              );
-                            }}
-                            onRemove={() => remove(source.id)}
-                            source={source}
-                          />
-                        ))}
-                      </ul>
-                    </SortableContext>
-                  </DndContext>
+                      <SortableContext
+                        items={sourceIds}
+                        strategy={verticalListSortingStrategy}
+                      >
+                        <ul className="space-y-2">
+                          {sources.data.map((source) => (
+                            <SortableSource
+                              isIssueOpen={source.id === openIssueSourceId}
+                              key={source.id}
+                              onIssueOpenChange={(isOpen) => {
+                                setOpenIssueSourceId((currentId) =>
+                                  isOpen
+                                    ? source.id
+                                    : currentId === source.id
+                                      ? null
+                                      : currentId,
+                                );
+                              }}
+                              onRemove={() => remove(source.id)}
+                              source={source}
+                            />
+                          ))}
+                        </ul>
+                      </SortableContext>
+                    </DndContext>
+                  </div>
                 )}
+
+                {/* Empty State */}
+                {sources.data?.length === 0 &&
+                  customSources.data?.length === 0 && (
+                    <div className="rounded-md border border-dashed border-divider p-6 text-center text-xs text-muted">
+                      No configuration sources configured yet. Go to{' '}
+                      <strong className="text-foreground">Add Source</strong> to
+                      attach files, or link sources from{' '}
+                      <strong className="text-foreground">
+                        Credential Vault
+                      </strong>
+                      .
+                    </div>
+                  )}
               </section>
             )}
 

@@ -2,6 +2,8 @@ import { invokeCommand } from '@/shared/infrastructure/tauri/invoke-client';
 import {
   credentialSchema,
   credentialSourceSchema,
+  envSecretPreviewItemSchema,
+  importEnvSecretsResultSchema,
   vaultStatusSchema,
   type CredentialDraft,
 } from '../models/credential-vault';
@@ -114,5 +116,26 @@ export const credentialVaultGateway = {
     return invokeCommand<void>('delete_credential', {
       input: { credentialId },
     });
+  },
+
+  async previewEnvSecrets(projectId: string, relativePath: string) {
+    return envSecretPreviewItemSchema.array().parse(
+      await invokeCommand<unknown>('preview_env_file_secrets', {
+        input: { projectId, relativePath },
+      }),
+    );
+  },
+
+  async importEnvFileToVault(input: {
+    environmentId?: string;
+    projectId: string;
+    relativePath: string;
+    selectedKeys: string[];
+    sourceId?: string;
+    sourceName?: string;
+  }) {
+    return importEnvSecretsResultSchema.parse(
+      await invokeCommand<unknown>('import_env_file_to_vault', { input }),
+    );
   },
 };

@@ -27,6 +27,7 @@ import {
   IconExternalLink,
   IconEye,
   IconEyeOff,
+  IconFileCode,
   IconFolder,
   IconKey,
   IconLock,
@@ -37,14 +38,16 @@ import {
   IconTrash,
 } from '@tabler/icons-react';
 import { useQueries } from '@tanstack/react-query';
-import { useMemo, useState } from 'react';
-import { useNavigate } from 'react-router';
+import { useEffect, useMemo, useState } from 'react';
+import { useLocation, useNavigate, useSearchParams } from 'react-router';
 import { CredentialEditorDialog } from '../components/CredentialEditorDialog';
 import {
   CredentialSourceDialog,
   type CredentialSourceValues,
 } from '../components/CredentialSourceDialog';
 import { CredentialValueDialog } from '../components/CredentialValueDialog';
+import { DeleteSourceDialog } from '../components/DeleteSourceDialog';
+import { ImportEnvFileDialog } from '../components/ImportEnvFileDialog';
 import { SourceLogo } from '../components/SourceLogo';
 import { VaultUnlockDialog } from '../components/VaultUnlockDialog';
 import {
@@ -55,6 +58,7 @@ import {
   useCredentialVaultStatusQuery,
   useDeleteCredentialMutation,
   useDeleteCredentialSourceMutation,
+  useImportEnvSecretsMutation,
   useLockCredentialVaultMutation,
   useRemoveCredentialSecretMutation,
   useReplaceCredentialSecretMutation,
@@ -76,6 +80,17 @@ type DeleteTarget =
 
 export function CredentialVaultPage() {
   const navigate = useNavigate();
+  const location = useLocation();
+  const [searchParams] = useSearchParams();
+
+  const querySourceId =
+    searchParams.get('source') ||
+    (location.state as { selectedSourceId?: string } | null)
+      ?.selectedSourceId ||
+    null;
+  const queryProjectId = searchParams.get('project') || null;
+  const queryEnvId = searchParams.get('env') || null;
+
   const { activeProjectId, selectProject } = useActiveProject();
   const status = useCredentialVaultStatusQuery();
   const isUnlocked = status.data?.isUnlocked ?? false;
@@ -93,6 +108,7 @@ export function CredentialVaultPage() {
   const replaceSecret = useReplaceCredentialSecretMutation();
   const removeSecret = useRemoveCredentialSecretMutation();
   const deleteCredential = useDeleteCredentialMutation();
+  const importEnvSecrets = useImportEnvSecretsMutation();
 
   const [deleteTarget, setDeleteTarget] = useState<DeleteTarget>(null);
   const [editingCredential, setEditingCredential] = useState<Credential | null>(
@@ -101,13 +117,18 @@ export function CredentialVaultPage() {
   const [editingSource, setEditingSource] = useState<CredentialSource | null>(
     null,
   );
-  const [environmentFilter, setEnvironmentFilter] = useState('all');
+  const [environmentFilter, setEnvironmentFilter] = useState(
+    () => queryEnvId || 'all',
+  );
   const [isCredentialDialogOpen, setCredentialDialogOpen] = useState(false);
   const [isSourceDialogOpen, setSourceDialogOpen] = useState(false);
+  const [isImportEnvDialogOpen, setImportEnvDialogOpen] = useState(false);
   const [isUnlockOpen, setUnlockOpen] = useState(false);
   const [isSetupDismissed, setSetupDismissed] = useState(false);
   const [isValueDialogOpen, setValueDialogOpen] = useState(false);
-  const [projectFilter, setProjectFilter] = useState('all');
+  const [projectFilter, setProjectFilter] = useState(
+    () => queryProjectId || 'all',
+  );
   const [revealedSecret, setRevealedSecret] = useState<{
     credentialId: string;
     value: string;
@@ -116,7 +137,28 @@ export function CredentialVaultPage() {
   const [selectedCredentialId, setSelectedCredentialId] = useState<
     string | null
   >(null);
-  const [selectedSourceId, setSelectedSourceId] = useState<string | null>(null);
+  const [selectedSourceId, setSelectedSourceId] = useState<string | null>(
+    () => querySourceId,
+  );
+
+  useEffect(() => {
+    const targetSource =
+      searchParams.get('source') ||
+      (location.state as { selectedSourceId?: string } | null)
+        ?.selectedSourceId;
+    if (targetSource) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setSelectedSourceId(targetSource);
+    }
+    const targetProject = searchParams.get('project');
+    if (targetProject) {
+      setProjectFilter(targetProject);
+    }
+    const targetEnv = searchParams.get('env');
+    if (targetEnv) {
+      setEnvironmentFilter(targetEnv);
+    }
+  }, [searchParams, location.state]);
 
   const projectList = useMemo(() => projects.data ?? [], [projects.data]);
   const sourceItems = useMemo(() => sources.data ?? [], [sources.data]);
@@ -392,9 +434,16 @@ export function CredentialVaultPage() {
     await safely(async () => {
       if (deleteTarget.kind === 'source') {
         await deleteSource.mutateAsync(deleteTarget.value.id);
-        toast.success('Credential source deleted.');
+        if (selectedSourceId === deleteTarget.value.id) {
+          setSelectedSourceId(null);
+          setSelectedCredentialId(null);
+        }
+        toast.success('Credential source and all associated data deleted.');
       } else {
         await deleteCredential.mutateAsync(deleteTarget.value.id);
+        if (selectedCredentialId === deleteTarget.value.id) {
+          setSelectedCredentialId(null);
+        }
         toast.success('Credential deleted.');
       }
       setDeleteTarget(null);
@@ -623,6 +672,15 @@ export function CredentialVaultPage() {
             New source
           </Button>
           <Button
+            isDisabled={!isUnlocked}
+            onPress={() => setImportEnvDialogOpen(true)}
+            size="sm"
+            variant="secondary"
+          >
+            <IconFileCode size={ICON_SIZE.small} stroke={ICON_STROKE} />
+            Import .env
+          </Button>
+          <Button
             isDisabled={sourceItems.length === 0}
             onPress={() => {
               setEditingCredential(null);
@@ -753,6 +811,24 @@ export function CredentialVaultPage() {
                     variant="secondary"
                   >
                     <IconEdit size={ICON_SIZE.small} stroke={ICON_STROKE} />
+                  </Button>
+                  <Button
+                    aria-label={`Delete ${selectedSource.name}`}
+                    isIconOnly
+                    onPress={() => {
+                      setDeleteTarget({
+                        kind: 'source',
+                        value: selectedSource,
+                      });
+                    }}
+                    size="sm"
+                    variant="secondary"
+                  >
+                    <IconTrash
+                      className="text-danger"
+                      size={ICON_SIZE.small}
+                      stroke={ICON_STROKE}
+                    />
                   </Button>
                   <Button
                     onPress={() => {
@@ -1055,6 +1131,22 @@ export function CredentialVaultPage() {
           sources={sourceItems}
         />
       ) : null}
+      {isImportEnvDialogOpen ? (
+        <ImportEnvFileDialog
+          environments={environments}
+          isOpen
+          isSaving={importEnvSecrets.isPending}
+          onOpenChange={setImportEnvDialogOpen}
+          onSubmit={async (values) => {
+            const result = await importEnvSecrets.mutateAsync(values);
+            setSelectedSourceId(result.sourceId);
+            return result;
+          }}
+          projects={projects.data ?? []}
+          sources={sourceItems}
+          targetProjectId={activeProjectId ?? null}
+        />
+      ) : null}
       {selectedCredential && isValueDialogOpen ? (
         <CredentialValueDialog
           credentialKey={selectedCredential.key}
@@ -1074,20 +1166,19 @@ export function CredentialVaultPage() {
           }}
         />
       ) : null}
+      <DeleteSourceDialog
+        isDeleting={deleteSource.isPending}
+        isOpen={deleteTarget?.kind === 'source'}
+        onConfirm={confirmDelete}
+        onOpenChange={(isOpen) => !isOpen && setDeleteTarget(null)}
+        source={deleteTarget?.kind === 'source' ? deleteTarget.value : null}
+      />
       <ConfirmDialog
-        body={
-          deleteTarget?.kind === 'source'
-            ? 'This removes the source, all of its credential metadata, associations, and encrypted values.'
-            : 'This removes the credential metadata, associations, and encrypted value.'
-        }
-        isOpen={deleteTarget !== null}
+        body="This removes the credential metadata, associations, and encrypted value."
+        isOpen={deleteTarget?.kind === 'credential'}
         onConfirm={() => void confirmDelete()}
         onOpenChange={(isOpen) => !isOpen && setDeleteTarget(null)}
-        title={
-          deleteTarget?.kind === 'source'
-            ? `Delete ${deleteTarget.value.name}?`
-            : `Delete ${deleteTarget?.value.key ?? 'credential'}?`
-        }
+        title={`Delete ${deleteTarget?.kind === 'credential' ? deleteTarget.value.key : 'credential'}?`}
       />
     </div>
   );

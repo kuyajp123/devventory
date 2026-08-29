@@ -92,7 +92,7 @@ impl AppState {
         );
         let file_inventory_service = FileInventoryService::new(
             SqliteFileInventoryRepository::new(database.pool().clone()),
-            project_service,
+            project_service.clone(),
         );
         let asset_service = AssetService::new(
             SqliteAssetRepository::new(database.pool().clone()),
@@ -124,6 +124,7 @@ impl AppState {
         );
         let credential_vault_service = CredentialVaultService::new(
             SqliteCredentialVaultRepository::new(database.pool().clone()),
+            project_service.clone(),
             &data_directory,
         );
 

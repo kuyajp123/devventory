@@ -708,8 +708,13 @@ async fn manifest_preview_and_export_include_only_empty_values_and_refresh_inven
 async fn custom_definitions_participate_in_required_and_duplicate_validation() {
     let context = TestContext::new("Custom validation project").await;
     let environment_id = context.environment("Production").await;
+    let project_service = ProjectService::new(
+        SqliteProjectRepository::new(context.pool.clone()),
+        LocalProjectFilesystem,
+    );
     let vault = CredentialVaultService::new(
         SqliteCredentialVaultRepository::new(context.pool.clone()),
+        project_service,
         context.root.parent().expect("workspace root"),
     );
     vault

@@ -901,7 +901,24 @@ export function EnvironmentTrackerPage() {
               : currentSelection,
           );
         }}
-        onOpenCredentialVault={() => void navigate('/credential-vault')}
+        onOpenCredentialVault={(sourceId?: string) => {
+          const params = new URLSearchParams();
+          if (sourceId) {
+            params.set('source', sourceId);
+          }
+          if (projectId) {
+            params.set('project', projectId);
+          }
+          const queryString = params.toString();
+          void navigate(
+            `/credential-vault${queryString ? `?${queryString}` : ''}`,
+            {
+              state: {
+                selectedSourceId: sourceId,
+              },
+            },
+          );
+        }}
         onStartDeleteEnvironment={(environment) => {
           setSourceEnvironment(null);
           pendingDeletion.startPendingDeletion(environment);

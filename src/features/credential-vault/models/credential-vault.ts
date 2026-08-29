@@ -180,3 +180,30 @@ export function predefinedSourceLogo(
   const path = `../../../assets/sources/${definition.logoFileName}`;
   return bundledSourceLogos[path] ?? null;
 }
+
+export const envSecretPreviewItemSchema = z.object({
+  existingSourceName: z.string().nullable(),
+  isAlreadyInVault: z.boolean(),
+  isCommented: z.boolean(),
+  key: z.string().min(1),
+  lineNumber: z.number().int().positive(),
+});
+export type EnvSecretPreviewItem = z.infer<typeof envSecretPreviewItemSchema>;
+
+export const importEnvSecretsResultSchema = z.object({
+  importedCount: z.number().int().nonnegative(),
+  sourceId: z.string().uuid(),
+  updatedCount: z.number().int().nonnegative(),
+});
+export type ImportEnvSecretsResult = z.infer<
+  typeof importEnvSecretsResultSchema
+>;
+
+export interface ImportEnvSecretsInput {
+  environmentId?: string;
+  projectId: string;
+  relativePath: string;
+  selectedKeys: string[];
+  sourceId?: string;
+  sourceName?: string;
+}

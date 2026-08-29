@@ -235,6 +235,54 @@ describe('EnvironmentSourceManager', () => {
       'text-success',
     );
   });
+
+  it('displays linked vault credential sources with key count and manage button', async () => {
+    vi.mocked(environmentTrackerGateway.listSources).mockReset();
+    vi.mocked(environmentTrackerGateway.listSources).mockResolvedValue([]);
+    vi.mocked(environmentTrackerGateway.listCustomSources).mockResolvedValue([
+      {
+        createdAt: '2026-08-05T00:00:00.000Z',
+        environmentId: environment.id,
+        id: 'a1b2c3d4-0817-4b8b-ad88-ec19881295b8',
+        keys: [
+          {
+            createdAt: '2026-08-05T00:00:00.000Z',
+            environmentId: environment.id,
+            id: 'k1',
+            name: 'STRIPE_SECRET_KEY',
+            normalizedName: 'STRIPE_SECRET_KEY',
+            projectId: environment.projectId,
+            sourceId: 'a1b2c3d4-0817-4b8b-ad88-ec19881295b8',
+            updatedAt: '2026-08-05T00:00:00.000Z',
+          },
+        ],
+        name: 'Stripe Payments',
+        projectId: environment.projectId,
+        sortOrder: 0,
+        updatedAt: '2026-08-05T00:00:00.000Z',
+      },
+    ]);
+
+    const onOpenCredentialVault = vi.fn();
+
+    renderWithProviders(
+      <EnvironmentSourceManager
+        environment={environment}
+        onOpenCredentialVault={onOpenCredentialVault}
+        onOpenChange={vi.fn()}
+        projectId={environment.projectId}
+      />,
+    );
+
+    expect(await screen.findByText('Stripe Payments')).toBeVisible();
+    expect(screen.getByText('1 key linked')).toBeVisible();
+
+    const manageBtn = screen.getByRole('button', { name: /Manage in vault/i });
+    await userEvent.click(manageBtn);
+    expect(onOpenCredentialVault).toHaveBeenCalledWith(
+      'a1b2c3d4-0817-4b8b-ad88-ec19881295b8',
+    );
+  });
 });
 
 const environment: Environment = {

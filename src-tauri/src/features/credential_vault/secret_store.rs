@@ -97,21 +97,37 @@ impl CredentialSecretStore {
     }
 
     pub(super) fn save(&self, reference: Uuid, value: &str) -> Result<(), CredentialVaultError> {
+        self.save_batch(&[(reference, value)])
+    }
+
+    pub(super) fn save_batch(&self, items: &[(Uuid, &str)]) -> Result<(), CredentialVaultError> {
+        if items.is_empty() {
+            return Ok(());
+        }
         self.with_unlocked(|stronghold| {
             let client = stronghold
                 .get_client(CLIENT_ID)
-                .map_err(|_| CredentialVaultError::SecretStorage)?;
-            client
-                .store()
-                .insert(
-                    reference.to_string().into_bytes(),
-                    value.as_bytes().to_vec(),
-                    None,
-                )
-                .map_err(|_| CredentialVaultError::SecretStorage)?;
-            stronghold
-                .save()
-                .map_err(|_| CredentialVaultError::SecretStorage)
+                .map_err(|err| {
+                    tracing::error!(error = ?err, "failed to get stronghold client");
+                    CredentialVaultError::SecretStorage
+                })?;
+            for (reference, value) in items {
+                client
+                    .store()
+                    .insert(
+                        reference.to_string().into_bytes(),
+                        value.as_bytes().to_vec(),
+                        None,
+                    )
+                    .map_err(|err| {
+                        tracing::error!(error = ?err, reference = %reference, "failed to insert secret in stronghold store");
+                        CredentialVaultError::SecretStorage
+                    })?;
+            }
+            stronghold.save().map_err(|err| {
+                tracing::error!(error = ?err, "failed to save stronghold snapshot to disk");
+                CredentialVaultError::SecretStorage
+            })
         })
     }
 
@@ -119,28 +135,44 @@ impl CredentialSecretStore {
         self.with_unlocked(|stronghold| {
             let client = stronghold
                 .get_client(CLIENT_ID)
-                .map_err(|_| CredentialVaultError::SecretStorage)?;
+                .map_err(|err| {
+                    tracing::error!(error = ?err, "failed to get stronghold client");
+                    CredentialVaultError::SecretStorage
+                })?;
             let bytes = client
                 .store()
                 .get(reference.to_string().as_bytes())
-                .map_err(|_| CredentialVaultError::SecretStorage)?
+                .map_err(|err| {
+                    tracing::error!(error = ?err, reference = %reference, "failed to get secret from stronghold store");
+                    CredentialVaultError::SecretStorage
+                })?
                 .ok_or(CredentialVaultError::CredentialNotFound)?;
             String::from_utf8(bytes).map_err(|_| CredentialVaultError::InvalidPersistedData)
         })
     }
 
     pub(super) fn delete(&self, reference: Uuid) -> Result<(), CredentialVaultError> {
+        self.delete_batch(&[reference])
+    }
+
+    pub(super) fn delete_batch(&self, references: &[Uuid]) -> Result<(), CredentialVaultError> {
+        if references.is_empty() {
+            return Ok(());
+        }
         self.with_unlocked(|stronghold| {
             let client = stronghold
                 .get_client(CLIENT_ID)
-                .map_err(|_| CredentialVaultError::SecretStorage)?;
-            client
-                .store()
-                .delete(reference.to_string().as_bytes())
-                .map_err(|_| CredentialVaultError::SecretStorage)?;
-            stronghold
-                .save()
-                .map_err(|_| CredentialVaultError::SecretStorage)
+                .map_err(|err| {
+                    tracing::error!(error = ?err, "failed to get stronghold client");
+                    CredentialVaultError::SecretStorage
+                })?;
+            for reference in references {
+                let _ = client.store().delete(reference.to_string().as_bytes());
+            }
+            stronghold.save().map_err(|err| {
+                tracing::error!(error = ?err, "failed to save stronghold snapshot to disk after delete");
+                CredentialVaultError::SecretStorage
+            })
         })
     }
 

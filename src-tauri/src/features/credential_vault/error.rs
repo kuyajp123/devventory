@@ -1,5 +1,6 @@
 use thiserror::Error;
 
+use crate::features::projects::ProjectFileError;
 use crate::shared::errors::command::CommandError;
 
 #[derive(Debug, Error)]
@@ -22,6 +23,12 @@ pub(crate) enum CredentialVaultError {
     InvalidPersistedData,
     #[error("credential vault storage is unavailable")]
     SecretStorage,
+    #[error("project file access failed")]
+    ProjectFile(#[from] ProjectFileError),
+    #[error("environment file parse failed: {0}")]
+    EnvParse(String),
+    #[error("duplicate active keys in environment file: {0}")]
+    DuplicateActiveKeys(String),
     #[error("database operation failed")]
     Database(#[from] sqlx::Error),
     #[error("filesystem operation failed")]
@@ -40,6 +47,9 @@ impl From<CredentialVaultError> for CommandError {
             CredentialVaultError::DuplicateCredential => Self::environment_conflict(
                 "That key already exists in the selected credential source.",
             ),
+            CredentialVaultError::DuplicateActiveKeys(_) => Self::invalid_input(
+                "The environment file contains duplicate active keys. Remove or comment out duplicates before importing.",
+            ),
             CredentialVaultError::Locked => {
                 Self::operation_unavailable("Unlock Credential Vault before accessing credentials.")
             }
@@ -52,10 +62,47 @@ impl From<CredentialVaultError> for CommandError {
             CredentialVaultError::InvalidIcon => {
                 Self::invalid_input("Choose a PNG, JPEG, or WebP image no larger than 2 MB.")
             }
-            CredentialVaultError::Database(_)
-            | CredentialVaultError::Filesystem(_)
-            | CredentialVaultError::InvalidPersistedData
-            | CredentialVaultError::SecretStorage => Self::storage_unavailable(),
+            CredentialVaultError::EnvParse(_) => {
+                Self::invalid_input("The environment file contains invalid formatting or encoding.")
+            }
+            CredentialVaultError::ProjectFile(error) => match error {
+                ProjectFileError::InvalidRelativePath | ProjectFileError::LinkNotAllowed => {
+                    Self::path_outside_root()
+                }
+                ProjectFileError::NotFound => {
+                    Self::not_found("The requested configuration source does not exist.")
+                }
+                ProjectFileError::NotRegularFile => Self::invalid_input(
+                    "Configuration sources must be regular files inside the project root.",
+                ),
+                ProjectFileError::ProjectNotFound => {
+                    Self::not_found("The requested project could not be found.")
+                }
+                ProjectFileError::RootUnavailable | ProjectFileError::Unreadable => {
+                    Self::filesystem_unavailable(
+                        "The configuration source cannot be read. Check the file permissions.",
+                    )
+                }
+                ProjectFileError::InvalidPathEncoding => {
+                    Self::invalid_input("The configuration source path is not supported.")
+                }
+            },
+            CredentialVaultError::Database(ref err) => {
+                tracing::error!(error = ?err, "database error in credential vault");
+                Self::storage_unavailable()
+            }
+            CredentialVaultError::Filesystem(ref err) => {
+                tracing::error!(error = ?err, "filesystem error in credential vault");
+                Self::storage_unavailable()
+            }
+            CredentialVaultError::InvalidPersistedData => {
+                tracing::error!("invalid persisted data in credential vault");
+                Self::storage_unavailable()
+            }
+            CredentialVaultError::SecretStorage => {
+                tracing::error!("secret storage (stronghold) error in credential vault");
+                Self::storage_unavailable()
+            }
         }
     }
 }

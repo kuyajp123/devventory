@@ -18,9 +18,10 @@ use features::asset_library::commands::{
 };
 use features::credential_vault::commands::{
     create_credential_source, create_credentials, delete_credential, delete_credential_source,
-    get_credential_vault_status, list_credential_sources, list_credentials, lock_credential_vault,
-    remove_credential_secret, replace_credential_secret, reveal_credential_secret,
-    unlock_credential_vault, update_credential, update_credential_source,
+    get_credential_vault_status, import_env_file_to_vault, list_credential_sources,
+    list_credentials, lock_credential_vault, preview_env_file_secrets, remove_credential_secret,
+    replace_credential_secret, reveal_credential_secret, unlock_credential_vault,
+    update_credential, update_credential_source,
 };
 use features::dashboard::commands::get_project_dashboard;
 use features::environment_tracker::commands::{
@@ -309,6 +310,8 @@ pub fn run() {
             remove_credential_secret,
             reveal_credential_secret,
             delete_credential,
+            preview_env_file_secrets,
+            import_env_file_to_vault,
             get_last_opened_project_id,
             save_last_opened_project_id,
             get_notification_preferences,
