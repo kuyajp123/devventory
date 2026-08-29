@@ -47,10 +47,26 @@ const { idleMutation, vaultMocks } = vi.hoisted(() => ({
   },
 }));
 
-vi.mock('react-router', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('react-router')>()),
-  useNavigate: () => mockNavigate,
-}));
+let mockSearchParams = new URLSearchParams();
+let mockLocationState: unknown = null;
+
+vi.mock('react-router', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('react-router')>();
+  return {
+    ...actual,
+    useLocation: () => ({
+      hash: '',
+      key: 'default',
+      pathname: '/credential-vault',
+      search: mockSearchParams.toString()
+        ? `?${mockSearchParams.toString()}`
+        : '',
+      state: mockLocationState,
+    }),
+    useNavigate: () => mockNavigate,
+    useSearchParams: () => [mockSearchParams, vi.fn()],
+  };
+});
 
 vi.mock('@/features/environment-tracker', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/features/environment-tracker')>()),
@@ -108,6 +124,7 @@ vi.mock('../hooks/use-credential-vault', () => ({
   }),
   useDeleteCredentialMutation: idleMutation,
   useDeleteCredentialSourceMutation: idleMutation,
+  useImportEnvSecretsMutation: idleMutation,
   useLockCredentialVaultMutation: idleMutation,
   useRemoveCredentialSecretMutation: idleMutation,
   useReplaceCredentialSecretMutation: idleMutation,
@@ -118,6 +135,8 @@ vi.mock('../hooks/use-credential-vault', () => ({
 
 describe('CredentialVaultPage access gate', () => {
   beforeEach(() => {
+    mockSearchParams = new URLSearchParams();
+    mockLocationState = null;
     vaultMocks.status = { isConfigured: false, isUnlocked: false };
     vaultMocks.projects = [];
     vaultMocks.sources = [
@@ -212,6 +231,8 @@ describe('CredentialVaultPage project filtering', () => {
   };
 
   beforeEach(() => {
+    mockSearchParams = new URLSearchParams();
+    mockLocationState = null;
     vaultMocks.status = { isConfigured: true, isUnlocked: true };
     vaultMocks.projects = [projectAlpha, projectBeta];
     vaultMocks.sources = [sourceAlpha, sourceBeta];
@@ -278,12 +299,18 @@ describe('CredentialVaultPage project filtering', () => {
 
     expect(
       screen.getByRole('button', {
-        name: (name) => name.includes('Alpha Source') && !name.includes('Edit'),
+        name: (name) =>
+          name.includes('Alpha Source') &&
+          !name.includes('Edit') &&
+          !name.includes('Delete'),
       }),
     ).toBeVisible();
     expect(
       screen.getByRole('button', {
-        name: (name) => name.includes('Beta Source') && !name.includes('Edit'),
+        name: (name) =>
+          name.includes('Beta Source') &&
+          !name.includes('Edit') &&
+          !name.includes('Delete'),
       }),
     ).toBeVisible();
   });
@@ -294,12 +321,18 @@ describe('CredentialVaultPage project filtering', () => {
 
     expect(
       screen.getByRole('button', {
-        name: (name) => name.includes('Alpha Source') && !name.includes('Edit'),
+        name: (name) =>
+          name.includes('Alpha Source') &&
+          !name.includes('Edit') &&
+          !name.includes('Delete'),
       }),
     ).toBeVisible();
     expect(
       screen.getByRole('button', {
-        name: (name) => name.includes('Beta Source') && !name.includes('Edit'),
+        name: (name) =>
+          name.includes('Beta Source') &&
+          !name.includes('Edit') &&
+          !name.includes('Delete'),
       }),
     ).toBeVisible();
 
@@ -315,12 +348,18 @@ describe('CredentialVaultPage project filtering', () => {
 
     expect(
       screen.getByRole('button', {
-        name: (name) => name.includes('Alpha Source') && !name.includes('Edit'),
+        name: (name) =>
+          name.includes('Alpha Source') &&
+          !name.includes('Edit') &&
+          !name.includes('Delete'),
       }),
     ).toBeVisible();
     expect(
       screen.queryByRole('button', {
-        name: (name) => name.includes('Beta Source') && !name.includes('Edit'),
+        name: (name) =>
+          name.includes('Beta Source') &&
+          !name.includes('Edit') &&
+          !name.includes('Delete'),
       }),
     ).not.toBeInTheDocument();
 
@@ -330,12 +369,18 @@ describe('CredentialVaultPage project filtering', () => {
 
     expect(
       screen.getByRole('button', {
-        name: (name) => name.includes('Alpha Source') && !name.includes('Edit'),
+        name: (name) =>
+          name.includes('Alpha Source') &&
+          !name.includes('Edit') &&
+          !name.includes('Delete'),
       }),
     ).toBeVisible();
     expect(
       screen.getByRole('button', {
-        name: (name) => name.includes('Beta Source') && !name.includes('Edit'),
+        name: (name) =>
+          name.includes('Beta Source') &&
+          !name.includes('Edit') &&
+          !name.includes('Delete'),
       }),
     ).toBeVisible();
   });
@@ -412,12 +457,18 @@ describe('CredentialVaultPage project filtering', () => {
 
     expect(
       screen.getByRole('button', {
-        name: (name) => name.includes('Alpha Source') && !name.includes('Edit'),
+        name: (name) =>
+          name.includes('Alpha Source') &&
+          !name.includes('Edit') &&
+          !name.includes('Delete'),
       }),
     ).toBeVisible();
     expect(
       screen.getByRole('button', {
-        name: (name) => name.includes('Beta Source') && !name.includes('Edit'),
+        name: (name) =>
+          name.includes('Beta Source') &&
+          !name.includes('Edit') &&
+          !name.includes('Delete'),
       }),
     ).toBeVisible();
 
@@ -433,12 +484,18 @@ describe('CredentialVaultPage project filtering', () => {
 
     expect(
       screen.getByRole('button', {
-        name: (name) => name.includes('Alpha Source') && !name.includes('Edit'),
+        name: (name) =>
+          name.includes('Alpha Source') &&
+          !name.includes('Edit') &&
+          !name.includes('Delete'),
       }),
     ).toBeVisible();
     expect(
       screen.queryByRole('button', {
-        name: (name) => name.includes('Beta Source') && !name.includes('Edit'),
+        name: (name) =>
+          name.includes('Beta Source') &&
+          !name.includes('Edit') &&
+          !name.includes('Delete'),
       }),
     ).not.toBeInTheDocument();
 
@@ -448,12 +505,18 @@ describe('CredentialVaultPage project filtering', () => {
 
     expect(
       screen.getByRole('button', {
-        name: (name) => name.includes('Alpha Source') && !name.includes('Edit'),
+        name: (name) =>
+          name.includes('Alpha Source') &&
+          !name.includes('Edit') &&
+          !name.includes('Delete'),
       }),
     ).toBeVisible();
     expect(
       screen.getByRole('button', {
-        name: (name) => name.includes('Beta Source') && !name.includes('Edit'),
+        name: (name) =>
+          name.includes('Beta Source') &&
+          !name.includes('Edit') &&
+          !name.includes('Delete'),
       }),
     ).toBeVisible();
   });
@@ -564,7 +627,10 @@ describe('CredentialVaultPage project filtering', () => {
     expect(searchInput).toHaveValue('');
     expect(
       screen.getByRole('button', {
-        name: (name) => name.includes('Alpha Source') && !name.includes('Edit'),
+        name: (name) =>
+          name.includes('Alpha Source') &&
+          !name.includes('Edit') &&
+          !name.includes('Delete'),
       }),
     ).toBeVisible();
   });
@@ -642,5 +708,18 @@ describe('CredentialVaultPage project filtering', () => {
         },
       },
     );
+  });
+
+  it('pre-selects source and applies project filter when navigated with search parameters', async () => {
+    mockSearchParams = new URLSearchParams(
+      `source=${sourceBeta.id}&project=${projectBeta.id}`,
+    );
+
+    renderWithProviders(<CredentialVaultPage />);
+
+    expect(
+      await screen.findByRole('heading', { name: 'Beta Source' }),
+    ).toBeVisible();
+    expect(screen.getAllByText('BETA_SECRET').length).toBeGreaterThanOrEqual(1);
   });
 });

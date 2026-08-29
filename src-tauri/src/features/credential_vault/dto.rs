@@ -238,6 +238,86 @@ impl TryFrom<UpdateCredentialInput> for UpdateCredential {
     }
 }
 
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub(crate) struct PreviewEnvSecretsInput {
+    project_id: String,
+    relative_path: String,
+}
+
+impl PreviewEnvSecretsInput {
+    pub(crate) fn parse(self) -> Result<(Uuid, String), CredentialVaultError> {
+        let project_id = parse_uuid(&self.project_id)?;
+        let relative_path = normalize_required(self.relative_path, 4_096)?;
+        Ok((project_id, relative_path))
+    }
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub(crate) struct ImportEnvSecretsInput {
+    project_id: String,
+    relative_path: String,
+    source_id: Option<String>,
+    source_name: Option<String>,
+    selected_keys: Vec<String>,
+    environment_id: Option<String>,
+}
+
+#[derive(Debug, Clone)]
+pub(crate) struct ValidatedImportEnvSecrets {
+    pub(crate) project_id: Uuid,
+    pub(crate) relative_path: String,
+    pub(crate) source_id: Option<Uuid>,
+    pub(crate) source_name: Option<String>,
+    pub(crate) selected_keys: Vec<String>,
+    pub(crate) environment_id: Option<Uuid>,
+}
+
+impl TryFrom<ImportEnvSecretsInput> for ValidatedImportEnvSecrets {
+    type Error = CredentialVaultError;
+
+    fn try_from(input: ImportEnvSecretsInput) -> Result<Self, Self::Error> {
+        let project_id = parse_uuid(&input.project_id)?;
+        let relative_path = normalize_required(input.relative_path, 4_096)?;
+        let source_id = input.source_id.as_deref().map(parse_uuid).transpose()?;
+        let source_name = normalize_optional(input.source_name, MAX_NAME_LENGTH)?;
+        let environment_id = input
+            .environment_id
+            .as_deref()
+            .map(parse_uuid)
+            .transpose()?;
+
+        if source_id.is_none() && source_name.is_none() {
+            return Err(CredentialVaultError::InvalidInput);
+        }
+
+        if input.selected_keys.is_empty() {
+            return Err(CredentialVaultError::InvalidInput);
+        }
+
+        let mut seen = HashSet::new();
+        let selected_keys = input
+            .selected_keys
+            .into_iter()
+            .map(|k| normalize_required(k, MAX_KEY_LENGTH))
+            .filter(|res| match res {
+                Ok(k) => seen.insert(k.to_ascii_uppercase()),
+                Err(_) => true,
+            })
+            .collect::<Result<Vec<_>, _>>()?;
+
+        Ok(Self {
+            project_id,
+            relative_path,
+            source_id,
+            source_name,
+            selected_keys,
+            environment_id,
+        })
+    }
+}
+
 fn parse_environment_links(
     inputs: Vec<CredentialEnvironmentLinkInput>,
     project_ids: &[Uuid],

@@ -106,3 +106,21 @@ pub(super) struct PreparedCredential {
     pub(super) secret_reference: Option<Uuid>,
     pub(super) credential: NewCredential,
 }
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct EnvSecretPreviewItem {
+    pub(crate) key: String,
+    pub(crate) line_number: u32,
+    pub(crate) is_commented: bool,
+    pub(crate) is_already_in_vault: bool,
+    pub(crate) existing_source_name: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct ImportEnvSecretsResult {
+    pub(crate) source_id: Uuid,
+    pub(crate) imported_count: u32,
+    pub(crate) updated_count: u32,
+}

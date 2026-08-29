@@ -12,6 +12,7 @@ use crate::features::projects::{
 use crate::shared::database::{initialize_database, DatabasePaths};
 use crate::shared::errors::command::CommandError;
 
+use super::dto::ValidatedImportEnvSecrets;
 use super::error::CredentialVaultError;
 use super::model::{
     CreateCredentials, CredentialEnvironmentLink, NewCredential, NewCredentialSource,
@@ -27,8 +28,13 @@ async fn vault_metadata_reads_and_mutations_require_an_unlocked_session() {
     let initialization = initialize_database(&DatabasePaths::new(directory.path().join("data")))
         .await
         .expect("database initialization");
+    let project_service = ProjectService::new(
+        SqliteProjectRepository::new(initialization.database.pool().clone()),
+        LocalProjectFilesystem,
+    );
     let vault = CredentialVaultService::new(
         SqliteCredentialVaultRepository::new(initialization.database.pool().clone()),
+        project_service,
         directory.path(),
     );
     let source_input = NewCredentialSource {
@@ -222,7 +228,7 @@ async fn vault_credentials_project_metadata_into_environment_tracker_without_pla
         .expect("project creation");
     let environment_service = EnvironmentService::new(
         SqliteEnvironmentRepository::new(pool.clone()),
-        project_service,
+        project_service.clone(),
     );
     let environment = environment_service
         .create(CreateEnvironment {
@@ -234,6 +240,7 @@ async fn vault_credentials_project_metadata_into_environment_tracker_without_pla
         .expect("environment creation");
     let vault = CredentialVaultService::new(
         SqliteCredentialVaultRepository::new(pool.clone()),
+        project_service.clone(),
         directory.path(),
     );
     vault
@@ -297,4 +304,390 @@ async fn vault_credentials_project_metadata_into_environment_tracker_without_pla
             .await
             .expect("secret reference count");
     assert_eq!(persisted_secret_references, 1);
+}
+
+#[tokio::test]
+async fn preview_and_import_env_file_secrets_into_vault() {
+    let directory = tempdir().expect("temporary application directory");
+    let project_root = directory.path().join("workspace");
+    std::fs::create_dir_all(&project_root).expect("project directory");
+    std::fs::write(
+        project_root.join(".env.local"),
+        "DATABASE_URL=postgres://user:pass@localhost:5432/mydb\nAPI_SECRET=\"super-secret-token\"\nPORT=8080\n# DISABLED_FLAG=off\n",
+    )
+    .expect("write .env.local");
+
+    let initialization = initialize_database(&DatabasePaths::new(directory.path().join("data")))
+        .await
+        .expect("database initialization");
+    let pool = initialization.database.pool().clone();
+    let project_service = ProjectService::new(
+        SqliteProjectRepository::new(pool.clone()),
+        LocalProjectFilesystem,
+    );
+    let project = project_service
+        .create(CreateProject {
+            name: "Test Env Project".to_owned(),
+            root_path: project_root.to_string_lossy().into_owned(),
+            description: None,
+            project_type: ProjectType::Web,
+            watched_locations: vec![".".to_owned()],
+            exclusions: vec![],
+        })
+        .await
+        .expect("project creation");
+
+    let vault = CredentialVaultService::new(
+        SqliteCredentialVaultRepository::new(pool.clone()),
+        project_service.clone(),
+        directory.path(),
+    );
+    vault
+        .unlock("test master password".to_owned())
+        .await
+        .expect("vault setup");
+
+    // 1. Preview env file secrets
+    let preview = vault
+        .preview_env_secrets(project.id(), ".env.local")
+        .await
+        .expect("preview env secrets");
+    assert_eq!(preview.len(), 4);
+    assert_eq!(preview[0].key, "DATABASE_URL");
+    assert!(!preview[0].is_commented);
+    assert!(!preview[0].is_already_in_vault);
+    assert_eq!(preview[1].key, "API_SECRET");
+    assert_eq!(preview[2].key, "PORT");
+    assert_eq!(preview[3].key, "DISABLED_FLAG");
+    assert!(preview[3].is_commented);
+
+    // 2. Import selected secrets into a new source
+    let import_result = vault
+        .import_env_file(ValidatedImportEnvSecrets {
+            project_id: project.id(),
+            relative_path: ".env.local".to_owned(),
+            source_id: None,
+            source_name: Some(".env.local".to_owned()),
+            selected_keys: vec!["DATABASE_URL".to_owned(), "API_SECRET".to_owned()],
+            environment_id: None,
+        })
+        .await
+        .expect("import env file");
+
+    assert_eq!(import_result.imported_count, 2);
+    assert_eq!(import_result.updated_count, 0);
+
+    // 3. Verify created credentials
+    let credentials = vault
+        .list_credentials(Some(import_result.source_id))
+        .await
+        .expect("list credentials");
+    assert_eq!(credentials.len(), 2);
+
+    let db_cred = credentials
+        .iter()
+        .find(|c| c.key == "DATABASE_URL")
+        .expect("db cred");
+    assert!(db_cred.has_value);
+    let secret = vault
+        .reveal_secret(db_cred.id)
+        .await
+        .expect("reveal db secret");
+    assert_eq!(secret, "postgres://user:pass@localhost:5432/mydb");
+
+    let api_cred = credentials
+        .iter()
+        .find(|c| c.key == "API_SECRET")
+        .expect("api cred");
+    assert!(api_cred.has_value);
+    let api_secret = vault
+        .reveal_secret(api_cred.id)
+        .await
+        .expect("reveal api secret");
+    assert_eq!(api_secret, "super-secret-token");
+
+    // 4. Verify preview now reflects that keys are in vault
+    let preview_after = vault
+        .preview_env_secrets(project.id(), ".env.local")
+        .await
+        .expect("preview after import");
+    assert!(preview_after[0].is_already_in_vault);
+    assert_eq!(
+        preview_after[0].existing_source_name.as_deref(),
+        Some(".env.local")
+    );
+}
+
+#[tokio::test]
+async fn delete_source_cascades_and_removes_all_credentials_and_secrets() {
+    let directory = tempdir().expect("temporary application directory");
+    let project_root = directory.path().join("cascade_test_project");
+    std::fs::create_dir_all(&project_root).expect("create project root");
+
+    let initialization = initialize_database(&DatabasePaths::new(directory.path().join("data")))
+        .await
+        .expect("database initialization");
+    let pool = initialization.database.pool().clone();
+
+    let project_service = ProjectService::new(
+        SqliteProjectRepository::new(pool.clone()),
+        LocalProjectFilesystem,
+    );
+    let project = project_service
+        .create(CreateProject {
+            name: "Cascade Test Project".to_owned(),
+            root_path: project_root.to_string_lossy().into_owned(),
+            description: None,
+            project_type: ProjectType::Web,
+            watched_locations: vec![".".to_owned()],
+            exclusions: vec![],
+        })
+        .await
+        .expect("project creation");
+
+    let vault = CredentialVaultService::new(
+        SqliteCredentialVaultRepository::new(pool.clone()),
+        project_service.clone(),
+        directory.path(),
+    );
+    vault
+        .unlock("correct horse battery staple".to_owned())
+        .await
+        .expect("unlock vault");
+
+    // 1. Create a source
+    let source = vault
+        .create_source(NewCredentialSource {
+            definition_key: None,
+            name: "Source To Delete".to_owned(),
+            description: Some("Will be cascade deleted".to_owned()),
+            project_ids: vec![project.id()],
+            icon_source_path: None,
+        })
+        .await
+        .expect("create source");
+
+    // 2. Create credentials under the source with secret values
+    let created_credentials = vault
+        .create_credentials(CreateCredentials {
+            source_id: source.id,
+            credentials: vec![
+                NewCredential {
+                    key: "SECRET_KEY_1".to_owned(),
+                    value: Some("secret-value-1".to_owned()),
+                    notes: None,
+                    project_ids: vec![project.id()],
+                    environment_links: vec![],
+                },
+                NewCredential {
+                    key: "SECRET_KEY_2".to_owned(),
+                    value: Some("secret-value-2".to_owned()),
+                    notes: None,
+                    project_ids: vec![project.id()],
+                    environment_links: vec![],
+                },
+            ],
+        })
+        .await
+        .expect("create credentials");
+
+    assert_eq!(created_credentials.len(), 2);
+    assert_eq!(
+        vault
+            .reveal_secret(created_credentials[0].id)
+            .await
+            .expect("reveal 1"),
+        "secret-value-1"
+    );
+
+    // 3. Delete the source
+    let affected = vault.delete_source(source.id).await.expect("delete source");
+    assert_eq!(affected, vec![project.id()]);
+
+    // 4. Verify credentials are gone
+    let remaining_creds = vault
+        .list_credentials(Some(source.id))
+        .await
+        .expect("list credentials");
+    assert!(remaining_creds.is_empty());
+
+    // 5. Verify SQLite tables have 0 rows for this source
+    let source_count: i64 =
+        sqlx::query_scalar("SELECT count(*) FROM credential_sources WHERE id = ?")
+            .bind(source.id.to_string())
+            .fetch_one(&pool)
+            .await
+            .expect("count sources");
+    assert_eq!(source_count, 0);
+
+    let cred_count: i64 =
+        sqlx::query_scalar("SELECT count(*) FROM credentials WHERE source_id = ?")
+            .bind(source.id.to_string())
+            .fetch_one(&pool)
+            .await
+            .expect("count credentials");
+    assert_eq!(cred_count, 0);
+}
+
+#[tokio::test]
+async fn import_env_file_with_active_duplicate_keys_fails() {
+    let directory = tempdir().expect("temporary application directory");
+    let project_root = directory.path().join("workspace");
+    std::fs::create_dir_all(&project_root).expect("project directory");
+    std::fs::write(
+        project_root.join(".env.duplicate"),
+        "API_KEY=first_val\nPORT=3000\nAPI_KEY=second_override_val\nDB_PASS=secret123\n",
+    )
+    .expect("write .env.duplicate");
+
+    let initialization = initialize_database(&DatabasePaths::new(directory.path().join("data")))
+        .await
+        .expect("database initialization");
+    let pool = initialization.database.pool().clone();
+    let project_service = ProjectService::new(
+        SqliteProjectRepository::new(pool.clone()),
+        LocalProjectFilesystem,
+    );
+    let project = project_service
+        .create(CreateProject {
+            name: "Duplicate Keys Project".to_owned(),
+            root_path: project_root.to_string_lossy().into_owned(),
+            description: None,
+            project_type: ProjectType::Web,
+            watched_locations: vec![".".to_owned()],
+            exclusions: vec![],
+        })
+        .await
+        .expect("project creation");
+
+    let vault = CredentialVaultService::new(
+        SqliteCredentialVaultRepository::new(pool.clone()),
+        project_service.clone(),
+        directory.path(),
+    );
+    vault
+        .unlock("correct password".to_owned())
+        .await
+        .expect("vault setup");
+
+    let err = vault
+        .import_env_file(ValidatedImportEnvSecrets {
+            project_id: project.id(),
+            relative_path: ".env.duplicate".to_owned(),
+            source_id: None,
+            source_name: Some("Deduplicated Source".to_owned()),
+            selected_keys: vec![
+                "API_KEY".to_owned(),
+                "PORT".to_owned(),
+                "DB_PASS".to_owned(),
+            ],
+            environment_id: None,
+        })
+        .await
+        .expect_err("should reject duplicate active keys");
+
+    match err {
+        CredentialVaultError::DuplicateActiveKeys(msg) => {
+            assert!(msg.contains("API_KEY"));
+            assert!(msg.contains("lines 1, 3"));
+        }
+        other => panic!("expected DuplicateActiveKeys, got {:?}", other),
+    }
+}
+
+#[tokio::test]
+async fn import_env_file_with_active_key_and_commented_duplicate_succeeds() {
+    let directory = tempdir().expect("temporary application directory");
+    let project_root = directory.path().join("workspace");
+    std::fs::create_dir_all(&project_root).expect("project directory");
+    std::fs::write(
+        project_root.join(".env.mixed"),
+        "API_KEY=active_val\nPORT=3000\n# API_KEY=commented_val\n# UNUSED=ignore_me\n",
+    )
+    .expect("write .env.mixed");
+
+    let initialization = initialize_database(&DatabasePaths::new(directory.path().join("data")))
+        .await
+        .expect("database initialization");
+    let pool = initialization.database.pool().clone();
+    let project_service = ProjectService::new(
+        SqliteProjectRepository::new(pool.clone()),
+        LocalProjectFilesystem,
+    );
+    let project = project_service
+        .create(CreateProject {
+            name: "Mixed Keys Project".to_owned(),
+            root_path: project_root.to_string_lossy().into_owned(),
+            description: None,
+            project_type: ProjectType::Web,
+            watched_locations: vec![".".to_owned()],
+            exclusions: vec![],
+        })
+        .await
+        .expect("project creation");
+
+    let vault = CredentialVaultService::new(
+        SqliteCredentialVaultRepository::new(pool.clone()),
+        project_service.clone(),
+        directory.path(),
+    );
+    vault
+        .unlock("correct password".to_owned())
+        .await
+        .expect("vault setup");
+
+    let import_result = vault
+        .import_env_file(ValidatedImportEnvSecrets {
+            project_id: project.id(),
+            relative_path: ".env.mixed".to_owned(),
+            source_id: None,
+            source_name: Some("Mixed Source".to_owned()),
+            selected_keys: vec!["API_KEY".to_owned(), "PORT".to_owned(), "UNUSED".to_owned()],
+            environment_id: None,
+        })
+        .await
+        .expect("import env file with active and commented keys");
+
+    assert_eq!(import_result.imported_count, 2);
+    assert_eq!(import_result.updated_count, 0);
+
+    let credentials = vault
+        .list_credentials(Some(import_result.source_id))
+        .await
+        .expect("list credentials");
+    assert_eq!(credentials.len(), 2);
+
+    let api_key_cred = credentials
+        .iter()
+        .find(|c| c.key == "API_KEY")
+        .expect("API_KEY cred");
+    let revealed = vault
+        .reveal_secret(api_key_cred.id)
+        .await
+        .expect("reveal API_KEY");
+    assert_eq!(revealed, "active_val");
+}
+
+#[tokio::test]
+async fn secret_store_batch_operations() {
+    let directory = tempdir().expect("temporary application directory");
+    let store = CredentialSecretStore::new(directory.path());
+    store.unlock("master-pass").expect("unlock");
+
+    let id1 = Uuid::new_v4();
+    let id2 = Uuid::new_v4();
+    let id3 = Uuid::new_v4();
+
+    store
+        .save_batch(&[(id1, "val-1"), (id2, "val-2"), (id3, "val-3")])
+        .expect("save_batch");
+
+    assert_eq!(store.read(id1).expect("read 1"), "val-1");
+    assert_eq!(store.read(id2).expect("read 2"), "val-2");
+    assert_eq!(store.read(id3).expect("read 3"), "val-3");
+
+    store.delete_batch(&[id1, id2]).expect("delete_batch");
+    assert!(store.read(id1).is_err());
+    assert!(store.read(id2).is_err());
+    assert_eq!(store.read(id3).expect("read 3"), "val-3");
 }

@@ -421,7 +421,7 @@ describe('QuotaWindowFlow', () => {
     // Enter new date and time
     const dateInput = screen.getByLabelText('Reset date');
     await user.clear(dateInput);
-    await user.type(dateInput, '2026-08-25');
+    await user.type(dateInput, '2028-08-25');
 
     const timeInput = screen.getByLabelText('Reset time');
     await user.clear(timeInput);
@@ -434,7 +434,7 @@ describe('QuotaWindowFlow', () => {
     expect(agentUsageGateway.saveQuota).toHaveBeenCalledWith(
       expect.objectContaining({
         id: 'quota-1',
-        resetAt: expect.stringMatching(/^2026-08-25/),
+        resetAt: expect.stringMatching(/^2028-08-25/),
       }),
     );
   });

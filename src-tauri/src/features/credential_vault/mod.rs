@@ -1,5 +1,6 @@
 pub(crate) mod commands;
 mod dto;
+pub(crate) mod env_parser;
 mod error;
 mod model;
 mod repository;

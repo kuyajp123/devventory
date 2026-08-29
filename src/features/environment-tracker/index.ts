@@ -10,5 +10,8 @@ export type {
   CustomEnvironmentKey,
   CustomEnvironmentSource,
   Environment,
+  EnvironmentPageFilters,
   EnvironmentSource,
+  EnvironmentSourceCandidate,
+  EnvironmentSourceCandidatePage,
 } from './models/environment';

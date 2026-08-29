@@ -1,5 +1,5 @@
 import { convertFileSrc } from '@tauri-apps/api/core';
-import { IconKey } from '@tabler/icons-react';
+import { IconFileCode, IconKey } from '@tabler/icons-react';
 import { useMemo, useState } from 'react';
 import { ICON_STROKE } from '@/shared/constants/icon.constants';
 import {
@@ -34,6 +34,17 @@ export function SourceLogo({
         onError={() => setFailedSource(imageSource)}
         src={imageSource}
       />
+    );
+  }
+
+  if (source.definitionKey === 'env_file') {
+    return (
+      <span
+        aria-hidden="true"
+        className={`${className} flex shrink-0 items-center justify-center rounded-md border border-primary/25 bg-primary/10 text-primary`}
+      >
+        <IconFileCode className="h-1/2 w-1/2" stroke={ICON_STROKE} />
+      </span>
     );
   }
 
