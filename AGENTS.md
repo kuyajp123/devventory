@@ -25,7 +25,7 @@
 - Asset Library frontend and Rust behavior stay under their existing feature modules. Asset queries, actions, imports, variants, and metadata remain explicitly project-scoped.
 - Inventory scans store metadata only, stay inside canonical registered roots, apply exclusions before descent, skip symbolic links and junctions, use bounded batches, and never expose raw filesystem errors.
 - Watcher callbacks only enqueue bounded, sanitized change signals. Services and repositories perform authoritative reconciliation and persistence.
-- Do not add environment-file parsing, persistent content search, global search, cloud sync, Supabase, HTTP synchronization, or broad frontend filesystem dependencies or permissions.
+- Do not add persistent content search, global search, cloud sync, Supabase, HTTP synchronization, or broad frontend filesystem dependencies or permissions. Automatic file-inventory scans store metadata only; user-initiated secret imports remain scoped to Credential Vault and Stronghold encryption.
 
 ## Framework-neutral feature organization
 
