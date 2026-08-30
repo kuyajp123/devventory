@@ -859,12 +859,14 @@ export function ImportEnvFileDialog({
                                 aria-label={`Commented ${item.key} (Excluded)`}
                                 isDisabled
                                 isSelected={false}
+                                onClick={(e) => e.stopPropagation()}
                               />
                             ) : (
                               <Checkbox
                                 aria-label={`Select ${item.key}`}
                                 isSelected={isChecked}
                                 onChange={() => toggleKey(item.key)}
+                                onClick={(e) => e.stopPropagation()}
                               />
                             )}
                             <code

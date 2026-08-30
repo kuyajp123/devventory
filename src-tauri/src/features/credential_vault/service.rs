@@ -375,45 +375,6 @@ impl CredentialVaultService {
         let parsed =
             parse_env_content(&bytes).map_err(|e| CredentialVaultError::EnvParse(e.to_string()))?;
 
-        let source_id = if let Some(existing_source_id) = input.source_id {
-            let source = self.find_source(existing_source_id).await?;
-            if !source.project_ids.contains(&project_id) {
-                let mut updated_project_ids = source.project_ids.clone();
-                updated_project_ids.push(project_id);
-                let update_input = UpdateCredentialSource {
-                    source_id: source.id,
-                    name: source.name,
-                    description: source.description,
-                    project_ids: updated_project_ids,
-                    icon_source_path: None,
-                    remove_icon: false,
-                };
-                self.repository
-                    .update_source(&update_input, None, false)
-                    .await?;
-            }
-            existing_source_id
-        } else if let Some(source_name) = input.source_name {
-            let existing_sources = self.repository.list_sources().await?;
-            if let Some(existing) = existing_sources.into_iter().find(|s| {
-                s.name.eq_ignore_ascii_case(&source_name) && s.project_ids.contains(&project_id)
-            }) {
-                existing.id
-            } else {
-                let new_source = NewCredentialSource {
-                    definition_key: Some("env_file".to_string()),
-                    name: source_name,
-                    description: Some(format!("Imported from {}", input.relative_path)),
-                    project_ids: vec![project_id],
-                    icon_source_path: None,
-                };
-                let created = self.create_source(new_source).await?;
-                created.id
-            }
-        } else {
-            return Err(CredentialVaultError::InvalidInput);
-        };
-
         let mut active_key_lines: HashMap<String, (String, Vec<u32>)> = HashMap::new();
         for entry in &parsed.entries {
             if !entry.is_commented {
@@ -462,6 +423,45 @@ impl CredentialVaultService {
                 deduplicated_entries.insert(entry.normalized_key.clone(), entry);
             }
         }
+
+        let source_id = if let Some(existing_source_id) = input.source_id {
+            let source = self.find_source(existing_source_id).await?;
+            if !source.project_ids.contains(&project_id) {
+                let mut updated_project_ids = source.project_ids.clone();
+                updated_project_ids.push(project_id);
+                let update_input = UpdateCredentialSource {
+                    source_id: source.id,
+                    name: source.name,
+                    description: source.description,
+                    project_ids: updated_project_ids,
+                    icon_source_path: None,
+                    remove_icon: false,
+                };
+                self.repository
+                    .update_source(&update_input, None, false)
+                    .await?;
+            }
+            existing_source_id
+        } else if let Some(source_name) = input.source_name {
+            let existing_sources = self.repository.list_sources().await?;
+            if let Some(existing) = existing_sources.into_iter().find(|s| {
+                s.name.eq_ignore_ascii_case(&source_name) && s.project_ids.contains(&project_id)
+            }) {
+                existing.id
+            } else {
+                let new_source = NewCredentialSource {
+                    definition_key: Some("env_file".to_string()),
+                    name: source_name,
+                    description: Some(format!("Imported from {}", input.relative_path)),
+                    project_ids: vec![project_id],
+                    icon_source_path: None,
+                };
+                let created = self.create_source(new_source).await?;
+                created.id
+            }
+        } else {
+            return Err(CredentialVaultError::InvalidInput);
+        };
 
         let existing_credentials = self.repository.list_credentials(Some(source_id)).await?;
 
