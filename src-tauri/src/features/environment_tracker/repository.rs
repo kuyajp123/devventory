@@ -322,6 +322,27 @@ impl SqliteEnvironmentRepository {
         assemble_custom_sources(source_rows, key_rows)
     }
 
+    pub(crate) async fn unlink_custom_source(
+        &self,
+        project_id: Uuid,
+        environment_id: Uuid,
+        source_id: Uuid,
+    ) -> Result<(), EnvironmentError> {
+        sqlx::query(
+            "DELETE FROM credential_environment_links
+             WHERE project_id = ? AND environment_id = ?
+               AND credential_id IN (
+                   SELECT id FROM credentials WHERE source_id = ?
+               )",
+        )
+        .bind(project_id.to_string())
+        .bind(environment_id.to_string())
+        .bind(source_id.to_string())
+        .execute(&self.pool)
+        .await?;
+        Ok(())
+    }
+
     pub(crate) async fn source_candidates(
         &self,
         query: &EnvironmentSourceCandidateQuery,
@@ -614,7 +635,8 @@ impl SqliteEnvironmentRepository {
             "SELECT o.key_definition_id, o.environment_id, o.source_id,
                     o.line_number, o.is_commented, o.is_duplicate,
                     'file' AS origin, s.relative_path AS source_name,
-                    s.relative_path, s.sort_order
+                    s.relative_path, s.sort_order,
+                    NULL AS credential_id
              FROM environment_key_occurrences o
              JOIN environment_sources s
                ON s.project_id = o.project_id AND s.id = o.source_id
@@ -632,7 +654,8 @@ impl SqliteEnvironmentRepository {
              SELECT l.key_definition_id, e.environment_id, c.source_id,
                     NULL AS line_number, 0 AS is_commented, 0 AS is_duplicate,
                     'custom' AS origin, s.name AS source_name,
-                    NULL AS relative_path, s.sort_order
+                    NULL AS relative_path, s.sort_order,
+                    c.id AS credential_id
              FROM credential_project_links l
              JOIN credentials c ON c.id = l.credential_id
              JOIN credential_environment_links e
@@ -675,6 +698,11 @@ fn matrix_cell(
                     .transpose()
                     .map_err(|_| EnvironmentError::InvalidPersistedData)?,
                 is_commented: occurrence.is_commented,
+                credential_id: occurrence
+                    .credential_id
+                    .as_deref()
+                    .map(parse_uuid)
+                    .transpose()?,
             },
         ));
     }
@@ -757,6 +785,20 @@ fn push_matrix_keys(
         );
         builder.push_bind(environment_id.to_string());
         builder.push("))");
+    } else {
+        builder.push(
+            " AND (EXISTS (
+                SELECT 1 FROM environment_key_occurrences o
+                WHERE o.project_id = d.project_id
+                  AND o.key_definition_id = d.id
+            ) OR EXISTS (
+                SELECT 1 FROM credential_project_links l
+                JOIN credential_environment_links e
+                  ON e.credential_id = l.credential_id AND e.project_id = l.project_id
+                WHERE l.project_id = d.project_id
+                  AND l.key_definition_id = d.id
+            ))",
+        );
     }
     builder.push(
         " UNION ALL
@@ -1042,6 +1084,7 @@ struct OccurrenceRow {
     source_name: String,
     relative_path: Option<String>,
     sort_order: i64,
+    credential_id: Option<String>,
 }
 
 impl TryFrom<&str> for EnvironmentSourceOrigin {

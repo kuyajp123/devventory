@@ -163,6 +163,22 @@ pub(crate) async fn list_custom_environment_sources(
 }
 
 #[tauri::command]
+pub(crate) async fn unlink_custom_environment_source(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    input: EnvironmentSourceIdInput,
+) -> Result<(), CommandError> {
+    let (project_id, environment_id, source_id) = input.parse().map_err(CommandError::from)?;
+    state
+        .environment_service()
+        .unlink_custom_source(project_id, environment_id, source_id)
+        .await
+        .map_err(CommandError::from)?;
+    revalidate_after_change(&app, &state, project_id).await;
+    Ok(())
+}
+
+#[tauri::command]
 pub(crate) async fn list_environment_source_candidates(
     state: State<'_, AppState>,
     input: EnvironmentSourceCandidateQueryInput,

@@ -722,4 +722,26 @@ describe('CredentialVaultPage project filtering', () => {
     ).toBeVisible();
     expect(screen.getAllByText('BETA_SECRET').length).toBeGreaterThanOrEqual(1);
   });
+
+  it('pre-selects credential and centers it in view when navigated with credential search parameter', async () => {
+    const scrollIntoViewMock = vi.fn();
+    window.HTMLElement.prototype.scrollIntoView = scrollIntoViewMock;
+
+    mockSearchParams = new URLSearchParams(
+      `source=${sourceBeta.id}&credential=22222222-2222-4222-8222-222222222222`,
+    );
+
+    renderWithProviders(<CredentialVaultPage />);
+
+    expect(
+      await screen.findByRole('heading', { name: 'Beta Source' }),
+    ).toBeVisible();
+
+    await vi.waitFor(() => {
+      expect(scrollIntoViewMock).toHaveBeenCalledWith({
+        behavior: 'smooth',
+        block: 'center',
+      });
+    });
+  });
 });

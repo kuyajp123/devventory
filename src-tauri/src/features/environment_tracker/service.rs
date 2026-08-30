@@ -155,6 +155,17 @@ impl EnvironmentService {
             .await
     }
 
+    pub(crate) async fn unlink_custom_source(
+        &self,
+        project_id: Uuid,
+        environment_id: Uuid,
+        source_id: Uuid,
+    ) -> Result<(), EnvironmentError> {
+        self.repository
+            .unlink_custom_source(project_id, environment_id, source_id)
+            .await
+    }
+
     pub(crate) async fn source_candidates(
         &self,
         query: EnvironmentSourceCandidateQuery,

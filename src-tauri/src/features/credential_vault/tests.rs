@@ -304,6 +304,25 @@ async fn vault_credentials_project_metadata_into_environment_tracker_without_pla
             .await
             .expect("secret reference count");
     assert_eq!(persisted_secret_references, 1);
+
+    environment_service
+        .unlink_custom_source(project.id(), environment.id, source.id)
+        .await
+        .expect("unlink custom source from environment");
+
+    let projected_after = environment_service
+        .list_custom_sources(project.id(), environment.id)
+        .await
+        .expect("environment projection after unlink");
+    assert_eq!(projected_after.len(), 0);
+
+    let vault_sources = vault.list_sources().await.expect("list vault sources");
+    assert_eq!(vault_sources.len(), 1);
+    let vault_creds = vault
+        .list_credentials(Some(source.id))
+        .await
+        .expect("list vault credentials");
+    assert_eq!(vault_creds.len(), 1);
 }
 
 #[tokio::test]
