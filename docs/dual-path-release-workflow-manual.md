@@ -26,7 +26,7 @@ cd C:\Users\Paul\Projects\devventory
 | `npm run release:hosted`     | Non-interactive GitHub Actions entry point; guarded to `main`.          |
 | `npm run test:release-tools` | Fast release-state, SemVer, metadata, GitHub-client, and version tests. |
 
-`release:local` prompts securely for the updater signing-key password. It then shows the source SHA, version, public installer URL, and each artifact's exact size and SHA-256 digest before accepting the phrase `publish v<version>`.
+`release:local` prompts securely for the updater signing-key password. It then shows the source SHA, version, public installer URL, and each artifact's exact size and SHA-256 digest before accepting the phrase `publish v<version>`. To bypass local quality gate tests and build immediately, pass `-- --skip-ci` (or `powershell.exe -File scripts/release-local.ps1 -SkipCi`).
 
 If recovery is required, the local command separately requires `recover v<version>` before changing remote state.
 

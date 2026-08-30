@@ -1,4 +1,4 @@
-import { formatReleaseNotes } from '@/features/app-updater';
+import { ReleaseNotesContent } from '@/features/app-updater';
 import { useAppUpdaterActions } from '@/features/app-updater/hooks/useAppUpdaterActions';
 import {
   isAppUpdateBusy,
@@ -203,14 +203,12 @@ export function AboutUpdatesSettingsSection() {
               )}
 
               {/* Release Notes */}
-              <div className="space-y-1">
+              <div className="space-y-1.5">
                 <p className="text-[10px] font-medium uppercase tracking-wider text-muted">
                   What's New
                 </p>
-                <div className="max-h-56 overflow-y-auto rounded-md border border-divider bg-workspace p-3">
-                  <pre className="whitespace-pre-wrap font-mono text-xs text-foreground">
-                    {formatReleaseNotes(availableUpdate.body)}
-                  </pre>
+                <div className="max-h-60 overflow-y-auto rounded-md border border-divider bg-workspace p-3">
+                  <ReleaseNotesContent notes={availableUpdate.body} />
                 </div>
               </div>
 

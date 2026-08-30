@@ -344,6 +344,15 @@ Run this from a clean, current `main`.
 npm run release:local
 ```
 
+#### ⚡ Fast Release (Skip Local CI Tests)
+```powershell
+# Using the PowerShell script directly:
+powershell.exe -File scripts/release-local.ps1 -SkipCi
+
+# Or passing through npm:
+npm run release:local -- --skip-ci
+```
+
 **Does:** Executes the real Devventory release process from your Windows computer.
 
 Use this when:

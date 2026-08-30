@@ -27,7 +27,24 @@ export default {
     ],
     [
       '@semantic-release/release-notes-generator',
-      { preset: 'conventionalcommits', presetConfig: {} },
+      {
+        preset: 'conventionalcommits',
+        presetConfig: {
+          types: [
+            { type: 'feat', section: 'Features & Improvements' },
+            { type: 'fix', section: 'Bug Fixes' },
+            { type: 'perf', section: 'Performance Improvements' },
+            { type: 'revert', section: 'Reverts' },
+            { type: 'docs', section: 'Documentation', hidden: true },
+            { type: 'chore', section: 'Chores', hidden: true },
+            { type: 'ci', section: 'Continuous Integration', hidden: true },
+            { type: 'test', section: 'Tests', hidden: true },
+            { type: 'refactor', section: 'Refactoring', hidden: true },
+            { type: 'style', section: 'Styles', hidden: true },
+            { type: 'build', section: 'Build System', hidden: true },
+          ],
+        },
+      },
     ],
   ],
 };

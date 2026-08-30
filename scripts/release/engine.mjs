@@ -191,6 +191,7 @@ export function createReleaseEngineDependencies({
   approveRecovery,
   approvePublication,
   fetchImpl,
+  runQualityGate = true,
 }) {
   const sourceClient = createGitHubClient({ token: sourceToken, fetchImpl });
   const releaseClient = createGitHubClient({ token: releaseToken, fetchImpl });
@@ -351,6 +352,7 @@ export function createReleaseEngineDependencies({
         version: plan.version,
         sourceSha: plan.sourceSha,
         notes: plan.notes,
+        runQualityGate,
       });
     },
 
