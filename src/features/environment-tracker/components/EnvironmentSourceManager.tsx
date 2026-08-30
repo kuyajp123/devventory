@@ -379,7 +379,7 @@ export function EnvironmentSourceManager({
                     read or stored.
                   </p>
                 </div>
-                <div className="flex items-center justify-between gap-3 rounded-md border border-accent/20 bg-accent/5 p-3">
+                <div className="flex items-center justify-between gap-3 rounded-md">
                   <div>
                     <p className="text-xs font-medium text-foreground">
                       Credential sources are managed globally
@@ -430,7 +430,7 @@ export function EnvironmentSourceManager({
                       {customSources.data.map((customSource) => (
                         <li
                           key={customSource.id}
-                          className="flex items-center justify-between gap-3 rounded-md border border-accent/30 bg-accent/5 p-2.5 text-xs"
+                          className="flex items-center justify-between gap-3 rounded-md border border-accent/30 p-2.5 text-xs"
                         >
                           <div className="flex min-w-0 items-center gap-2.5">
                             <div className="flex size-7 shrink-0 items-center justify-center rounded border border-accent/30 bg-accent/10 text-accent">
