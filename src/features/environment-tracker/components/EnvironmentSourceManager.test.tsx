@@ -43,6 +43,7 @@ vi.mock('../services/environment-tracker.gateway', () => ({
     reorderSources: vi.fn(),
     selectSourceFile: vi.fn(),
     sourceCandidates: vi.fn(),
+    unlinkCustomSource: vi.fn(),
     update: vi.fn(),
   },
 }));
@@ -282,6 +283,111 @@ describe('EnvironmentSourceManager', () => {
     expect(onOpenCredentialVault).toHaveBeenCalledWith(
       'a1b2c3d4-0817-4b8b-ad88-ec19881295b8',
     );
+  });
+
+  it('prompts for confirmation before removing a file source', async () => {
+    const user = userEvent.setup();
+    vi.mocked(environmentTrackerGateway.listSources).mockReset();
+    vi.mocked(environmentTrackerGateway.listSources).mockResolvedValue([
+      parseIssueSource,
+    ]);
+    vi.mocked(environmentTrackerGateway.deleteSource).mockResolvedValue(
+      undefined,
+    );
+
+    renderWithProviders(
+      <EnvironmentSourceManager
+        environment={environment}
+        onOpenChange={vi.fn()}
+        projectId={environment.projectId}
+      />,
+    );
+
+    const removeBtn = await screen.findByRole('button', {
+      name: `Remove ${parseIssueSource.relativePath}`,
+    });
+    await user.click(removeBtn);
+
+    expect(
+      await screen.findByRole('heading', {
+        name: 'Remove Configuration Source',
+      }),
+    ).toBeVisible();
+    expect(screen.getByText(/Are you sure you want to remove/)).toBeVisible();
+
+    const confirmBtn = screen.getByRole('button', { name: 'Remove Source' });
+    await user.click(confirmBtn);
+
+    expect(environmentTrackerGateway.deleteSource).toHaveBeenCalledWith(
+      environment.projectId,
+      environment.id,
+      parseIssueSource.id,
+    );
+  });
+
+  it('prompts for confirmation and unlinks a custom vault source from environment', async () => {
+    const user = userEvent.setup();
+    vi.mocked(environmentTrackerGateway.listSources).mockReset();
+    vi.mocked(environmentTrackerGateway.listSources).mockResolvedValue([]);
+    vi.mocked(environmentTrackerGateway.listCustomSources).mockResolvedValue([
+      {
+        createdAt: '2026-08-05T00:00:00.000Z',
+        environmentId: environment.id,
+        id: 'vault-src-1',
+        keys: [
+          {
+            createdAt: '2026-08-05T00:00:00.000Z',
+            environmentId: environment.id,
+            id: 'k1',
+            name: 'STRIPE_SECRET_KEY',
+            normalizedName: 'STRIPE_SECRET_KEY',
+            projectId: environment.projectId,
+            sourceId: 'vault-src-1',
+            updatedAt: '2026-08-05T00:00:00.000Z',
+          },
+        ],
+        name: 'Stripe Payments',
+        projectId: environment.projectId,
+        sortOrder: 0,
+        updatedAt: '2026-08-05T00:00:00.000Z',
+      },
+    ]);
+    vi.mocked(environmentTrackerGateway.unlinkCustomSource).mockResolvedValue(
+      undefined,
+    );
+
+    renderWithProviders(
+      <EnvironmentSourceManager
+        environment={environment}
+        onOpenChange={vi.fn()}
+        projectId={environment.projectId}
+      />,
+    );
+
+    const unlinkBtn = await screen.findByRole('button', {
+      name: /Unlink Stripe Payments from this environment/i,
+    });
+    await user.click(unlinkBtn);
+
+    expect(
+      await screen.findByRole('heading', {
+        name: 'Unlink Credential Source',
+      }),
+    ).toBeVisible();
+    expect(
+      screen.getByText(
+        /The credentials and encrypted secrets in your Credential Vault will not be deleted/,
+      ),
+    ).toBeVisible();
+
+    const confirmBtn = screen.getByRole('button', { name: 'Unlink Source' });
+    await user.click(confirmBtn);
+
+    expect(environmentTrackerGateway.unlinkCustomSource).toHaveBeenCalledWith({
+      environmentId: environment.id,
+      projectId: environment.projectId,
+      sourceId: 'vault-src-1',
+    });
   });
 });
 

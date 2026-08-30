@@ -146,6 +146,7 @@ pub(crate) struct EnvironmentMatrixSourceDetail {
     pub(crate) relative_path: Option<String>,
     pub(crate) line_number: Option<u32>,
     pub(crate) is_commented: bool,
+    pub(crate) credential_id: Option<Uuid>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]

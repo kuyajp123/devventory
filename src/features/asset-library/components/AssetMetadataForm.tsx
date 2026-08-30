@@ -20,6 +20,7 @@ import {
   IconHeart,
   IconNote,
 } from '@tabler/icons-react';
+import { useEffect } from 'react';
 import { Controller, useForm } from 'react-hook-form';
 import { useUpdateAssetMetadataMutation } from '../hooks/use-assets';
 import {
@@ -45,7 +46,7 @@ export function AssetMetadataForm({
     control,
     formState: { errors },
     handleSubmit,
-    register,
+    reset,
   } = useForm<AssetMetadataFormValues>({
     defaultValues: {
       favorite: asset.favorite,
@@ -54,6 +55,14 @@ export function AssetMetadataForm({
     },
     resolver: zodResolver(assetMetadataFormSchema),
   });
+
+  useEffect(() => {
+    reset({
+      favorite: asset.favorite,
+      note: asset.note ?? '',
+      tagsText: asset.tags.join(', '),
+    });
+  }, [asset, reset]);
 
   const submit = handleSubmit(async (values) => {
     try {
@@ -96,7 +105,11 @@ export function AssetMetadataForm({
             control={control}
             name="favorite"
             render={({ field }) => (
-              <Switch isSelected={field.value} onChange={field.onChange}>
+              <Switch
+                isDisabled={update.isPending}
+                isSelected={field.value}
+                onChange={field.onChange}
+              >
                 <Switch.Content>
                   <span className="flex items-center gap-1.5">
                     <IconHeart
@@ -116,49 +129,71 @@ export function AssetMetadataForm({
           />
 
           {/* Tags field with icon cue */}
-          <TextField
-            fullWidth
-            isInvalid={Boolean(errors.tagsText)}
-            variant="secondary"
-          >
-            <Label className="flex items-center gap-1.5">
-              <IconHash
-                aria-hidden="true"
-                className="text-muted"
-                size={ICON_SIZE.small}
-                stroke={ICON_STROKE}
-              />
-              Tags
-            </Label>
-            <Input
-              placeholder="brand, approved, v2 — separate with commas"
-              {...register('tagsText')}
-            />
-            <FieldError>{errors.tagsText?.message}</FieldError>
-          </TextField>
+          <Controller
+            control={control}
+            name="tagsText"
+            render={({ field }) => (
+              <TextField
+                fullWidth
+                isInvalid={Boolean(errors.tagsText)}
+                variant="secondary"
+              >
+                <Label className="flex items-center gap-1.5">
+                  <IconHash
+                    aria-hidden="true"
+                    className="text-muted"
+                    size={ICON_SIZE.small}
+                    stroke={ICON_STROKE}
+                  />
+                  Tags
+                </Label>
+                <Input
+                  disabled={update.isPending}
+                  name={field.name}
+                  onBlur={field.onBlur}
+                  onChange={field.onChange}
+                  placeholder="brand, approved, v2 — separate with commas"
+                  ref={field.ref}
+                  value={field.value}
+                />
+                <FieldError>{errors.tagsText?.message}</FieldError>
+              </TextField>
+            )}
+          />
 
           {/* Note field with icon cue */}
-          <TextField
-            fullWidth
-            isInvalid={Boolean(errors.note)}
-            variant="secondary"
-          >
-            <Label className="flex items-center gap-1.5">
-              <IconNote
-                aria-hidden="true"
-                className="text-muted"
-                size={ICON_SIZE.small}
-                stroke={ICON_STROKE}
-              />
-              Note
-            </Label>
-            <TextArea
-              placeholder="Add internal notes, usage context, or review comments..."
-              rows={4}
-              {...register('note')}
-            />
-            <FieldError>{errors.note?.message}</FieldError>
-          </TextField>
+          <Controller
+            control={control}
+            name="note"
+            render={({ field }) => (
+              <TextField
+                fullWidth
+                isInvalid={Boolean(errors.note)}
+                variant="secondary"
+              >
+                <Label className="flex items-center gap-1.5">
+                  <IconNote
+                    aria-hidden="true"
+                    className="text-muted"
+                    size={ICON_SIZE.small}
+                    stroke={ICON_STROKE}
+                  />
+                  Note
+                </Label>
+                <TextArea
+                  disabled={update.isPending}
+                  name={field.name}
+                  onBlur={field.onBlur}
+                  onChange={field.onChange}
+                  placeholder="Add internal notes, usage context, or review comments..."
+                  ref={field.ref}
+                  rows={4}
+                  value={field.value}
+                />
+                <FieldError>{errors.note?.message}</FieldError>
+              </TextField>
+            )}
+          />
 
           {/* Favorite + Save row */}
           <div className="flex flex-wrap items-center justify-end gap-4 border-t p-4">

@@ -234,3 +234,22 @@ export function useRefreshProjectEnvironmentsMutation(projectId: string) {
     onSuccess: invalidate,
   });
 }
+
+export function useUnlinkCustomEnvironmentSourceMutation(projectId: string) {
+  const invalidate = useProjectInvalidation(projectId);
+  return useMutation({
+    mutationFn: ({
+      environmentId,
+      sourceId,
+    }: {
+      environmentId: string;
+      sourceId: string;
+    }) =>
+      environmentTrackerGateway.unlinkCustomSource({
+        environmentId,
+        projectId,
+        sourceId,
+      }),
+    onSuccess: invalidate,
+  });
+}

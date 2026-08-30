@@ -133,6 +133,7 @@ export type EnvironmentMatrixCellState = z.infer<
 
 export const environmentMatrixSourceDetailSchema = z
   .object({
+    credentialId: z.string().uuid().nullable().optional(),
     isCommented: z.boolean(),
     lineNumber: z.number().int().positive().nullable(),
     origin: environmentSourceOriginSchema,

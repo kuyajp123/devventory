@@ -38,7 +38,7 @@ import {
   IconTrash,
 } from '@tabler/icons-react';
 import { useQueries } from '@tanstack/react-query';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useLocation, useNavigate, useSearchParams } from 'react-router';
 import { CredentialEditorDialog } from '../components/CredentialEditorDialog';
 import {
@@ -88,6 +88,11 @@ export function CredentialVaultPage() {
     (location.state as { selectedSourceId?: string } | null)
       ?.selectedSourceId ||
     null;
+  const queryCredentialId =
+    searchParams.get('credential') ||
+    (location.state as { selectedCredentialId?: string } | null)
+      ?.selectedCredentialId ||
+    null;
   const queryProjectId = searchParams.get('project') || null;
   const queryEnvId = searchParams.get('env') || null;
 
@@ -136,7 +141,7 @@ export function CredentialVaultPage() {
   const [search, setSearch] = useState('');
   const [selectedCredentialId, setSelectedCredentialId] = useState<
     string | null
-  >(null);
+  >(() => queryCredentialId);
   const [selectedSourceId, setSelectedSourceId] = useState<string | null>(
     () => querySourceId,
   );
@@ -149,6 +154,13 @@ export function CredentialVaultPage() {
     if (targetSource) {
       // eslint-disable-next-line react-hooks/set-state-in-effect
       setSelectedSourceId(targetSource);
+    }
+    const targetCredential =
+      searchParams.get('credential') ||
+      (location.state as { selectedCredentialId?: string } | null)
+        ?.selectedCredentialId;
+    if (targetCredential) {
+      setSelectedCredentialId(targetCredential);
     }
     const targetProject = searchParams.get('project');
     if (targetProject) {
@@ -338,6 +350,23 @@ export function CredentialVaultPage() {
     filteredCredentials.some((item) => item.id === selectedCredentialId)
       ? selectedCredentialId
       : (filteredCredentials[0]?.id ?? null);
+
+  const activeCredentialRef = useRef<HTMLButtonElement | null>(null);
+
+  useEffect(() => {
+    if (!activeCredentialId) return;
+
+    const timeoutId = setTimeout(() => {
+      if (typeof activeCredentialRef.current?.scrollIntoView === 'function') {
+        activeCredentialRef.current.scrollIntoView({
+          behavior: 'smooth',
+          block: 'center',
+        });
+      }
+    }, 50);
+
+    return () => clearTimeout(timeoutId);
+  }, [activeCredentialId, filteredCredentials.length]);
 
   const selectedCredential =
     credentialItems.find((item) => item.id === activeCredentialId) ?? null;
@@ -852,6 +881,11 @@ export function CredentialVaultPage() {
               <div className="min-h-0 flex-1 overflow-y-auto">
                 {filteredCredentials.map((credential) => (
                   <button
+                    ref={(node) => {
+                      if (credential.id === activeCredentialId) {
+                        activeCredentialRef.current = node;
+                      }
+                    }}
                     className={`grid w-full grid-cols-[minmax(180px,1.4fr)_minmax(130px,1fr)_110px_100px] items-center border-b border-divider px-4 py-4 text-left transition-colors ${
                       credential.id === activeCredentialId
                         ? 'bg-accent/8'

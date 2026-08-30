@@ -616,3 +616,98 @@ async fn rejects_duplicate_environment_names() {
 
     assert!(matches!(error, EnvironmentError::DuplicateEnvironment));
 }
+
+#[tokio::test]
+async fn matrix_excludes_vault_keys_with_no_environment_links_until_linked() {
+    let context = TestContext::new().await;
+    let environment_id = context.environment("staging").await;
+
+    let def_id = Uuid::new_v4().to_string();
+    let cred_id = Uuid::new_v4().to_string();
+    let src_id = Uuid::new_v4().to_string();
+    sqlx::query(
+        "INSERT INTO credential_sources (id, name, normalized_name, created_at, updated_at)
+         VALUES (?, 'Supabase', 'supabase', '2026-08-01', '2026-08-01')",
+    )
+    .bind(&src_id)
+    .execute(&context.pool)
+    .await
+    .expect("credential source");
+
+    sqlx::query(
+        "INSERT INTO credentials (id, source_id, key_name, normalized_key_name, created_at, updated_at)
+         VALUES (?, ?, 'supabase password', 'supabase password', '2026-08-01', '2026-08-01')",
+    )
+    .bind(&cred_id)
+    .bind(&src_id)
+    .execute(&context.pool)
+    .await
+    .expect("credential");
+
+    sqlx::query(
+        "INSERT INTO environment_key_definitions (id, project_id, name, normalized_name)
+         VALUES (?, ?, 'supabase password', 'supabase password')",
+    )
+    .bind(&def_id)
+    .bind(context.project_id.to_string())
+    .execute(&context.pool)
+    .await
+    .expect("key definition");
+
+    sqlx::query(
+        "INSERT INTO credential_project_links (credential_id, project_id, key_definition_id)
+         VALUES (?, ?, ?)",
+    )
+    .bind(&cred_id)
+    .bind(context.project_id.to_string())
+    .bind(&def_id)
+    .execute(&context.pool)
+    .await
+    .expect("credential project link");
+
+    // Before linking to an environment, matrix should be empty (0 rows)
+    let matrix_empty = context
+        .workspace_service
+        .matrix(EnvironmentMatrixQuery {
+            project_id: context.project_id,
+            environment_id: None,
+            search: None,
+            page: 1,
+            page_size: 25,
+        })
+        .await
+        .expect("empty matrix");
+    assert_eq!(matrix_empty.total_items, 0);
+    assert_eq!(matrix_empty.rows.len(), 0);
+
+    // Link credential to staging environment
+    sqlx::query(
+        "INSERT INTO credential_environment_links (credential_id, project_id, environment_id)
+         VALUES (?, ?, ?)",
+    )
+    .bind(&cred_id)
+    .bind(context.project_id.to_string())
+    .bind(environment_id.to_string())
+    .execute(&context.pool)
+    .await
+    .expect("credential environment link");
+
+    // After linking to staging, matrix should display the key with Present status for staging
+    let matrix_linked = context
+        .workspace_service
+        .matrix(EnvironmentMatrixQuery {
+            project_id: context.project_id,
+            environment_id: None,
+            search: None,
+            page: 1,
+            page_size: 25,
+        })
+        .await
+        .expect("linked matrix");
+    assert_eq!(matrix_linked.total_items, 1);
+    assert_eq!(matrix_linked.rows[0].key_name, "supabase password");
+    assert_eq!(
+        matrix_linked.rows[0].cells[0].state,
+        EnvironmentMatrixCellState::Present
+    );
+}

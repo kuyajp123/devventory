@@ -55,10 +55,12 @@ import {
   useEnvironmentSourceCandidatesQuery,
   useEnvironmentSourcesQuery,
   useReorderEnvironmentSourcesMutation,
+  useUnlinkCustomEnvironmentSourceMutation,
   useUpdateEnvironmentMutation,
 } from '../hooks/use-environments';
 import {
   sourceStatusLabel,
+  type CustomEnvironmentSource,
   type Environment,
   type EnvironmentSource,
 } from '../models/environment';
@@ -118,6 +120,8 @@ export function EnvironmentSourceManager({
   );
   const addSource = useAddEnvironmentSourceMutation(projectId);
   const deleteSource = useDeleteEnvironmentSourceMutation(projectId);
+  const unlinkCustomSource =
+    useUnlinkCustomEnvironmentSourceMutation(projectId);
   const reorderSources = useReorderEnvironmentSourcesMutation(projectId);
   const updateEnvironment = useUpdateEnvironmentMutation(projectId);
 
@@ -131,6 +135,10 @@ export function EnvironmentSourceManager({
   const [openIssueSourceId, setOpenIssueSourceId] = useState<string | null>(
     null,
   );
+  const [pendingFileSourceDeletion, setPendingFileSourceDeletion] =
+    useState<EnvironmentSource | null>(null);
+  const [pendingVaultSourceUnlink, setPendingVaultSourceUnlink] =
+    useState<CustomEnvironmentSource | null>(null);
 
   const candidates = useEnvironmentSourceCandidatesQuery(
     projectId,
@@ -151,6 +159,7 @@ export function EnvironmentSourceManager({
   const isBusy =
     addSource.isPending ||
     deleteSource.isPending ||
+    unlinkCustomSource.isPending ||
     reorderSources.isPending ||
     updateEnvironment.isPending;
 
@@ -216,14 +225,34 @@ export function EnvironmentSourceManager({
     }
   }
 
-  function remove(sourceId: string) {
-    if (!environment) return;
+  function handleConfirmDeleteFileSource() {
+    if (!environment || !pendingFileSourceDeletion) return;
     deleteSource.mutate(
-      { environmentId: environment.id, sourceId },
+      { environmentId: environment.id, sourceId: pendingFileSourceDeletion.id },
       {
         onError: (error) =>
           toast.danger(errorMessage(error, 'The source could not be removed.')),
-        onSuccess: () => toast.success('Configuration source removed'),
+        onSuccess: () => {
+          toast.success('Configuration source removed');
+          setPendingFileSourceDeletion(null);
+        },
+      },
+    );
+  }
+
+  function handleConfirmUnlinkVaultSource() {
+    if (!environment || !pendingVaultSourceUnlink) return;
+    unlinkCustomSource.mutate(
+      { environmentId: environment.id, sourceId: pendingVaultSourceUnlink.id },
+      {
+        onError: (error) =>
+          toast.danger(
+            errorMessage(error, 'The credential source could not be unlinked.'),
+          ),
+        onSuccess: () => {
+          toast.success('Credential source unlinked from environment');
+          setPendingVaultSourceUnlink(null);
+        },
       },
     );
   }
@@ -251,437 +280,575 @@ export function EnvironmentSourceManager({
   }
 
   return (
-    <DevventoryDialog
-      isOpen={Boolean(environment)}
-      onOpenChange={onOpenChange}
-      size="2xl"
-    >
-      <DialogHeader
-        icon={
-          <IconFileCode
-            aria-hidden="true"
-            size={ICON_SIZE.button}
-            stroke={ICON_STROKE}
-          />
-        }
-        title={`Environment settings${environment ? ` — ${environment.name}` : ''}`}
-      />
-      <DialogBody className="p-0">
-        <div className="flex h-[460px] min-h-0 min-w-0">
-          {/* Left Mini Navigation Sidebar */}
-          <nav
-            aria-label="Environment settings sections"
-            className="w-48 shrink-0 border-r border-divider bg-surface-secondary/40 p-2 space-y-1"
-          >
-            <button
-              aria-current={activeSection === 'general' ? 'page' : undefined}
-              className={`flex w-full items-center gap-2 rounded px-2.5 py-2 text-left text-xs font-medium transition ${
-                activeSection === 'general'
-                  ? 'bg-accent-subtle/40 text-accent font-semibold'
-                  : 'text-muted hover:bg-surface-secondary hover:text-foreground'
-              }`}
-              onClick={() => setActiveSection('general')}
-              type="button"
+    <>
+      <DevventoryDialog
+        isOpen={Boolean(environment)}
+        onOpenChange={onOpenChange}
+        size="2xl"
+      >
+        <DialogHeader
+          icon={
+            <IconFileCode
+              aria-hidden="true"
+              size={ICON_SIZE.button}
+              stroke={ICON_STROKE}
+            />
+          }
+          title={`Environment settings${environment ? ` — ${environment.name}` : ''}`}
+        />
+        <DialogBody className="p-0">
+          <div className="flex h-[460px] min-h-0 min-w-0">
+            {/* Left Mini Navigation Sidebar */}
+            <nav
+              aria-label="Environment settings sections"
+              className="w-48 shrink-0 border-r border-divider bg-surface-secondary/40 p-2 space-y-1"
             >
-              <IconAdjustments
-                aria-hidden="true"
-                size={ICON_SIZE.small}
-                stroke={ICON_STROKE}
-              />
-              General
-            </button>
-            <button
-              aria-current={activeSection === 'sources' ? 'page' : undefined}
-              className={`flex w-full items-center justify-between rounded px-2.5 py-2 text-left text-xs font-medium transition ${
-                activeSection === 'sources'
-                  ? 'bg-accent-subtle/40 text-accent font-semibold'
-                  : 'text-muted hover:bg-surface-secondary hover:text-foreground'
-              }`}
-              onClick={() => setActiveSection('sources')}
-              type="button"
-            >
-              <span className="flex items-center gap-2">
-                <IconListCheck
-                  aria-hidden="true"
-                  size={ICON_SIZE.small}
-                  stroke={ICON_STROKE}
-                />
-                Configured Sources
-              </span>
-              {(sources.data || customSources.data) && (
-                <span className="font-mono text-[10px] text-muted">
-                  {totalSourcesCount}
-                </span>
-              )}
-            </button>
-            <button
-              aria-current={activeSection === 'add-source' ? 'page' : undefined}
-              className={`flex w-full items-center gap-2 rounded px-2.5 py-2 text-left text-xs font-medium transition ${
-                activeSection === 'add-source'
-                  ? 'bg-accent-subtle/40 text-accent font-semibold'
-                  : 'text-muted hover:bg-surface-secondary hover:text-foreground'
-              }`}
-              onClick={() => setActiveSection('add-source')}
-              type="button"
-            >
-              <IconPlus
-                aria-hidden="true"
-                size={ICON_SIZE.small}
-                stroke={ICON_STROKE}
-              />
-              Add Source
-            </button>
-            <div className="pt-4 border-t border-divider my-2">
               <button
-                aria-current={activeSection === 'danger' ? 'page' : undefined}
+                aria-current={activeSection === 'general' ? 'page' : undefined}
                 className={`flex w-full items-center gap-2 rounded px-2.5 py-2 text-left text-xs font-medium transition ${
-                  activeSection === 'danger'
-                    ? 'bg-danger/10 text-danger font-semibold'
-                    : 'text-muted hover:bg-danger/5 hover:text-danger'
+                  activeSection === 'general'
+                    ? 'bg-accent-subtle/40 text-accent font-semibold'
+                    : 'text-muted hover:bg-surface-secondary hover:text-foreground'
                 }`}
-                onClick={() => setActiveSection('danger')}
+                onClick={() => setActiveSection('general')}
                 type="button"
               >
-                <IconAlertTriangle
+                <IconAdjustments
                   aria-hidden="true"
                   size={ICON_SIZE.small}
                   stroke={ICON_STROKE}
                 />
-                Danger Zone
+                General
               </button>
-            </div>
-          </nav>
-
-          {/* Right Active Section Panel */}
-          <main className="flex-1 min-w-0 flex flex-col min-h-0 overflow-y-auto p-4 space-y-4">
-            {environment && activeSection === 'general' && (
-              <EnvironmentGeneralSection
-                environment={environment}
-                isSaving={updateEnvironment.isPending}
-                onRename={renameEnvironment}
-              />
-            )}
-
-            {activeSection === 'sources' && (
-              <section
-                aria-labelledby="configured-sources-heading"
-                className="space-y-4"
+              <button
+                aria-current={activeSection === 'sources' ? 'page' : undefined}
+                className={`flex w-full items-center justify-between rounded px-2.5 py-2 text-left text-xs font-medium transition ${
+                  activeSection === 'sources'
+                    ? 'bg-accent-subtle/40 text-accent font-semibold'
+                    : 'text-muted hover:bg-surface-secondary hover:text-foreground'
+                }`}
+                onClick={() => setActiveSection('sources')}
+                type="button"
               >
-                <div>
-                  <h2
-                    className="font-medium text-foreground text-sm"
-                    id="configured-sources-heading"
-                  >
-                    Configured sources
-                  </h2>
-                  <p className="text-xs text-muted leading-relaxed">
-                    Drag to set priority order. Configuration values are never
-                    read or stored.
-                  </p>
-                </div>
-                <div className="flex items-center justify-between gap-3 rounded-md">
-                  <div>
-                    <p className="text-xs font-medium text-foreground">
-                      Credential sources are managed globally
-                    </p>
-                    <p className="mt-1 text-xs leading-relaxed text-muted">
-                      Custom sources, keys, encrypted values, and their project
-                      or environment associations live in Credential Vault.
-                    </p>
-                  </div>
-                  <Button
-                    onPress={() => onOpenCredentialVault?.()}
-                    size="sm"
-                    variant="secondary"
-                  >
-                    Open vault
-                  </Button>
-                </div>
-                {(sources.isPending || customSources.isPending) && (
-                  <Spinner
-                    aria-label="Loading configuration sources"
-                    size="sm"
+                <span className="flex items-center gap-2">
+                  <IconListCheck
+                    aria-hidden="true"
+                    size={ICON_SIZE.small}
+                    stroke={ICON_STROKE}
                   />
+                  Configured Sources
+                </span>
+                {(sources.data || customSources.data) && (
+                  <span className="font-mono text-[10px] text-muted">
+                    {totalSourcesCount}
+                  </span>
                 )}
-                {sources.isError && (
-                  <Alert role="alert" status="danger">
-                    <Alert.Indicator />
-                    <Alert.Content>
-                      <Alert.Title>Sources unavailable</Alert.Title>
-                      <Alert.Description>
-                        Try refreshing this environment.
-                      </Alert.Description>
-                    </Alert.Content>
-                  </Alert>
-                )}
-
-                {/* Linked Credential Vault Sources */}
-                {customSources.data && customSources.data.length > 0 && (
-                  <div className="space-y-2">
-                    <div className="flex items-center justify-between">
-                      <h3 className="font-mono text-[11px] font-semibold uppercase tracking-wider text-muted">
-                        Credential Vault Sources ({customSources.data.length})
-                      </h3>
-                      <span className="font-mono text-[10px] text-accent">
-                        Linked to this environment
-                      </span>
-                    </div>
-                    <ul className="space-y-2">
-                      {customSources.data.map((customSource) => (
-                        <li
-                          key={customSource.id}
-                          className="flex items-center justify-between gap-3 rounded-md border border-accent/30 p-2.5 text-xs"
-                        >
-                          <div className="flex min-w-0 items-center gap-2.5">
-                            <div className="flex size-7 shrink-0 items-center justify-center rounded border border-accent/30 bg-accent/10 text-accent">
-                              <IconShieldLock
-                                size={ICON_SIZE.small}
-                                stroke={ICON_STROKE}
-                              />
-                            </div>
-                            <div className="min-w-0">
-                              <p className="truncate font-mono font-medium text-foreground">
-                                {customSource.name}
-                              </p>
-                              <p className="font-mono text-[10px] text-muted">
-                                {customSource.keys.length}{' '}
-                                {customSource.keys.length === 1
-                                  ? 'key'
-                                  : 'keys'}{' '}
-                                linked
-                              </p>
-                            </div>
-                          </div>
-                          <Button
-                            onPress={() =>
-                              onOpenCredentialVault?.(customSource.id)
-                            }
-                            size="sm"
-                            variant="secondary"
-                          >
-                            <IconExternalLink
-                              size={ICON_SIZE.small}
-                              stroke={ICON_STROKE}
-                            />
-                            Manage in vault
-                          </Button>
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                )}
-
-                {/* File Sources */}
-                {sources.data && sources.data.length > 0 && (
-                  <div className="space-y-2">
-                    {customSources.data && customSources.data.length > 0 && (
-                      <h3 className="font-mono text-[11px] font-semibold uppercase tracking-wider text-muted">
-                        File Sources ({sources.data.length})
-                      </h3>
-                    )}
-                    <DndContext
-                      collisionDetection={closestCenter}
-                      onDragEnd={reorder}
-                      sensors={sensors}
-                    >
-                      <SortableContext
-                        items={sourceIds}
-                        strategy={verticalListSortingStrategy}
-                      >
-                        <ul className="space-y-2">
-                          {sources.data.map((source) => (
-                            <SortableSource
-                              isIssueOpen={source.id === openIssueSourceId}
-                              key={source.id}
-                              onIssueOpenChange={(isOpen) => {
-                                setOpenIssueSourceId((currentId) =>
-                                  isOpen
-                                    ? source.id
-                                    : currentId === source.id
-                                      ? null
-                                      : currentId,
-                                );
-                              }}
-                              onRemove={() => remove(source.id)}
-                              source={source}
-                            />
-                          ))}
-                        </ul>
-                      </SortableContext>
-                    </DndContext>
-                  </div>
-                )}
-
-                {/* Empty State */}
-                {sources.data?.length === 0 &&
-                  customSources.data?.length === 0 && (
-                    <div className="rounded-md border border-dashed border-divider p-6 text-center text-xs text-muted">
-                      No configuration sources configured yet. Go to{' '}
-                      <strong className="text-foreground">Add Source</strong> to
-                      attach files, or link sources from{' '}
-                      <strong className="text-foreground">
-                        Credential Vault
-                      </strong>
-                      .
-                    </div>
-                  )}
-              </section>
-            )}
-
-            {activeSection === 'add-source' && (
-              <section
-                aria-labelledby="add-source-heading"
-                className="space-y-4"
+              </button>
+              <button
+                aria-current={
+                  activeSection === 'add-source' ? 'page' : undefined
+                }
+                className={`flex w-full items-center gap-2 rounded px-2.5 py-2 text-left text-xs font-medium transition ${
+                  activeSection === 'add-source'
+                    ? 'bg-accent-subtle/40 text-accent font-semibold'
+                    : 'text-muted hover:bg-surface-secondary hover:text-foreground'
+                }`}
+                onClick={() => setActiveSection('add-source')}
+                type="button"
               >
-                <div>
-                  <h2
-                    className="font-medium text-foreground text-sm"
-                    id="add-source-heading"
-                  >
-                    Add Configuration Source
-                  </h2>
-                  <p className="text-xs text-muted">
-                    Attach configuration files from indexed project files or by
-                    choosing a file from your project.
-                  </p>
-                </div>
-
-                <Tabs
-                  aria-label="Add source methods"
-                  onSelectionChange={(key) =>
-                    setAddSourceTab(key as AddSourceSubTab)
-                  }
-                  selectedKey={addSourceTab}
-                  variant="secondary"
+                <IconPlus
+                  aria-hidden="true"
+                  size={ICON_SIZE.small}
+                  stroke={ICON_STROKE}
+                />
+                Add Source
+              </button>
+              <div className="pt-4 border-t border-divider my-2">
+                <button
+                  aria-current={activeSection === 'danger' ? 'page' : undefined}
+                  className={`flex w-full items-center gap-2 rounded px-2.5 py-2 text-left text-xs font-medium transition ${
+                    activeSection === 'danger'
+                      ? 'bg-danger/10 text-danger font-semibold'
+                      : 'text-muted hover:bg-danger/5 hover:text-danger'
+                  }`}
+                  onClick={() => setActiveSection('danger')}
+                  type="button"
                 >
-                  <Tabs.List>
-                    <Tabs.Tab id="indexed">Indexed Files</Tabs.Tab>
-                    <Tabs.Tab id="manual">Choose File</Tabs.Tab>
-                  </Tabs.List>
-                  <Tabs.Panel className="pt-3 space-y-3" id="indexed">
-                    <TextField fullWidth variant="secondary">
-                      <Label className="sr-only">Search indexed files</Label>
-                      <Input
-                        onChange={(event) => {
-                          setSearch(event.target.value);
-                          setPage(1);
-                        }}
-                        placeholder="Search filename or path (e.g. config/local.env)"
-                        value={search}
-                      />
-                    </TextField>
-                    {candidates.isPending ? (
-                      <Spinner aria-label="Searching indexed files" size="sm" />
-                    ) : null}
-                    {candidates.data && (
-                      <>
-                        <p
-                          aria-live="polite"
-                          className="text-xs text-muted font-mono"
-                        >
-                          {candidates.data.totalItems.toLocaleString()} matching
-                          file
-                          {candidates.data.totalItems === 1 ? '' : 's'}
-                        </p>
-                        <ul className="divide-y divide-divider rounded-md border border-divider bg-surface max-h-48 overflow-y-auto">
-                          {candidates.data.items.map((candidate) => (
-                            <li
-                              className="flex items-center justify-between gap-3 px-3 py-2 text-xs"
-                              key={candidate.relativePath}
-                            >
-                              <span className="min-w-0 truncate font-mono">
-                                {candidate.relativePath}
-                              </span>
-                              <Button
-                                isDisabled={isBusy}
-                                onPress={() => add(candidate.relativePath)}
-                                size="sm"
-                                variant="secondary"
-                              >
-                                <IconPlus
-                                  aria-hidden="true"
+                  <IconAlertTriangle
+                    aria-hidden="true"
+                    size={ICON_SIZE.small}
+                    stroke={ICON_STROKE}
+                  />
+                  Danger Zone
+                </button>
+              </div>
+            </nav>
+
+            {/* Right Active Section Panel */}
+            <main className="flex-1 min-w-0 flex flex-col min-h-0 overflow-y-auto p-4 space-y-4">
+              {environment && activeSection === 'general' && (
+                <EnvironmentGeneralSection
+                  environment={environment}
+                  isSaving={updateEnvironment.isPending}
+                  onRename={renameEnvironment}
+                />
+              )}
+
+              {activeSection === 'sources' && (
+                <section
+                  aria-labelledby="configured-sources-heading"
+                  className="space-y-4"
+                >
+                  <div>
+                    <h2
+                      className="font-medium text-foreground text-sm"
+                      id="configured-sources-heading"
+                    >
+                      Configured sources
+                    </h2>
+                    <p className="text-xs text-muted leading-relaxed">
+                      Drag to set priority order. Configuration values are never
+                      read or stored.
+                    </p>
+                  </div>
+                  <div className="flex items-center justify-between gap-3 rounded-md">
+                    <div>
+                      <p className="text-xs font-medium text-foreground">
+                        Credential sources are managed globally
+                      </p>
+                      <p className="mt-1 text-xs leading-relaxed text-muted">
+                        Custom sources, keys, encrypted values, and their
+                        project or environment associations live in Credential
+                        Vault.
+                      </p>
+                    </div>
+                    <Button
+                      onPress={() => onOpenCredentialVault?.()}
+                      size="sm"
+                      variant="secondary"
+                    >
+                      Open vault
+                    </Button>
+                  </div>
+                  {(sources.isPending || customSources.isPending) && (
+                    <Spinner
+                      aria-label="Loading configuration sources"
+                      size="sm"
+                    />
+                  )}
+                  {sources.isError && (
+                    <Alert role="alert" status="danger">
+                      <Alert.Indicator />
+                      <Alert.Content>
+                        <Alert.Title>Sources unavailable</Alert.Title>
+                        <Alert.Description>
+                          Try refreshing this environment.
+                        </Alert.Description>
+                      </Alert.Content>
+                    </Alert>
+                  )}
+
+                  {/* Linked Credential Vault Sources */}
+                  {customSources.data && customSources.data.length > 0 && (
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between">
+                        <h3 className="font-mono text-[11px] font-semibold uppercase tracking-wider text-muted">
+                          Credential Vault Sources ({customSources.data.length})
+                        </h3>
+                        <span className="font-mono text-[10px] text-accent">
+                          Linked to this environment
+                        </span>
+                      </div>
+                      <ul className="space-y-2">
+                        {customSources.data.map((customSource) => (
+                          <li
+                            key={customSource.id}
+                            className="flex items-center justify-between gap-3 rounded-md border border-accent/30 p-2.5 text-xs"
+                          >
+                            <div className="flex min-w-0 items-center gap-2.5">
+                              <div className="flex size-7 shrink-0 items-center justify-center rounded border border-accent/30 bg-accent/10 text-accent">
+                                <IconShieldLock
                                   size={ICON_SIZE.small}
                                   stroke={ICON_STROKE}
                                 />
-                                Add
+                              </div>
+                              <div className="min-w-0">
+                                <p className="truncate font-mono font-medium text-foreground">
+                                  {customSource.name}
+                                </p>
+                                <p className="font-mono text-[10px] text-muted">
+                                  {customSource.keys.length}{' '}
+                                  {customSource.keys.length === 1
+                                    ? 'key'
+                                    : 'keys'}{' '}
+                                  linked
+                                </p>
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-1.5">
+                              <Button
+                                onPress={() =>
+                                  onOpenCredentialVault?.(customSource.id)
+                                }
+                                size="sm"
+                                variant="secondary"
+                              >
+                                <IconExternalLink
+                                  size={ICON_SIZE.small}
+                                  stroke={ICON_STROKE}
+                                />
+                                Manage in vault
                               </Button>
-                            </li>
-                          ))}
-                        </ul>
-                        {candidates.data.totalPages > 1 && (
-                          <AppPagination
-                            ariaLabel="Indexed file pages"
-                            onPageChange={setPage}
-                            page={candidates.data.page}
-                            totalPages={candidates.data.totalPages}
-                          />
-                        )}
-                      </>
-                    )}
-                  </Tabs.Panel>
-                  <Tabs.Panel className="pt-3 space-y-3" id="manual">
-                    <p className="text-xs text-muted leading-relaxed">
-                      Must be inside the current project root, readable, regular
-                      file (not a symlink/junction).
-                    </p>
-                    <div className="flex flex-col items-center justify-center gap-3 rounded-md border border-dashed border-divider bg-surface p-6 text-center">
-                      <IconFileCode
-                        aria-hidden="true"
-                        className="text-muted"
-                        size={ICON_SIZE.emptyState}
-                        stroke={ICON_STROKE}
-                      />
-                      <div className="space-y-1">
-                        <p className="text-xs font-medium text-foreground">
-                          Choose a configuration file
-                        </p>
-                        <p className="text-[11px] text-muted">
-                          Browse your project to attach an environment file.
-                        </p>
-                      </div>
-                      <Button
-                        isDisabled={isBusy}
-                        onPress={() => void handleChooseFile()}
-                        size="sm"
-                        variant="primary"
+                              <Button
+                                aria-label={`Unlink ${customSource.name} from this environment`}
+                                className="text-danger hover:bg-danger-subtle/20"
+                                isDisabled={isBusy}
+                                isIconOnly
+                                onPress={() =>
+                                  setPendingVaultSourceUnlink(customSource)
+                                }
+                                size="sm"
+                                variant="ghost"
+                              >
+                                <IconTrash
+                                  size={ICON_SIZE.small}
+                                  stroke={ICON_STROKE}
+                                />
+                              </Button>
+                            </div>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+
+                  {/* File Sources */}
+                  {sources.data && sources.data.length > 0 && (
+                    <div className="space-y-2">
+                      {customSources.data && customSources.data.length > 0 && (
+                        <h3 className="font-mono text-[11px] font-semibold uppercase tracking-wider text-muted">
+                          File Sources ({sources.data.length})
+                        </h3>
+                      )}
+                      <DndContext
+                        collisionDetection={closestCenter}
+                        onDragEnd={reorder}
+                        sensors={sensors}
                       >
+                        <SortableContext
+                          items={sourceIds}
+                          strategy={verticalListSortingStrategy}
+                        >
+                          <ul className="space-y-2">
+                            {sources.data.map((source) => (
+                              <SortableSource
+                                isIssueOpen={source.id === openIssueSourceId}
+                                key={source.id}
+                                onIssueOpenChange={(isOpen) => {
+                                  setOpenIssueSourceId((currentId) =>
+                                    isOpen
+                                      ? source.id
+                                      : currentId === source.id
+                                        ? null
+                                        : currentId,
+                                  );
+                                }}
+                                onRemove={() =>
+                                  setPendingFileSourceDeletion(source)
+                                }
+                                source={source}
+                              />
+                            ))}
+                          </ul>
+                        </SortableContext>
+                      </DndContext>
+                    </div>
+                  )}
+
+                  {/* Empty State */}
+                  {sources.data?.length === 0 &&
+                    customSources.data?.length === 0 && (
+                      <div className="rounded-md border border-dashed border-divider p-6 text-center text-xs text-muted">
+                        No configuration sources configured yet. Go to{' '}
+                        <strong className="text-foreground">Add Source</strong>{' '}
+                        to attach files, or link sources from{' '}
+                        <strong className="text-foreground">
+                          Credential Vault
+                        </strong>
+                        .
+                      </div>
+                    )}
+                </section>
+              )}
+
+              {activeSection === 'add-source' && (
+                <section
+                  aria-labelledby="add-source-heading"
+                  className="space-y-4"
+                >
+                  <div>
+                    <h2
+                      className="font-medium text-foreground text-sm"
+                      id="add-source-heading"
+                    >
+                      Add Configuration Source
+                    </h2>
+                    <p className="text-xs text-muted">
+                      Attach configuration files from indexed project files or
+                      by choosing a file from your project.
+                    </p>
+                  </div>
+
+                  <Tabs
+                    aria-label="Add source methods"
+                    onSelectionChange={(key) =>
+                      setAddSourceTab(key as AddSourceSubTab)
+                    }
+                    selectedKey={addSourceTab}
+                    variant="secondary"
+                  >
+                    <Tabs.List>
+                      <Tabs.Tab id="indexed">Indexed Files</Tabs.Tab>
+                      <Tabs.Tab id="manual">Choose File</Tabs.Tab>
+                    </Tabs.List>
+                    <Tabs.Panel className="pt-3 space-y-3" id="indexed">
+                      <TextField fullWidth variant="secondary">
+                        <Label className="sr-only">Search indexed files</Label>
+                        <Input
+                          onChange={(event) => {
+                            setSearch(event.target.value);
+                            setPage(1);
+                          }}
+                          placeholder="Search filename or path (e.g. config/local.env)"
+                          value={search}
+                        />
+                      </TextField>
+                      {candidates.isPending ? (
+                        <Spinner
+                          aria-label="Searching indexed files"
+                          size="sm"
+                        />
+                      ) : null}
+                      {candidates.data && (
+                        <>
+                          <p
+                            aria-live="polite"
+                            className="text-xs text-muted font-mono"
+                          >
+                            {candidates.data.totalItems.toLocaleString()}{' '}
+                            matching file
+                            {candidates.data.totalItems === 1 ? '' : 's'}
+                          </p>
+                          <ul className="divide-y divide-divider rounded-md border border-divider bg-surface max-h-48 overflow-y-auto">
+                            {candidates.data.items.map((candidate) => (
+                              <li
+                                className="flex items-center justify-between gap-3 px-3 py-2 text-xs"
+                                key={candidate.relativePath}
+                              >
+                                <span className="min-w-0 truncate font-mono">
+                                  {candidate.relativePath}
+                                </span>
+                                <Button
+                                  isDisabled={isBusy}
+                                  onPress={() => add(candidate.relativePath)}
+                                  size="sm"
+                                  variant="secondary"
+                                >
+                                  <IconPlus
+                                    aria-hidden="true"
+                                    size={ICON_SIZE.small}
+                                    stroke={ICON_STROKE}
+                                  />
+                                  Add
+                                </Button>
+                              </li>
+                            ))}
+                          </ul>
+                          {candidates.data.totalPages > 1 && (
+                            <AppPagination
+                              ariaLabel="Indexed file pages"
+                              onPageChange={setPage}
+                              page={candidates.data.page}
+                              totalPages={candidates.data.totalPages}
+                            />
+                          )}
+                        </>
+                      )}
+                    </Tabs.Panel>
+                    <Tabs.Panel className="pt-3 space-y-3" id="manual">
+                      <p className="text-xs text-muted leading-relaxed">
+                        Must be inside the current project root, readable,
+                        regular file (not a symlink/junction).
+                      </p>
+                      <div className="flex flex-col items-center justify-center gap-3 rounded-md border border-dashed border-divider bg-surface p-6 text-center">
                         <IconFileCode
                           aria-hidden="true"
-                          size={ICON_SIZE.small}
+                          className="text-muted"
+                          size={ICON_SIZE.emptyState}
                           stroke={ICON_STROKE}
                         />
-                        Choose file
-                      </Button>
-                    </div>
-                  </Tabs.Panel>
-                </Tabs>
-              </section>
-            )}
+                        <div className="space-y-1">
+                          <p className="text-xs font-medium text-foreground">
+                            Choose a configuration file
+                          </p>
+                          <p className="text-[11px] text-muted">
+                            Browse your project to attach an environment file.
+                          </p>
+                        </div>
+                        <Button
+                          isDisabled={isBusy}
+                          onPress={() => void handleChooseFile()}
+                          size="sm"
+                          variant="primary"
+                        >
+                          <IconFileCode
+                            aria-hidden="true"
+                            size={ICON_SIZE.small}
+                            stroke={ICON_STROKE}
+                          />
+                          Choose file
+                        </Button>
+                      </div>
+                    </Tabs.Panel>
+                  </Tabs>
+                </section>
+              )}
 
-            {environment && activeSection === 'danger' && (
-              <EnvironmentDangerZoneSection
-                environment={environment}
-                isDeleting={false}
-                onDelete={() => {
-                  onStartDeleteEnvironment?.(environment);
-                  onOpenChange(false);
-                }}
-              />
-            )}
-          </main>
-        </div>
-      </DialogBody>
-      <DialogFooter>
-        <Button
-          isDisabled={isBusy}
-          onPress={() => onOpenChange(false)}
-          variant="secondary"
-          size="sm"
-        >
-          Done
-        </Button>
-      </DialogFooter>
-    </DevventoryDialog>
+              {environment && activeSection === 'danger' && (
+                <EnvironmentDangerZoneSection
+                  environment={environment}
+                  isDeleting={false}
+                  onDelete={() => {
+                    onStartDeleteEnvironment?.(environment);
+                    onOpenChange(false);
+                  }}
+                />
+              )}
+            </main>
+          </div>
+        </DialogBody>
+        <DialogFooter>
+          <Button
+            isDisabled={isBusy}
+            onPress={() => onOpenChange(false)}
+            variant="secondary"
+            size="sm"
+          >
+            Done
+          </Button>
+        </DialogFooter>
+      </DevventoryDialog>
+
+      {/* File Source Deletion Confirmation Dialog */}
+      <DevventoryDialog
+        isOpen={Boolean(pendingFileSourceDeletion)}
+        onOpenChange={(isOpen) => {
+          if (!isOpen) setPendingFileSourceDeletion(null);
+        }}
+        size="md"
+      >
+        <DialogHeader
+          icon={
+            <IconAlertTriangle
+              aria-hidden="true"
+              className="text-danger"
+              size={ICON_SIZE.button}
+              stroke={ICON_STROKE}
+            />
+          }
+          title="Remove Configuration Source"
+        />
+        <DialogBody>
+          <p className="text-xs text-muted leading-relaxed">
+            Are you sure you want to remove{' '}
+            <code className="rounded bg-surface-secondary px-1 py-0.5 font-mono font-medium text-foreground">
+              {pendingFileSourceDeletion?.relativePath}
+            </code>{' '}
+            from{' '}
+            <span className="font-semibold text-foreground">
+              {environment?.name}
+            </span>
+            ? This file will no longer provide variables for this environment.
+          </p>
+        </DialogBody>
+        <DialogFooter>
+          <Button
+            isDisabled={deleteSource.isPending}
+            onPress={() => setPendingFileSourceDeletion(null)}
+            size="sm"
+            variant="secondary"
+          >
+            Cancel
+          </Button>
+          <Button
+            isDisabled={deleteSource.isPending}
+            onPress={handleConfirmDeleteFileSource}
+            size="sm"
+            variant="danger"
+          >
+            {deleteSource.isPending ? 'Removing...' : 'Remove Source'}
+          </Button>
+        </DialogFooter>
+      </DevventoryDialog>
+
+      {/* Credential Vault Source Unlink Confirmation Dialog */}
+      <DevventoryDialog
+        isOpen={Boolean(pendingVaultSourceUnlink)}
+        onOpenChange={(isOpen) => {
+          if (!isOpen) setPendingVaultSourceUnlink(null);
+        }}
+        size="md"
+      >
+        <DialogHeader
+          icon={
+            <IconAlertTriangle
+              aria-hidden="true"
+              className="text-danger"
+              size={ICON_SIZE.button}
+              stroke={ICON_STROKE}
+            />
+          }
+          title="Unlink Credential Source"
+        />
+        <DialogBody>
+          <p className="text-xs text-muted leading-relaxed">
+            Are you sure you want to unlink{' '}
+            <span className="font-semibold text-foreground">
+              {pendingVaultSourceUnlink?.name}
+            </span>{' '}
+            from{' '}
+            <span className="font-semibold text-foreground">
+              {environment?.name}
+            </span>
+            ? All{' '}
+            <span className="font-medium text-foreground">
+              {pendingVaultSourceUnlink?.keys.length}{' '}
+              {pendingVaultSourceUnlink?.keys.length === 1 ? 'key' : 'keys'}
+            </span>{' '}
+            will be unlinked from this environment. The credentials and
+            encrypted secrets in your Credential Vault will not be deleted.
+          </p>
+        </DialogBody>
+        <DialogFooter>
+          <Button
+            isDisabled={unlinkCustomSource.isPending}
+            onPress={() => setPendingVaultSourceUnlink(null)}
+            size="sm"
+            variant="secondary"
+          >
+            Cancel
+          </Button>
+          <Button
+            isDisabled={unlinkCustomSource.isPending}
+            onPress={handleConfirmUnlinkVaultSource}
+            size="sm"
+            variant="danger"
+          >
+            {unlinkCustomSource.isPending ? 'Unlinking...' : 'Unlink Source'}
+          </Button>
+        </DialogFooter>
+      </DevventoryDialog>
+    </>
   );
 }
 

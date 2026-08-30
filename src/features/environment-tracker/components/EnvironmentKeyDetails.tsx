@@ -1,20 +1,32 @@
-import { Button, Chip } from '@heroui/react';
+import {
+  credentialVaultGateway,
+  useCredentialVaultStatusQuery,
+  useUnlockCredentialVaultMutation,
+  VaultUnlockDialog,
+} from '@/features/credential-vault';
+import { ICON_SIZE, ICON_STROKE } from '@/shared/constants/icon.constants';
+import { TauriCommandError } from '@/shared/infrastructure/tauri/tauri-error';
+import type { ValidationIssue } from '@/shared/models/validation';
+import { SemanticStatusChip } from '@/shared/ui';
+import { Button, Chip, Spinner, toast } from '@heroui/react';
 import {
   IconAlertTriangle,
-  IconDatabase,
+  IconCopy,
+  IconExternalLink,
+  IconEye,
+  IconEyeOff,
   IconFileCode,
-  IconInfoCircle,
+  IconLock,
+  IconShieldLock,
   IconX,
 } from '@tabler/icons-react';
 import { useEffect, useMemo, useState } from 'react';
-import { ICON_SIZE, ICON_STROKE } from '@/shared/constants/icon.constants';
-import type { ValidationIssue } from '@/shared/models/validation';
-import { SemanticStatusChip } from '@/shared/ui';
+import { useNavigate } from 'react-router';
 import type {
   Environment,
-  EnvironmentSourceOrigin,
   EnvironmentMatrixCellValidation,
   EnvironmentMatrixSourceDetail,
+  EnvironmentSourceOrigin,
 } from '../models/environment';
 import { EnvironmentValidationDetails } from './EnvironmentValidationDetails';
 
@@ -60,6 +72,14 @@ export function EnvironmentKeyDetails({
   );
 }
 
+function useOptionalNavigate() {
+  try {
+    return useNavigate();
+  } catch {
+    return () => {};
+  }
+}
+
 function EnvironmentKeyDetailsContent({
   isUpdatingIssue,
   onClose,
@@ -73,6 +93,21 @@ function EnvironmentKeyDetailsContent({
   onIssueStatusChange: (issue: ValidationIssue) => void;
   selection: EnvironmentKeySelection;
 }) {
+  const navigate = useOptionalNavigate();
+  const vaultStatus = useCredentialVaultStatusQuery();
+  const unlockMutation = useUnlockCredentialVaultMutation();
+  const [revealedValues, setRevealedValues] = useState<Record<string, string>>(
+    {},
+  );
+  const [isRevealingCredentialId, setIsRevealingCredentialId] = useState<
+    string | null
+  >(null);
+  const [isUnlockOpen, setIsUnlockOpen] = useState(false);
+  const [pendingUnlockTarget, setPendingUnlockTarget] = useState<{
+    credentialId: string;
+    action: 'reveal' | 'copy';
+  } | null>(null);
+
   const [selectedDefinitionPath, setSelectedDefinitionPath] = useState<
     string | null
   >(selection.selectedSourcePath ?? null);
@@ -123,186 +158,430 @@ function EnvironmentKeyDetailsContent({
     onDefinitionClick?.(sourceId);
   }
 
+  async function handleReveal(credentialId: string) {
+    if (revealedValues[credentialId] !== undefined) {
+      setRevealedValues((prev) => {
+        const next = { ...prev };
+        delete next[credentialId];
+        return next;
+      });
+      return;
+    }
+
+    if (!vaultStatus.data?.isUnlocked) {
+      setPendingUnlockTarget({ credentialId, action: 'reveal' });
+      setIsUnlockOpen(true);
+      return;
+    }
+
+    setIsRevealingCredentialId(credentialId);
+    try {
+      const value = await credentialVaultGateway.revealSecret(credentialId);
+      setRevealedValues((prev) => ({ ...prev, [credentialId]: value }));
+    } catch (error) {
+      toast.danger(
+        error instanceof TauriCommandError
+          ? error.message
+          : 'The encrypted value could not be revealed.',
+      );
+    } finally {
+      setIsRevealingCredentialId(null);
+    }
+  }
+
+  async function handleCopy(credentialId: string) {
+    if (!vaultStatus.data?.isUnlocked) {
+      setPendingUnlockTarget({ credentialId, action: 'copy' });
+      setIsUnlockOpen(true);
+      return;
+    }
+
+    try {
+      let value = revealedValues[credentialId];
+      if (value === undefined) {
+        setIsRevealingCredentialId(credentialId);
+        value = await credentialVaultGateway.revealSecret(credentialId);
+      }
+      await navigator.clipboard.writeText(value);
+      toast.success('Credential value copied to clipboard.');
+    } catch (error) {
+      toast.danger(
+        error instanceof TauriCommandError
+          ? error.message
+          : 'Could not copy credential value.',
+      );
+    } finally {
+      setIsRevealingCredentialId(null);
+    }
+  }
+
+  async function handleUnlock(password: string) {
+    await unlockMutation.mutateAsync(password);
+    if (pendingUnlockTarget) {
+      const { credentialId, action } = pendingUnlockTarget;
+      setPendingUnlockTarget(null);
+      setIsRevealingCredentialId(credentialId);
+      try {
+        const value = await credentialVaultGateway.revealSecret(credentialId);
+        if (action === 'reveal') {
+          setRevealedValues((prev) => ({ ...prev, [credentialId]: value }));
+        } else if (action === 'copy') {
+          await navigator.clipboard.writeText(value);
+          toast.success('Credential value copied to clipboard.');
+        }
+      } catch (error) {
+        toast.danger(
+          error instanceof TauriCommandError
+            ? error.message
+            : 'Could not process credential action.',
+        );
+      } finally {
+        setIsRevealingCredentialId(null);
+      }
+    }
+  }
+
+  function handleRedirectToVault(
+    sourceId: string,
+    credentialId?: string | null,
+  ) {
+    const params = new URLSearchParams();
+    params.set('source', sourceId);
+    if (credentialId) {
+      params.set('credential', credentialId);
+    }
+    if (selection.environment.projectId) {
+      params.set('project', selection.environment.projectId);
+    }
+    params.set('env', selection.environment.id);
+    navigate(`/credential-vault?${params.toString()}`);
+  }
+
+  const isVaultUnlocked = vaultStatus.data?.isUnlocked ?? false;
+
   return (
-    <aside className="flex flex-col h-full overflow-y-auto bg-surface border-l border-divider shadow-xl">
-      <header className="flex items-start justify-between gap-3 border-b border-divider p-4 sticky top-0 bg-surface z-10">
-        <div className="min-w-0">
-          <p className="truncate font-mono text-sm font-semibold">
-            {selection.keyName}
-          </p>
-          <p className="mt-1 text-sm text-muted">
-            {selection.environment.name}
-            {effectiveSelectedSourcePath
-              ? ` · ${effectiveSelectedSourcePath}`
-              : ' environment'}
-          </p>
-        </div>
-        <Button
-          aria-label="Close key details"
-          isIconOnly
-          onPress={onClose}
-          size="sm"
-          variant="ghost"
-        >
-          <IconX
-            aria-hidden="true"
-            size={ICON_SIZE.button}
-            stroke={ICON_STROKE}
-          />
-        </Button>
-      </header>
-
-      <div className="space-y-4 p-4">
-        <section>
-          <p className="text-xs font-medium uppercase tracking-wide text-muted">
-            Status
-          </p>
-          <div className="mt-2 flex items-center gap-2">
-            {activeDetails.length > 1 && !effectiveSelectedSourcePath ? (
-              <IconAlertTriangle
-                aria-hidden="true"
-                className="text-warning"
-                size={ICON_SIZE.button}
-                stroke={ICON_STROKE}
-              />
-            ) : null}
-            <p className="font-semibold">{status}</p>
+    <>
+      <aside className="flex flex-col h-full overflow-y-auto bg-surface border-l border-divider shadow-xl">
+        <header className="flex items-start justify-between gap-3 border-b border-divider p-4 sticky top-0 bg-surface z-10">
+          <div className="min-w-0">
+            <p className="truncate font-mono text-sm font-semibold">
+              {selection.keyName}
+            </p>
+            <p className="mt-1 text-sm text-muted">
+              {selection.environment.name}
+              {effectiveSelectedSourcePath
+                ? ` · ${effectiveSelectedSourcePath}`
+                : ' environment'}
+            </p>
           </div>
-          <p className="mt-2 text-sm leading-6 text-muted">
-            {effectiveSelectedSourcePath
-              ? sourceExplanation(
-                  selectedSourceDetails,
-                  sourceDetailLabel(selectedSourceDetails[0]),
-                )
-              : environmentExplanation(
-                  activeDetails.length,
-                  commentedDetails.length,
-                  selection.environment.name,
-                )}
-          </p>
-        </section>
+          <Button
+            aria-label="Close key details"
+            isIconOnly
+            onPress={onClose}
+            size="sm"
+            variant="ghost"
+          >
+            <IconX
+              aria-hidden="true"
+              size={ICON_SIZE.button}
+              stroke={ICON_STROKE}
+            />
+          </Button>
+        </header>
 
-        <div className="border-t border-divider pt-4">
-          <EnvironmentValidationDetails
-            isUpdating={isUpdatingIssue}
-            onStatusChange={onIssueStatusChange}
-            validation={selection.validation}
-          />
-        </div>
+        <div className="space-y-4 p-4">
+          <section>
+            <p className="text-xs font-medium uppercase tracking-wide text-muted">
+              Status
+            </p>
+            <div className="mt-2 flex items-center gap-2">
+              {activeDetails.length > 1 && !effectiveSelectedSourcePath ? (
+                <IconAlertTriangle
+                  aria-hidden="true"
+                  className="text-warning"
+                  size={ICON_SIZE.button}
+                  stroke={ICON_STROKE}
+                />
+              ) : null}
+              <p className="font-semibold">{status}</p>
+            </div>
+            <p className="mt-2 text-sm leading-6 text-muted">
+              {effectiveSelectedSourcePath
+                ? sourceExplanation(
+                    selectedSourceDetails,
+                    sourceDetailLabel(selectedSourceDetails[0]),
+                  )
+                : environmentExplanation(
+                    activeDetails.length,
+                    commentedDetails.length,
+                    selection.environment.name,
+                  )}
+            </p>
+          </section>
 
-        <section>
-          <div className="flex items-center justify-between gap-2">
-            <h3 className="font-medium">Definitions in this environment</h3>
-            <Chip size="sm" variant="soft">
-              <Chip.Label>{selection.sourceDetails.length}</Chip.Label>
-            </Chip>
+          <div className="border-t border-divider pt-4">
+            <EnvironmentValidationDetails
+              isUpdating={isUpdatingIssue}
+              onStatusChange={onIssueStatusChange}
+              validation={selection.validation}
+            />
           </div>
-          {selection.sourceDetails.length > 0 ? (
-            <ul className="mt-3 space-y-2">
-              {selection.sourceDetails.map((detail, index) => {
-                const isSelected = selectedSourceId === detail.sourceId;
-                const sourceLabel = sourceDetailLabel(detail);
 
-                return (
-                  <li
-                    key={`${detail.sourceId}:${detail.lineNumber ?? 'metadata'}:${index}`}
-                  >
-                    <button
-                      aria-pressed={isSelected}
-                      className={`w-full rounded-xl border p-3 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground/40 ${
-                        isSelected
-                          ? 'relative z-10 bg-surface-secondary shadow-sm ring-2 ring-inset ring-foreground/25'
-                          : ''
-                      } ${
-                        onDefinitionClick
-                          ? 'cursor-pointer hover:border-foreground/25 hover:bg-surface-secondary'
-                          : 'cursor-default'
-                      }`}
-                      data-definition-path={sourceLabel}
-                      data-selected={isSelected ? 'true' : undefined}
-                      onClick={() => handleDefinitionClick(detail.sourceId)}
-                      type="button"
-                    >
-                      <div className="flex items-start gap-3">
-                        {detail.origin === 'custom' ? (
-                          <IconDatabase
+          <section>
+            <div className="flex items-center justify-between gap-2">
+              <h3 className="font-medium">Definitions in this environment</h3>
+              <Chip size="sm" variant="soft">
+                <Chip.Label>{selection.sourceDetails.length}</Chip.Label>
+              </Chip>
+            </div>
+            {selection.sourceDetails.length > 0 ? (
+              <ul className="mt-3 space-y-2.5">
+                {selection.sourceDetails.map((detail, index) => {
+                  const isSelected = selectedSourceId === detail.sourceId;
+                  const sourceLabel = sourceDetailLabel(detail);
+
+                  if (detail.origin === 'custom') {
+                    const isRevealed = detail.credentialId
+                      ? revealedValues[detail.credentialId] !== undefined
+                      : false;
+
+                    return (
+                      <li
+                        key={`${detail.sourceId}:${detail.lineNumber ?? 'metadata'}:${index}`}
+                        className={`rounded-xl border p-3.5 transition-colors ${
+                          isSelected
+                            ? 'bg-surface-secondary shadow-sm ring-2 ring-inset ring-foreground/25 border-transparent'
+                            : 'border-divider bg-surface'
+                        }`}
+                        data-definition-path={sourceLabel}
+                        data-selected={isSelected ? 'true' : undefined}
+                      >
+                        <div className="flex items-start gap-3">
+                          <IconShieldLock
                             aria-hidden="true"
-                            className="mt-0.5 shrink-0 text-muted"
+                            className="mt-0.5 shrink-0 text-accent"
                             size={ICON_SIZE.button}
                             stroke={ICON_STROKE}
                           />
-                        ) : (
+                          <div className="min-w-0 flex-1">
+                            <p className="truncate font-mono text-sm font-medium text-foreground">
+                              {sourceLabel}
+                            </p>
+                            <p className="mt-0.5 text-xs text-muted">
+                              Linked from Credential Vault
+                            </p>
+                          </div>
+                          <div className="flex items-center gap-1.5 shrink-0">
+                            <SemanticStatusChip
+                              dataStatus="present"
+                              label="Present"
+                              tone="success"
+                            />
+                            <SemanticStatusChip
+                              dataStatus="custom"
+                              label="Vault"
+                              tone="neutral"
+                            />
+                          </div>
+                        </div>
+
+                        <div className="mt-3 border-t border-divider/60 pt-3 space-y-2">
+                          {detail.credentialId ? (
+                            <div className="rounded-lg border border-accent/30 bg-surface-secondary/70 p-2.5 space-y-1.5">
+                              <div className="flex items-center justify-between gap-2">
+                                <span className="text-[11px] font-medium uppercase tracking-wider text-muted">
+                                  Encrypted value
+                                </span>
+                                {isVaultUnlocked ? (
+                                  <div className="flex items-center gap-1">
+                                    <Button
+                                      aria-label="Copy secret value"
+                                      className="h-6 px-2 text-xs text-muted hover:text-foreground"
+                                      isDisabled={
+                                        isRevealingCredentialId ===
+                                        detail.credentialId
+                                      }
+                                      onPress={() =>
+                                        void handleCopy(detail.credentialId!)
+                                      }
+                                      size="sm"
+                                      variant="ghost"
+                                    >
+                                      <IconCopy
+                                        size={ICON_SIZE.small}
+                                        stroke={ICON_STROKE}
+                                      />
+                                      Copy
+                                    </Button>
+                                    <Button
+                                      aria-label={
+                                        isRevealed
+                                          ? 'Hide secret value'
+                                          : 'Reveal secret value'
+                                      }
+                                      className="h-6 px-2 text-xs text-muted hover:text-foreground"
+                                      isDisabled={
+                                        isRevealingCredentialId ===
+                                        detail.credentialId
+                                      }
+                                      onPress={() =>
+                                        void handleReveal(detail.credentialId!)
+                                      }
+                                      size="sm"
+                                      variant="ghost"
+                                    >
+                                      {isRevealingCredentialId ===
+                                      detail.credentialId ? (
+                                        <Spinner
+                                          aria-label="Revealing value"
+                                          size="sm"
+                                        />
+                                      ) : isRevealed ? (
+                                        <>
+                                          <IconEyeOff
+                                            size={ICON_SIZE.small}
+                                            stroke={ICON_STROKE}
+                                          />
+                                          Hide
+                                        </>
+                                      ) : (
+                                        <>
+                                          <IconEye
+                                            size={ICON_SIZE.small}
+                                            stroke={ICON_STROKE}
+                                          />
+                                          Reveal
+                                        </>
+                                      )}
+                                    </Button>
+                                  </div>
+                                ) : (
+                                  <Button
+                                    aria-label="Unlock vault to view or copy secret"
+                                    className="h-6 px-2 text-xs text-muted hover:text-foreground"
+                                    onPress={() => {
+                                      setPendingUnlockTarget({
+                                        action: 'reveal',
+                                        credentialId: detail.credentialId!,
+                                      });
+                                      setIsUnlockOpen(true);
+                                    }}
+                                    size="sm"
+                                    variant="ghost"
+                                  >
+                                    <IconLock
+                                      size={ICON_SIZE.small}
+                                      stroke={ICON_STROKE}
+                                    />
+                                    Unlock vault
+                                  </Button>
+                                )}
+                              </div>
+
+                              {isVaultUnlocked && isRevealed ? (
+                                <pre className="max-h-32 overflow-y-auto select-all whitespace-pre-wrap break-all rounded border border-divider/40 bg-surface/80 p-2 font-mono text-xs text-foreground">
+                                  {revealedValues[detail.credentialId]}
+                                </pre>
+                              ) : (
+                                <div className="flex items-center rounded border border-divider/40 bg-surface/80 p-2 font-mono text-xs text-muted tracking-widest select-none">
+                                  <span>••••••••••••</span>
+                                </div>
+                              )}
+                            </div>
+                          ) : null}
+
+                          <Button
+                            className="h-7 px-2 text-xs text-accent hover:bg-accent/10"
+                            onPress={() =>
+                              handleRedirectToVault(
+                                detail.sourceId,
+                                detail.credentialId,
+                              )
+                            }
+                            size="sm"
+                            variant="ghost"
+                          >
+                            <IconExternalLink
+                              size={ICON_SIZE.small}
+                              stroke={ICON_STROKE}
+                            />
+                            Open in Credential Vault
+                          </Button>
+                        </div>
+                      </li>
+                    );
+                  }
+
+                  return (
+                    <li
+                      key={`${detail.sourceId}:${detail.lineNumber ?? 'metadata'}:${index}`}
+                    >
+                      <button
+                        aria-pressed={isSelected}
+                        className={`w-full rounded-xl border p-3 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground/40 ${
+                          isSelected
+                            ? 'relative z-10 bg-surface-secondary shadow-sm ring-2 ring-inset ring-foreground/25'
+                            : ''
+                        } ${
+                          onDefinitionClick
+                            ? 'cursor-pointer hover:border-foreground/25 hover:bg-surface-secondary'
+                            : 'cursor-default'
+                        }`}
+                        data-definition-path={sourceLabel}
+                        data-selected={isSelected ? 'true' : undefined}
+                        onClick={() => handleDefinitionClick(detail.sourceId)}
+                        type="button"
+                      >
+                        <div className="flex items-start gap-3">
                           <IconFileCode
                             aria-hidden="true"
                             className="mt-0.5 shrink-0 text-muted"
                             size={ICON_SIZE.button}
                             stroke={ICON_STROKE}
                           />
-                        )}
-                        <div className="min-w-0 flex-1">
-                          <p className="truncate font-mono text-sm">
-                            {sourceLabel}
-                          </p>
-                          <p className="mt-1 text-xs text-muted">
-                            {detail.origin === 'custom'
-                              ? 'Custom metadata source'
-                              : detail.lineNumber
+                          <div className="min-w-0 flex-1">
+                            <p className="truncate font-mono text-sm">
+                              {sourceLabel}
+                            </p>
+                            <p className="mt-1 text-xs text-muted">
+                              {detail.lineNumber
                                 ? `Line ${detail.lineNumber}`
                                 : 'Line unavailable'}
-                          </p>
-                        </div>
-                        <SemanticStatusChip
-                          dataStatus={
-                            detail.isCommented
-                              ? 'commented'
-                              : detail.origin === 'custom'
-                                ? 'present'
-                                : 'active'
-                          }
-                          label={
-                            detail.isCommented
-                              ? 'Commented'
-                              : detail.origin === 'custom'
-                                ? 'Present'
-                                : 'Active'
-                          }
-                          tone={detail.isCommented ? 'neutral' : 'success'}
-                        />
-                        {detail.origin === 'custom' ? (
+                            </p>
+                          </div>
                           <SemanticStatusChip
-                            dataStatus="custom"
-                            label="Custom"
-                            tone="neutral"
+                            dataStatus={
+                              detail.isCommented ? 'commented' : 'active'
+                            }
+                            label={detail.isCommented ? 'Commented' : 'Active'}
+                            tone={detail.isCommented ? 'neutral' : 'success'}
                           />
-                        ) : null}
-                      </div>
-                    </button>
-                  </li>
-                );
-              })}
-            </ul>
-          ) : (
-            <p className="mt-3 rounded-xl border border-dashed border-divider p-4 text-sm text-muted">
-              No definition exists in the selected environment or source file.
-            </p>
-          )}
-        </section>
-
-        <div className="flex gap-3 rounded-xl border border-accent/40 bg-accent/5 p-4 text-sm leading-6 text-muted">
-          <IconInfoCircle
-            aria-hidden="true"
-            className="mt-0.5 shrink-0 text-accent"
-            size={ICON_SIZE.button}
-            stroke={ICON_STROKE}
-          />
-          <p>
-            Status is calculated separately for each environment. Commented
-            definitions are shown for context but do not count as active
-            duplicates.
-          </p>
+                        </div>
+                      </button>
+                    </li>
+                  );
+                })}
+              </ul>
+            ) : (
+              <p className="mt-3 rounded-xl border border-dashed border-divider p-4 text-sm text-muted">
+                No definition exists in the selected environment or source file.
+              </p>
+            )}
+          </section>
         </div>
-      </div>
-    </aside>
+      </aside>
+
+      <VaultUnlockDialog
+        isConfigured={vaultStatus.data?.isConfigured ?? true}
+        isOpen={isUnlockOpen}
+        isUnlocking={unlockMutation.isPending}
+        onOpenChange={(isOpen) => {
+          setIsUnlockOpen(isOpen);
+          if (!isOpen) setPendingUnlockTarget(null);
+        }}
+        onUnlock={handleUnlock}
+      />
+    </>
   );
 }
 

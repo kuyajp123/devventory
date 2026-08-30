@@ -139,4 +139,14 @@ export const environmentTrackerGateway = {
     );
     return customEnvironmentSourceSchema.array().parse(response);
   },
+
+  unlinkCustomSource(input: {
+    environmentId: string;
+    projectId: string;
+    sourceId: string;
+  }) {
+    return invokeCommand<void>('unlink_custom_environment_source', {
+      input,
+    });
+  },
 };

@@ -29,7 +29,7 @@ use features::environment_tracker::commands::{
     get_environment_matrix, list_custom_environment_sources, list_environment_source_candidates,
     list_environment_sources, list_environments, refresh_environment,
     refresh_project_environment_sources, reorder_environment_sources, reorder_environments,
-    update_environment,
+    unlink_custom_environment_source, update_environment,
 };
 use features::file_inventory::commands::{
     list_project_directory, list_project_files, rescan_project, rescan_watched_location,
@@ -342,6 +342,7 @@ pub fn run() {
             delete_environment_source,
             reorder_environment_sources,
             list_custom_environment_sources,
+            unlink_custom_environment_source,
             list_environment_source_candidates,
             get_environment_matrix,
             refresh_environment,
