@@ -242,6 +242,13 @@ fn parse_double_quoted_value(
         }
     }
 
+    if !closed {
+        return Err(EnvParseError {
+            code: EnvParseErrorCode::InvalidAssignment,
+            line_number: Some(start_line_num),
+        });
+    }
+
     Ok((accumulated, lines_consumed))
 }
 
@@ -259,6 +266,7 @@ fn parse_single_quoted_value(
 
     let mut accumulated = inner_start.to_string();
     let mut lines_consumed = 1;
+    let mut closed = false;
 
     for (offset, &raw_line) in remaining_lines.iter().enumerate().skip(1) {
         let line_num = start_line_num + offset as u32;
@@ -274,10 +282,18 @@ fn parse_single_quoted_value(
 
         if let Some((content, _after)) = raw_line.split_once('\'') {
             accumulated.push_str(content);
+            closed = true;
             break;
         } else {
             accumulated.push_str(raw_line);
         }
+    }
+
+    if !closed {
+        return Err(EnvParseError {
+            code: EnvParseErrorCode::InvalidAssignment,
+            line_number: Some(start_line_num),
+        });
     }
 
     Ok((accumulated, lines_consumed))
@@ -386,5 +402,21 @@ mod tests {
         let content = &[0xff, 0xfe, 0x00];
         let err = parse_env_content(content).expect_err("should reject invalid utf-8");
         assert_eq!(err.code, EnvParseErrorCode::InvalidEncoding);
+    }
+
+    #[test]
+    fn rejects_unterminated_double_quotes() {
+        let content = b"TOKEN=\"abc\nPORT=3000";
+        let err = parse_env_content(content).expect_err("should reject unclosed double quote");
+        assert_eq!(err.code, EnvParseErrorCode::InvalidAssignment);
+        assert_eq!(err.line_number, Some(1));
+    }
+
+    #[test]
+    fn rejects_unterminated_single_quotes() {
+        let content = b"TOKEN='abc\nPORT=3000";
+        let err = parse_env_content(content).expect_err("should reject unclosed single quote");
+        assert_eq!(err.code, EnvParseErrorCode::InvalidAssignment);
+        assert_eq!(err.line_number, Some(1));
     }
 }

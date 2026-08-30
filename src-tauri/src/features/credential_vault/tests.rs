@@ -593,6 +593,9 @@ async fn import_env_file_with_active_duplicate_keys_fails() {
         }
         other => panic!("expected DuplicateActiveKeys, got {:?}", other),
     }
+
+    let sources = vault.list_sources().await.expect("list sources");
+    assert_eq!(sources.len(), 0);
 }
 
 #[tokio::test]
