@@ -109,3 +109,22 @@ test('does not start the release when password verification fails', async () => 
 
   assert.equal(releaseStarted, false);
 });
+
+test('forwards extra arguments such as --skip-ci to the release cli', async () => {
+  let executedArgs = [];
+
+  await runLocalRelease({
+    repositoryRoot: 'C:\\repo',
+    signingKeyPath: 'C:\\keys\\devventory-updater.key',
+    environment: {},
+    readPassword: async () => 'test-password',
+    verify: async () => {},
+    run: async (_command, args) => {
+      executedArgs = args;
+    },
+    extraArgs: ['--skip-ci'],
+    log: () => {},
+  });
+
+  assert.deepEqual(executedArgs.slice(-2), ['local', '--skip-ci']);
+});

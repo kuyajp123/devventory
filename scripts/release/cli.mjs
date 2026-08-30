@@ -113,10 +113,20 @@ async function main() {
   }
 
   const interactive = command === 'local';
+  const skipCi =
+    process.argv.includes('--skip-ci') ||
+    process.env.DEVVENTORY_SKIP_QUALITY_GATE === '1' ||
+    process.env.SKIP_CI === '1';
+
+  if (skipCi) {
+    console.log('Skipping local quality gate checks (--skip-ci).');
+  }
+
   const dependencies = createReleaseEngineDependencies({
     repositoryRoot,
     candidateSha,
     ...tokens,
+    runQualityGate: !skipCi,
     approveRecovery: async (state) => {
       console.log(`Recovery required for v${state.transaction.version}.`);
       console.log(`Action: ${state.action}`);

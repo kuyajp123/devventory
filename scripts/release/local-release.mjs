@@ -108,6 +108,7 @@ export async function runLocalRelease({
   verify = verifyUpdaterSigningCredentials,
   run = runProcess,
   log = console.log,
+  extraArgs = [],
 }) {
   const previousKey = environment.TAURI_SIGNING_PRIVATE_KEY;
   const previousPassword = environment.TAURI_SIGNING_PRIVATE_KEY_PASSWORD;
@@ -126,7 +127,11 @@ export async function runLocalRelease({
     log('Updater signing credentials verified. Starting local release.');
     await run(
       process.execPath,
-      [join(workingDirectory, 'scripts', 'release', 'cli.mjs'), 'local'],
+      [
+        join(workingDirectory, 'scripts', 'release', 'cli.mjs'),
+        'local',
+        ...extraArgs,
+      ],
       { cwd: workingDirectory, env: environment },
     );
   } finally {
@@ -147,6 +152,7 @@ async function main() {
   await runLocalRelease({
     repositoryRoot,
     signingKeyPath: process.argv[2],
+    extraArgs: process.argv.slice(3),
   });
 }
 

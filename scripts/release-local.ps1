@@ -1,5 +1,6 @@
 param(
-  [string]$SigningKeyPath = (Join-Path ([Environment]::GetFolderPath('UserProfile')) '.tauri\devventory-updater.key')
+  [string]$SigningKeyPath = (Join-Path ([Environment]::GetFolderPath('UserProfile')) '.tauri\devventory-updater.key'),
+  [switch]$SkipCi
 )
 
 Set-StrictMode -Version Latest
@@ -13,9 +14,17 @@ if (-not (Test-Path -LiteralPath $SigningKeyPath -PathType Leaf)) {
 $resolvedSigningKeyPath = (Resolve-Path -LiteralPath $SigningKeyPath).Path
 $exitCode = 1
 
+$nodeArgs = @('scripts/release/local-release.mjs', $resolvedSigningKeyPath)
+if ($SkipCi) {
+  $nodeArgs += '--skip-ci'
+}
+if ($args) {
+  $nodeArgs += $args
+}
+
 Push-Location -LiteralPath $repositoryRoot
 try {
-  & node 'scripts/release/local-release.mjs' $resolvedSigningKeyPath
+  & node @nodeArgs
   $exitCode = $LASTEXITCODE
 } finally {
   Pop-Location
