@@ -8,6 +8,40 @@ cd C:\Users\Paul\Projects\devventory
 
 ---
 
+## 📑 Table of Contents
+
+- [🧪 Local Testing / CI](#-local-testing--ci)
+  - [Run the complete local CI](#run-the-complete-local-ci)
+  - [See CI stages without running them](#see-ci-stages-without-running-them)
+  - [Test only the release tooling](#test-only-the-release-tooling)
+  - [Test only the Git hook policies](#test-only-the-git-hook-policies)
+- [🚀 Normal Git Push](#-normal-git-push)
+  - [First push of a new branch](#first-push-of-a-new-branch)
+  - [Delete a merged remote feature branch](#delete-a-merged-remote-feature-branch)
+- [🧪 Safely Test the Pre-Push Hook](#-safely-test-the-pre-push-hook)
+- [🪝 Check Git Hooks](#-check-git-hooks)
+- [🌿 Start a Feature Branch](#-start-a-feature-branch)
+- [🔍 Check Changes Before Commit](#-check-changes-before-commit)
+- [💾 Commit](#-commit)
+- [🔀 After a PR Is Merged](#-after-a-pr-is-merged)
+- [🔄 If main Changed While Working on a Feature](#-if-main-changed-while-working-on-a-feature)
+- [📦 Release Commands](#-release-commands)
+  - [Preview the Next Release](#preview-the-next-release)
+  - [🖥️ Local Production Release](#️-local-production-release)
+  - [☁️ Hosted Release](#️-hosted-release)
+- [🏷️ Release Version Rules](#️-release-version-rules)
+- [🔐 Release Requirements](#-release-requirements)
+- [🔑 Default Tauri Signing Key](#-default-tauri-signing-key)
+- [🛠️ New Checkout / Worktree Setup](#️-new-checkout--worktree-setup)
+- [🔒 Check for an Active Hosted Release](#-check-for-an-active-hosted-release)
+- [🔒 Check the Release Lock](#-check-the-release-lock)
+- [⚠️ Remove a Stale Release Lock](#️-remove-a-stale-release-lock)
+- [🚨 Bypass Local Push CI](#-bypass-local-push-ci)
+- [⭐ Commands You'll Probably Use Most](#-commands-youll-probably-use-most)
+- [🧠 Quick Mental Model](#-quick-mental-model)
+
+---
+
 ## 🧪 Local Testing / CI
 
 ### Run the complete local CI
@@ -235,7 +269,7 @@ ci:       CI changes
 
 ---
 
-# 🔀 After a PR Is Merged
+## 🔀 After a PR Is Merged
 
 Update your local `main`:
 
@@ -248,7 +282,7 @@ git pull --ff-only
 
 ---
 
-# 🔄 If `main` Changed While Working on a Feature
+## 🔄 If `main` Changed While Working on a Feature
 
 ```powershell
 git switch feature/my-feature
@@ -273,9 +307,9 @@ full local CI runs again
 
 ---
 
-# 📦 Release Commands
+## 📦 Release Commands
 
-## Preview the Next Release
+### Preview the Next Release
 
 ```powershell
 npm run release:plan
@@ -304,7 +338,7 @@ Run this from a clean, current `main`.
 
 ---
 
-## 🖥️ Local Production Release
+### 🖥️ Local Production Release
 
 ```powershell
 npm run release:local
@@ -358,7 +392,7 @@ publish v0.2.0
 
 ---
 
-## ☁️ Hosted Release
+### ☁️ Hosted Release
 
 ```powershell
 npm run release:hosted
@@ -389,7 +423,7 @@ release:hosted
 
 ---
 
-# 🏷️ Release Version Rules
+## 🏷️ Release Version Rules
 
 Your Conventional Commits determine the version.
 
@@ -440,7 +474,7 @@ test:
 
 ---
 
-# 🔐 Release Requirements
+## 🔐 Release Requirements
 
 Before running:
 
@@ -464,7 +498,7 @@ make sure:
 
 ---
 
-# 🔑 Default Tauri Signing Key
+## 🔑 Default Tauri Signing Key
 
 Expected location:
 
@@ -481,7 +515,7 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/release-local.ps
 
 ---
 
-# 🛠️ New Checkout / Worktree Setup
+## 🛠️ New Checkout / Worktree Setup
 
 Install Node dependencies:
 
@@ -521,7 +555,7 @@ Expected:
 
 ---
 
-# 🔒 Check for an Active Hosted Release
+## 🔒 Check for an Active Hosted Release
 
 ```powershell
 gh run list --repo kuyajp123/devventory --workflow release.yml --status in_progress
@@ -533,7 +567,7 @@ Useful before troubleshooting a potentially stale release lock.
 
 ---
 
-# 🔒 Check the Release Lock
+## 🔒 Check the Release Lock
 
 ```powershell
 gh api repos/kuyajp123/devventory/git/ref/heads/automation/release-lock --jq '.object.sha'
@@ -543,7 +577,7 @@ gh api repos/kuyajp123/devventory/git/ref/heads/automation/release-lock --jq '.o
 
 ---
 
-# ⚠️ Remove a Stale Release Lock
+## ⚠️ Remove a Stale Release Lock
 
 Only after confirming:
 
@@ -571,7 +605,7 @@ or rerun the hosted GitHub workflow.
 
 ---
 
-# 🚨 Bypass Local Push CI
+## 🚨 Bypass Local Push CI
 
 ```powershell
 git push --no-verify
@@ -591,7 +625,7 @@ Do not treat `--no-verify` as proof that a release candidate passed CI.
 
 ---
 
-# ⭐ Commands You'll Probably Use Most
+## ⭐ Commands You'll Probably Use Most
 
 ```powershell
 # Check repository
@@ -625,7 +659,7 @@ npm run test:hooks
 
 ---
 
-# 🧠 Quick Mental Model
+## 🧠 Quick Mental Model
 
 ### Testing
 
