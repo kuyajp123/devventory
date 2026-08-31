@@ -6,6 +6,11 @@ export {
   useEnvironmentsQuery,
 } from './hooks/use-environments';
 export { environmentTrackerGateway } from './services/environment-tracker.gateway';
+export { environmentTrackerViewStore } from './store/environment-tracker-view.store';
+export type {
+  EnvironmentTrackerProjectViewState,
+  EnvironmentTrackerScrollPosition,
+} from './store/environment-tracker-view.store';
 export type {
   CustomEnvironmentKey,
   CustomEnvironmentSource,

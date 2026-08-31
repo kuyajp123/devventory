@@ -3,6 +3,7 @@ import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { renderWithProviders } from '@/test/render';
 import { CredentialVaultPage } from './CredentialVaultPage';
+import { credentialVaultViewStore } from '../store/credential-vault-view.store';
 
 const mockNavigate = vi.fn();
 const mockSelectProject = vi.fn();
@@ -271,6 +272,23 @@ describe('CredentialVaultPage project filtering', () => {
         sourceId: sourceBeta.id,
         updatedAt: '2026-08-13T00:00:00.000Z',
       },
+      {
+        createdAt: '2026-08-13T00:00:00.000Z',
+        environmentLinks: [
+          {
+            environmentId: '88888888-8888-4888-8888-888888888888',
+            projectId: projectBeta.id,
+          },
+        ],
+        hasValue: true,
+        id: '99999999-9999-4999-8999-999999999999',
+        key: 'BETA_EXTRA_SECRET',
+        normalizedKey: 'BETA_EXTRA_SECRET',
+        notes: null,
+        projectIds: [projectBeta.id],
+        sourceId: sourceBeta.id,
+        updatedAt: '2026-08-13T00:00:00.000Z',
+      },
     ];
     vaultMocks.environments = [
       {
@@ -292,6 +310,7 @@ describe('CredentialVaultPage project filtering', () => {
         updatedAt: '2026-08-13T00:00:00.000Z',
       },
     ];
+    credentialVaultViewStore.clear();
   });
 
   it('displays all sources by default when filter is All', () => {
@@ -728,7 +747,7 @@ describe('CredentialVaultPage project filtering', () => {
     window.HTMLElement.prototype.scrollIntoView = scrollIntoViewMock;
 
     mockSearchParams = new URLSearchParams(
-      `source=${sourceBeta.id}&credential=22222222-2222-4222-8222-222222222222`,
+      `source=${sourceBeta.id}&credential=66666666-6666-4666-8666-666666666666`,
     );
 
     renderWithProviders(<CredentialVaultPage />);
@@ -743,5 +762,87 @@ describe('CredentialVaultPage project filtering', () => {
         block: 'center',
       });
     });
+  });
+
+  it('does not scroll or center the screen when manually clicking a credential in normal browsing', async () => {
+    const user = userEvent.setup();
+    const scrollIntoViewMock = vi.fn();
+    window.HTMLElement.prototype.scrollIntoView = scrollIntoViewMock;
+
+    mockSearchParams = new URLSearchParams(`source=${sourceBeta.id}`);
+
+    renderWithProviders(<CredentialVaultPage />);
+
+    expect(
+      await screen.findByRole('heading', { name: 'Beta Source' }),
+    ).toBeVisible();
+
+    // In normal browsing, initial source load without credential search param does not scroll
+    expect(scrollIntoViewMock).not.toHaveBeenCalled();
+
+    const extraCredentialRow = screen.getByRole('button', {
+      name: /BETA_EXTRA_SECRET/i,
+    });
+    await user.click(extraCredentialRow);
+
+    await new Promise((resolve) => setTimeout(resolve, 100));
+
+    expect(scrollIntoViewMock).not.toHaveBeenCalled();
+  });
+
+  it('preserves selected credential key when navigating away and remounting without filters', async () => {
+    const user = userEvent.setup();
+    const { unmount } = renderWithProviders(<CredentialVaultPage />);
+
+    // Click Beta Source in sources sidebar
+    const betaSourceBtn = screen.getByRole('button', {
+      name: (name) =>
+        name.includes('Beta Source') &&
+        !name.includes('Edit') &&
+        !name.includes('Delete'),
+    });
+    await user.click(betaSourceBtn);
+
+    // Click BETA_EXTRA_SECRET credential row
+    const betaExtraSecretRow = await screen.findByRole('button', {
+      name: /BETA_EXTRA_SECRET/i,
+    });
+    await user.click(betaExtraSecretRow);
+
+    // Verify right panel shows BETA_EXTRA_SECRET details
+    expect(
+      screen.getByRole('heading', { name: 'BETA_EXTRA_SECRET' }),
+    ).toBeVisible();
+
+    // Unmount (simulating navigating away to another screen)
+    unmount();
+
+    // Remount (simulating navigating back to Credential Vault)
+    renderWithProviders(<CredentialVaultPage />);
+
+    // Selected credential must remain BETA_EXTRA_SECRET in the right panel and active row
+    expect(
+      await screen.findByRole('heading', { name: 'BETA_EXTRA_SECRET' }),
+    ).toBeVisible();
+    expect(credentialVaultViewStore.getViewState().selectedCredentialId).toBe(
+      '99999999-9999-4999-8999-999999999999',
+    );
+    expect(credentialVaultViewStore.getViewState().selectedSourceId).toBe(
+      sourceBeta.id,
+    );
+  });
+
+  it('restores scroll position when remounting without filters', async () => {
+    credentialVaultViewStore.setScrollPosition({
+      scrollLeft: 0,
+      scrollTop: 350,
+    });
+
+    renderWithProviders(<CredentialVaultPage />);
+
+    const scrollContainer = await screen.findByTestId(
+      'credential-vault-list-scroll',
+    );
+    expect(scrollContainer.scrollTop).toBe(350);
   });
 });

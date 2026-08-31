@@ -8,7 +8,7 @@ import { ICON_SIZE, ICON_STROKE } from '@/shared/constants/icon.constants';
 import { TauriCommandError } from '@/shared/infrastructure/tauri/tauri-error';
 import type { ValidationIssue } from '@/shared/models/validation';
 import { SemanticStatusChip } from '@/shared/ui';
-import { Button, Chip, Spinner, toast } from '@heroui/react';
+import { Button, Chip, Spinner, toast, Tooltip } from '@heroui/react';
 import {
   IconAlertTriangle,
   IconCopy,
@@ -16,6 +16,7 @@ import {
   IconEye,
   IconEyeOff,
   IconFileCode,
+  IconFocusCentered,
   IconLock,
   IconShieldLock,
   IconX,
@@ -48,12 +49,14 @@ export function EnvironmentKeyDetails({
   onClose,
   onDefinitionClick,
   onIssueStatusChange = () => {},
+  onLocateCell,
   selection,
 }: {
   isUpdatingIssue?: boolean;
   onClose: () => void;
   onDefinitionClick?: (relativePath: string) => void;
   onIssueStatusChange?: (issue: ValidationIssue) => void;
+  onLocateCell?: () => void;
   selection: EnvironmentKeySelection | null;
 }) {
   if (!selection) {
@@ -67,6 +70,7 @@ export function EnvironmentKeyDetails({
       onClose={onClose}
       onDefinitionClick={onDefinitionClick}
       onIssueStatusChange={onIssueStatusChange}
+      onLocateCell={onLocateCell}
       selection={selection}
     />
   );
@@ -85,12 +89,14 @@ function EnvironmentKeyDetailsContent({
   onClose,
   onDefinitionClick,
   onIssueStatusChange,
+  onLocateCell,
   selection,
 }: {
   isUpdatingIssue: boolean;
   onClose: () => void;
   onDefinitionClick?: (relativePath: string) => void;
   onIssueStatusChange: (issue: ValidationIssue) => void;
+  onLocateCell?: () => void;
   selection: EnvironmentKeySelection;
 }) {
   const navigate = useOptionalNavigate();
@@ -274,19 +280,41 @@ function EnvironmentKeyDetailsContent({
                 : ' environment'}
             </p>
           </div>
-          <Button
-            aria-label="Close key details"
-            isIconOnly
-            onPress={onClose}
-            size="sm"
-            variant="ghost"
-          >
-            <IconX
-              aria-hidden="true"
-              size={ICON_SIZE.button}
-              stroke={ICON_STROKE}
-            />
-          </Button>
+          <div className="flex items-center gap-1 shrink-0">
+            {onLocateCell ? (
+              <Tooltip delay={0}>
+                <Button
+                  aria-label="Scroll to cell in matrix"
+                  isIconOnly
+                  onPress={onLocateCell}
+                  size="sm"
+                  variant="ghost"
+                >
+                  <IconFocusCentered
+                    aria-hidden="true"
+                    size={ICON_SIZE.button}
+                    stroke={ICON_STROKE}
+                  />
+                </Button>
+                <Tooltip.Content placement="bottom">
+                  <p>Scroll to cell</p>
+                </Tooltip.Content>
+              </Tooltip>
+            ) : null}
+            <Button
+              aria-label="Close key details"
+              isIconOnly
+              onPress={onClose}
+              size="sm"
+              variant="ghost"
+            >
+              <IconX
+                aria-hidden="true"
+                size={ICON_SIZE.button}
+                stroke={ICON_STROKE}
+              />
+            </Button>
+          </div>
         </header>
 
         <div className="space-y-4 p-4">

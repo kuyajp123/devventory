@@ -5,6 +5,7 @@ import { MemoryRouter } from 'react-router';
 import { renderWithProviders } from '@/test/render';
 import { validationCenterGateway } from '@/features/validation-center/services/validation-center.gateway';
 import { environmentTrackerGateway } from '../services/environment-tracker.gateway';
+import { environmentTrackerViewStore } from '../store/environment-tracker-view.store';
 import { EnvironmentTrackerPage } from './EnvironmentTrackerPage';
 
 const projectId = '30af17bd-2dd6-4b89-a5e7-8517191815a7';
@@ -101,6 +102,7 @@ vi.mock(
 describe('EnvironmentTrackerPage', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    environmentTrackerViewStore.clear();
     vi.mocked(environmentTrackerGateway.list).mockResolvedValue([]);
     vi.mocked(environmentTrackerGateway.listCustomSources).mockResolvedValue(
       [],
@@ -459,6 +461,244 @@ describe('EnvironmentTrackerPage', () => {
     expect(
       await screen.findByRole('dialog', { name: 'Create environment' }),
     ).toBeVisible();
+  });
+
+  it('preserves page, search, and view mode when navigating away and back', async () => {
+    const environment = environmentResponse();
+    vi.mocked(environmentTrackerGateway.list).mockResolvedValue([environment]);
+    vi.mocked(environmentTrackerGateway.matrix).mockResolvedValue({
+      environments: [environment],
+      page: 2,
+      pageSize: 50,
+      rows: [],
+      totalItems: 100,
+      totalPages: 2,
+    });
+
+    // Simulate user being on page 2 with search
+    environmentTrackerViewStore.setPage(projectId, 2);
+    environmentTrackerViewStore.setSearch(projectId, 'SAVED_KEY');
+    environmentTrackerViewStore.setView(projectId, 'compare');
+
+    const { unmount } = renderTracker();
+
+    expect(
+      await screen.findByPlaceholderText('Search key name...'),
+    ).toHaveValue('SAVED_KEY');
+
+    // Verify matrix gateway was called with saved page 2
+    expect(environmentTrackerGateway.matrix).toHaveBeenCalledWith(
+      projectId,
+      expect.objectContaining({ page: 2, search: 'SAVED_KEY' }),
+    );
+
+    // Unmount (simulating navigating to another route)
+    unmount();
+
+    // Remount (simulating navigating back to environment tracker)
+    renderTracker();
+
+    expect(
+      await screen.findByPlaceholderText('Search key name...'),
+    ).toHaveValue('SAVED_KEY');
+  });
+
+  it('restores scroll position when matrix data renders on return', async () => {
+    const environment = environmentResponse();
+    vi.mocked(environmentTrackerGateway.list).mockResolvedValue([environment]);
+    vi.mocked(environmentTrackerGateway.matrix).mockResolvedValue({
+      environments: [environment],
+      page: 1,
+      pageSize: 50,
+      rows: [
+        {
+          cells: [
+            {
+              sourceDetails: [],
+              state: 'present',
+              validation: { ignoredIssues: [], openIssues: [], rules: [] },
+            },
+          ],
+          keyName: 'KEY_1',
+        },
+      ],
+      totalItems: 1,
+      totalPages: 1,
+    });
+
+    environmentTrackerViewStore.setScrollPosition(projectId, {
+      scrollLeft: 150,
+      scrollTop: 300,
+    });
+
+    renderTracker();
+
+    const scrollContainer = await screen.findByTestId(
+      'environment-matrix-scroll',
+    );
+    expect(scrollContainer.scrollTop).toBe(300);
+    expect(scrollContainer.scrollLeft).toBe(150);
+  });
+
+  it('retains scroll position in store even when unmounted', async () => {
+    const environment = environmentResponse();
+    vi.mocked(environmentTrackerGateway.list).mockResolvedValue([environment]);
+    vi.mocked(environmentTrackerGateway.matrix).mockResolvedValue({
+      environments: [environment],
+      page: 1,
+      pageSize: 50,
+      rows: [
+        {
+          cells: [
+            {
+              sourceDetails: [],
+              state: 'present',
+              validation: { ignoredIssues: [], openIssues: [], rules: [] },
+            },
+          ],
+          keyName: 'KEY_1',
+        },
+      ],
+      totalItems: 1,
+      totalPages: 1,
+    });
+
+    environmentTrackerViewStore.setScrollPosition(projectId, {
+      scrollLeft: 100,
+      scrollTop: 250,
+    });
+
+    const { unmount } = renderTracker();
+
+    // Verify element rendered
+    expect(
+      await screen.findByTestId('environment-matrix-scroll'),
+    ).toBeInTheDocument();
+
+    // Unmount page (simulating route transition)
+    unmount();
+
+    // Scroll position in store must NOT have been reset to 0 by unmount
+    expect(
+      environmentTrackerViewStore.getViewState(projectId).scrollPosition,
+    ).toEqual({
+      scrollLeft: 100,
+      scrollTop: 250,
+    });
+  });
+
+  it('preserves opened right side panel selected cell across navigation', async () => {
+    const user = userEvent.setup();
+    const environment = environmentResponse();
+    vi.mocked(environmentTrackerGateway.list).mockResolvedValue([environment]);
+    vi.mocked(environmentTrackerGateway.matrix).mockResolvedValue({
+      environments: [environment],
+      page: 1,
+      pageSize: 50,
+      rows: [
+        {
+          cells: [
+            {
+              sourceDetails: [],
+              state: 'present',
+              validation: { ignoredIssues: [], openIssues: [], rules: [] },
+            },
+          ],
+          keyName: 'KEY_1',
+        },
+      ],
+      totalItems: 1,
+      totalPages: 1,
+    });
+
+    const { unmount } = renderTracker();
+
+    // Find the cell in matrix and click it
+    const cellButton = await screen.findByRole('button', {
+      name: new RegExp(`KEY_1 in ${environment.name}`, 'i'),
+    });
+    await user.click(cellButton);
+
+    // Right panel should now be open
+    expect(
+      await screen.findByRole('button', { name: 'Close key details' }),
+    ).toBeVisible();
+    expect(screen.getAllByText('KEY_1').length).toBeGreaterThanOrEqual(1);
+
+    // Verify cell was persisted in store
+    expect(
+      environmentTrackerViewStore.getViewState(projectId).selectedCell,
+    ).toEqual({
+      environmentId: environment.id,
+      keyName: 'KEY_1',
+      selectedSourcePath: undefined,
+    });
+
+    // Navigate away (unmount)
+    unmount();
+
+    // Navigate back (remount)
+    renderTracker();
+
+    // Right panel should automatically restore open with KEY_1
+    expect(
+      await screen.findByRole('button', { name: 'Close key details' }),
+    ).toBeVisible();
+    expect(screen.getAllByText('KEY_1').length).toBeGreaterThanOrEqual(1);
+  });
+
+  it('scrolls back to the selected cell when the redirect/locate button in the right panel is clicked', async () => {
+    const user = userEvent.setup();
+    const scrollIntoViewMock = vi.fn();
+    window.HTMLElement.prototype.scrollIntoView = scrollIntoViewMock;
+
+    const environment = environmentResponse();
+    vi.mocked(environmentTrackerGateway.list).mockResolvedValue([environment]);
+    vi.mocked(environmentTrackerGateway.matrix).mockResolvedValue({
+      environments: [environment],
+      page: 1,
+      pageSize: 50,
+      rows: [
+        {
+          cells: [
+            {
+              sourceDetails: [],
+              state: 'present',
+              validation: { ignoredIssues: [], openIssues: [], rules: [] },
+            },
+          ],
+          keyName: 'KEY_1',
+        },
+      ],
+      totalItems: 1,
+      totalPages: 1,
+    });
+
+    renderTracker();
+
+    // Click cell to open details panel
+    const cellButton = await screen.findByRole('button', {
+      name: new RegExp(`KEY_1 in ${environment.name}`, 'i'),
+    });
+    await user.click(cellButton);
+
+    expect(
+      await screen.findByRole('button', { name: 'Close key details' }),
+    ).toBeVisible();
+
+    scrollIntoViewMock.mockClear();
+
+    // Click "Scroll to cell in matrix" button in panel header
+    const locateBtn = screen.getByRole('button', {
+      name: 'Scroll to cell in matrix',
+    });
+    await user.click(locateBtn);
+
+    expect(scrollIntoViewMock).toHaveBeenCalledWith({
+      behavior: 'smooth',
+      block: 'center',
+      inline: 'center',
+    });
   });
 });
 

@@ -222,6 +222,26 @@ describe('EnvironmentKeyDetails custom definitions', () => {
       `/credential-vault?source=${SOURCE_ID}&credential=cred-123&project=30af17bd-2dd6-4b89-a5e7-8517191815a7&env=d63f9ad6-0817-4b8b-ad88-ec19881295b8`,
     );
   });
+
+  it('calls onLocateCell when the scroll to cell button in header is clicked', async () => {
+    const user = userEvent.setup();
+    const onLocateCell = vi.fn();
+
+    renderWithProviders(
+      <EnvironmentKeyDetails
+        onClose={vi.fn()}
+        onLocateCell={onLocateCell}
+        selection={selection([])}
+      />,
+    );
+
+    const locateBtn = screen.getByRole('button', {
+      name: /Scroll to cell in matrix/i,
+    });
+    await user.click(locateBtn);
+
+    expect(onLocateCell).toHaveBeenCalledTimes(1);
+  });
 });
 
 const SOURCE_ID = '39f15e31-e7b1-47db-b027-c8707551d1d2';
