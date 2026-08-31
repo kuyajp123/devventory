@@ -72,6 +72,7 @@ import {
   type CredentialSource,
 } from '../models/credential-vault';
 import { credentialVaultGateway } from '../services/credential-vault.gateway';
+import { credentialVaultViewStore } from '../store/credential-vault-view.store';
 
 type DeleteTarget =
   | { kind: 'credential'; value: Credential }
@@ -82,6 +83,11 @@ export function CredentialVaultPage() {
   const navigate = useNavigate();
   const location = useLocation();
   const [searchParams] = useSearchParams();
+
+  const initialVaultView = useMemo(
+    () => credentialVaultViewStore.getViewState(),
+    [],
+  );
 
   const querySourceId =
     searchParams.get('source') ||
@@ -141,10 +147,36 @@ export function CredentialVaultPage() {
   const [search, setSearch] = useState('');
   const [selectedCredentialId, setSelectedCredentialId] = useState<
     string | null
-  >(() => queryCredentialId);
+  >(() => queryCredentialId ?? initialVaultView.selectedCredentialId);
   const [selectedSourceId, setSelectedSourceId] = useState<string | null>(
-    () => querySourceId,
+    () => querySourceId ?? initialVaultView.selectedSourceId,
   );
+  const pendingCenterCredentialIdRef = useRef<string | null>(
+    queryCredentialId ||
+      (location.state as { selectedCredentialId?: string } | null)
+        ?.selectedCredentialId ||
+      null,
+  );
+
+  const vaultScrollContainerRef = useRef<HTMLDivElement>(null);
+  const isMountedRef = useRef(true);
+  const isProgrammaticScrollRef = useRef(false);
+  const hasRestoredVaultScrollRef = useRef(false);
+
+  useEffect(() => {
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    credentialVaultViewStore.setSelectedCredentialId(selectedCredentialId);
+  }, [selectedCredentialId]);
+
+  useEffect(() => {
+    credentialVaultViewStore.setSelectedSourceId(selectedSourceId);
+  }, [selectedSourceId]);
 
   useEffect(() => {
     const targetSource =
@@ -161,6 +193,7 @@ export function CredentialVaultPage() {
         ?.selectedCredentialId;
     if (targetCredential) {
       setSelectedCredentialId(targetCredential);
+      pendingCenterCredentialIdRef.current = targetCredential;
     }
     const targetProject = searchParams.get('project');
     if (targetProject) {
@@ -354,7 +387,12 @@ export function CredentialVaultPage() {
   const activeCredentialRef = useRef<HTMLButtonElement | null>(null);
 
   useEffect(() => {
-    if (!activeCredentialId) return;
+    if (
+      !activeCredentialId ||
+      pendingCenterCredentialIdRef.current !== activeCredentialId
+    ) {
+      return;
+    }
 
     const timeoutId = setTimeout(() => {
       if (typeof activeCredentialRef.current?.scrollIntoView === 'function') {
@@ -363,10 +401,73 @@ export function CredentialVaultPage() {
           block: 'center',
         });
       }
+      pendingCenterCredentialIdRef.current = null;
     }, 50);
 
     return () => clearTimeout(timeoutId);
   }, [activeCredentialId, filteredCredentials.length]);
+
+  useEffect(() => {
+    if (hasRestoredVaultScrollRef.current || !filteredCredentials.length) {
+      return;
+    }
+
+    const initialPos = credentialVaultViewStore.getViewState().scrollPosition;
+    if (
+      !initialPos ||
+      (initialPos.scrollTop === 0 && initialPos.scrollLeft === 0)
+    ) {
+      hasRestoredVaultScrollRef.current = true;
+      return;
+    }
+
+    if (pendingCenterCredentialIdRef.current) {
+      hasRestoredVaultScrollRef.current = true;
+      return;
+    }
+
+    let rafId: number;
+
+    const restore = (attemptsLeft = 5) => {
+      const container = vaultScrollContainerRef.current;
+      if (!container || !isMountedRef.current) return;
+
+      if (pendingCenterCredentialIdRef.current) {
+        hasRestoredVaultScrollRef.current = true;
+        return;
+      }
+
+      isProgrammaticScrollRef.current = true;
+      container.scrollTop = initialPos.scrollTop;
+      container.scrollLeft = initialPos.scrollLeft;
+
+      const needsVertical = initialPos.scrollTop > 0;
+      const canScrollVertical = container.scrollHeight > container.clientHeight;
+
+      if (
+        needsVertical &&
+        !canScrollVertical &&
+        container.scrollHeight > 0 &&
+        attemptsLeft > 0
+      ) {
+        rafId = requestAnimationFrame(() => restore(attemptsLeft - 1));
+        return;
+      }
+
+      rafId = requestAnimationFrame(() => {
+        isProgrammaticScrollRef.current = false;
+        hasRestoredVaultScrollRef.current = true;
+      });
+    };
+
+    restore();
+    const timeoutId = setTimeout(() => restore(3), 50);
+
+    return () => {
+      cancelAnimationFrame(rafId);
+      clearTimeout(timeoutId);
+    };
+  }, [filteredCredentials.length]);
 
   const selectedCredential =
     credentialItems.find((item) => item.id === activeCredentialId) ?? null;
@@ -878,7 +979,32 @@ export function CredentialVaultPage() {
                 <span>Updated</span>
                 <span>Value</span>
               </div>
-              <div className="min-h-0 flex-1 overflow-y-auto">
+              <div
+                ref={vaultScrollContainerRef}
+                className="min-h-0 flex-1 overflow-y-auto"
+                data-testid="credential-vault-list-scroll"
+                onScroll={(event) => {
+                  if (
+                    !isMountedRef.current ||
+                    isProgrammaticScrollRef.current
+                  ) {
+                    return;
+                  }
+                  const target = event.currentTarget;
+                  if (
+                    target.scrollHeight <= target.clientHeight &&
+                    target.scrollWidth <= target.clientWidth &&
+                    target.scrollTop === 0 &&
+                    target.scrollLeft === 0
+                  ) {
+                    return;
+                  }
+                  credentialVaultViewStore.setScrollPosition({
+                    scrollLeft: target.scrollLeft,
+                    scrollTop: target.scrollTop,
+                  });
+                }}
+              >
                 {filteredCredentials.map((credential) => (
                   <button
                     ref={(node) => {

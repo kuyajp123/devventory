@@ -13,6 +13,11 @@ export {
   credentialKeySchema,
   PREDEFINED_CREDENTIAL_SOURCES,
 } from './models/credential-vault';
+export { credentialVaultViewStore } from './store/credential-vault-view.store';
+export type {
+  CredentialVaultScrollPosition,
+  CredentialVaultViewState,
+} from './store/credential-vault-view.store';
 export type {
   Credential,
   CredentialDraft,

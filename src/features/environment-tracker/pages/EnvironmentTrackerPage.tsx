@@ -66,6 +66,10 @@ import type {
   EnvironmentFormValues,
   EnvironmentInspectableSource,
 } from '../models/environment';
+import {
+  environmentTrackerViewStore,
+  type EnvironmentTrackerScrollPosition,
+} from '../store/environment-tracker-view.store';
 
 const MATRIX_PAGE_SIZE = 50;
 type TrackerView = 'compare' | 'inspect';
@@ -79,15 +83,24 @@ export function EnvironmentTrackerPage() {
     activeProjectId: projectId,
     isHydrating,
   } = useActiveProject();
+
+  const initialViewState = useMemo(
+    () => environmentTrackerViewStore.getViewState(projectId),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [],
+  );
+
   const [searchParams, setSearchParams] = useSearchParams();
   const currentSearchParam = searchParams.get('search');
   const [prevSearchParam, setPrevSearchParam] = useState(currentSearchParam);
-  const [search, setSearch] = useState(currentSearchParam ?? '');
-  const [page, setPage] = useState(1);
-  const [view, setView] = useState<TrackerView>('compare');
+  const [search, setSearch] = useState(
+    () => currentSearchParam ?? initialViewState.search,
+  );
+  const [page, setPage] = useState(() => initialViewState.page);
+  const [view, setView] = useState<TrackerView>(() => initialViewState.view);
   const [selectedEnvironmentId, setSelectedEnvironmentId] = useState<
     string | null
-  >(null);
+  >(() => initialViewState.selectedEnvironmentId);
   const [selectionStore] = useState(createEnvironmentMatrixSelectionStore);
   const locationState = location.state as {
     highlightCell?: { keyName: string; environmentId?: string };
@@ -102,6 +115,19 @@ export function EnvironmentTrackerPage() {
   );
   const [sourceEnvironment, setSourceEnvironment] =
     useState<Environment | null>(null);
+
+  const handleScroll = useCallback(
+    (position: EnvironmentTrackerScrollPosition) => {
+      environmentTrackerViewStore.setScrollPosition(projectId, position);
+    },
+    [projectId],
+  );
+
+  const initialScrollPosition = useMemo(
+    () => environmentTrackerViewStore.getViewState(projectId).scrollPosition,
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [projectId, view],
+  );
 
   const targetHighlightKey =
     locationState?.highlightCell?.keyName ??
@@ -247,17 +273,38 @@ export function EnvironmentTrackerPage() {
   const refreshEnvironment = useRefreshEnvironmentMutation(projectId ?? '');
   const refreshProject = useRefreshProjectEnvironmentsMutation(projectId ?? '');
 
+  const isSwitchingProjectRef = useRef(false);
+
+  useEffect(() => {
+    return selectionStore.subscribe(() => {
+      if (isSwitchingProjectRef.current) return;
+      const current = selectionStore.getSelection();
+      if (current) {
+        environmentTrackerViewStore.setSelectedCell(projectId, {
+          environmentId: current.environment.id,
+          keyName: current.keyName,
+          selectedSourcePath: current.selectedSourcePath,
+        });
+      } else {
+        environmentTrackerViewStore.setSelectedCell(projectId, null);
+      }
+    });
+  }, [projectId, selectionStore]);
+
   useEffect(() => {
     if (previousProjectId.current === projectId) return;
     previousProjectId.current = projectId;
+    isSwitchingProjectRef.current = true;
+    const projectState = environmentTrackerViewStore.getViewState(projectId);
     setEditing(null);
     setSourceEnvironment(null);
     selectionStore.setSelection(null);
-    setSelectedEnvironmentId(null);
-    setView('compare');
-    setPage(1);
-    setSearch('');
+    setSelectedEnvironmentId(projectState.selectedEnvironmentId);
+    setView(projectState.view);
+    setPage(projectState.page);
+    setSearch(projectState.search);
     pendingCellHighlightRef.current = null;
+    isSwitchingProjectRef.current = false;
   }, [projectId, selectionStore]);
 
   async function saveEnvironment(values: EnvironmentFormValues) {
@@ -308,6 +355,12 @@ export function EnvironmentTrackerPage() {
     setView(nextView);
     selectionStore.setSelection(null);
     setPage(1);
+    environmentTrackerViewStore.setView(projectId, nextView);
+    environmentTrackerViewStore.setPage(projectId, 1);
+    environmentTrackerViewStore.setScrollPosition(projectId, {
+      scrollLeft: 0,
+      scrollTop: 0,
+    });
   }
 
   const isSaving = createEnvironment.isPending;
@@ -367,6 +420,43 @@ export function EnvironmentTrackerPage() {
     },
     [selectionStore, view, inspectSources],
   );
+
+  const handleLocateCell = useCallback(() => {
+    const selection = selectionStore.getSelection();
+    if (!selection) return;
+
+    const container = matrixContainerRef.current;
+    if (!container) return;
+
+    let cellId: string | null = null;
+    if (view === 'inspect') {
+      const targetSourceId =
+        selection.selectedSource?.id ??
+        selection.selectedSourcePath ??
+        inspectSources[0]?.id;
+      if (targetSourceId) {
+        cellId = `${selection.keyName}:${targetSourceId}`;
+      }
+    } else {
+      cellId = `${selection.keyName}:${selection.environment.id}`;
+    }
+
+    if (!cellId) return;
+
+    const cell = container.querySelector(
+      `[data-cell-id="${CSS.escape(cellId)}"]`,
+    );
+    if (cell && typeof cell.scrollIntoView === 'function') {
+      cell.scrollIntoView({
+        behavior: 'smooth',
+        block: 'center',
+        inline: 'center',
+      });
+      if (typeof (cell as HTMLElement).focus === 'function') {
+        (cell as HTMLElement).focus({ preventScroll: true });
+      }
+    }
+  }, [selectionStore, view, inspectSources]);
 
   const activeMatrix = view === 'compare' ? compareMatrix : inspectMatrix;
   const matrixData =
@@ -442,6 +532,44 @@ export function EnvironmentTrackerPage() {
       });
     }
   }, [matrixData, activeTab, selectionStore]);
+
+  useEffect(() => {
+    if (
+      activeTab !== 'environments' ||
+      pendingCellHighlightRef.current ||
+      selectionStore.getSelection() !== null ||
+      !matrixData
+    ) {
+      return;
+    }
+
+    const savedCell =
+      environmentTrackerViewStore.getViewState(projectId).selectedCell;
+    if (!savedCell) return;
+
+    const row = matrixData.rows.find((r) => r.keyName === savedCell.keyName);
+    if (!row) return;
+
+    const envIndex = matrixData.environments.findIndex(
+      (env) => env.id === savedCell.environmentId,
+    );
+    if (envIndex === -1) return;
+
+    const matchingEnv = matrixData.environments[envIndex];
+    const cell = row.cells[envIndex];
+    if (matchingEnv && cell) {
+      selectionStore.setSelection({
+        environment: matchingEnv,
+        keyName: row.keyName,
+        selectedSource: savedCell.selectedSourcePath
+          ? inspectSources.find((s) => s.id === savedCell.selectedSourcePath)
+          : undefined,
+        selectedSourcePath: savedCell.selectedSourcePath,
+        sourceDetails: cell.sourceDetails,
+        validation: cell.validation,
+      });
+    }
+  }, [matrixData, activeTab, projectId, selectionStore, inspectSources]);
 
   useEffect(() => {
     if (!matrixData || activeTab !== 'environments') return;
@@ -601,6 +729,12 @@ export function EnvironmentTrackerPage() {
                   setSearch(value);
                   selectionStore.setSelection(null);
                   setPage(1);
+                  environmentTrackerViewStore.setSearch(projectId, value);
+                  environmentTrackerViewStore.setPage(projectId, 1);
+                  environmentTrackerViewStore.setScrollPosition(projectId, {
+                    scrollLeft: 0,
+                    scrollTop: 0,
+                  });
                 }}
                 value={search}
                 variant="secondary"
@@ -655,9 +789,19 @@ export function EnvironmentTrackerPage() {
                     className="w-44"
                     onChange={(value: Key | null) => {
                       if (value === null) return;
-                      setSelectedEnvironmentId(String(value));
+                      const envId = String(value);
+                      setSelectedEnvironmentId(envId);
                       selectionStore.setSelection(null);
                       setPage(1);
+                      environmentTrackerViewStore.setSelectedEnvironmentId(
+                        projectId,
+                        envId,
+                      );
+                      environmentTrackerViewStore.setPage(projectId, 1);
+                      environmentTrackerViewStore.setScrollPosition(projectId, {
+                        scrollLeft: 0,
+                        scrollTop: 0,
+                      });
                     }}
                     value={selectedEnvironment.id}
                     variant="secondary"
@@ -790,6 +934,7 @@ export function EnvironmentTrackerPage() {
                 >
                   {view === 'compare' ? (
                     <EnvironmentMatrix
+                      initialScrollPosition={initialScrollPosition}
                       isRefreshingId={
                         refreshEnvironment.isPending
                           ? refreshEnvironment.variables
@@ -800,13 +945,16 @@ export function EnvironmentTrackerPage() {
                       onManageSources={setSourceEnvironment}
                       onRefresh={refreshOne}
                       onReorder={reorderEnvironments}
+                      onScroll={handleScroll}
                       onSelect={selectionStore.setSelection}
                       selectionStore={selectionStore}
                     />
                   ) : selectedEnvironment && selectedSources.data ? (
                     <InspectEnvironmentMatrix
                       environment={selectedEnvironment}
+                      initialScrollPosition={initialScrollPosition}
                       matrix={matrixData}
+                      onScroll={handleScroll}
                       onSelect={selectionStore.setSelection}
                       selectionStore={selectionStore}
                       sources={inspectSources}
@@ -836,6 +984,7 @@ export function EnvironmentTrackerPage() {
                   onIssueStatusChange={(issue) =>
                     void validation.changeIssueStatus(issue)
                   }
+                  onLocateCell={handleLocateCell}
                   selectionStore={selectionStore}
                 />
               </>
@@ -849,6 +998,11 @@ export function EnvironmentTrackerPage() {
                 ariaLabel="Environment matrix pages"
                 onPageChange={(nextPage) => {
                   setPage(nextPage);
+                  environmentTrackerViewStore.setPage(projectId, nextPage);
+                  environmentTrackerViewStore.setScrollPosition(projectId, {
+                    scrollLeft: 0,
+                    scrollTop: 0,
+                  });
                   selectionStore.setSelection(null);
                 }}
                 page={matrixData.page}
@@ -988,11 +1142,13 @@ function EnvironmentKeyDetailsPanel({
   isUpdatingIssue,
   onDefinitionClick,
   onIssueStatusChange,
+  onLocateCell,
   selectionStore,
 }: {
   isUpdatingIssue: boolean;
   onDefinitionClick: (relativePath: string) => void;
   onIssueStatusChange: (issue: ValidationIssue) => void;
+  onLocateCell?: () => void;
   selectionStore: EnvironmentMatrixSelectionStore;
 }) {
   const selection = useEnvironmentMatrixSelectionStore(selectionStore);
@@ -1006,6 +1162,7 @@ function EnvironmentKeyDetailsPanel({
         onClose={() => selectionStore.setSelection(null)}
         onDefinitionClick={onDefinitionClick}
         onIssueStatusChange={onIssueStatusChange}
+        onLocateCell={onLocateCell}
         selection={selection}
       />
     </div>

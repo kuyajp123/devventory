@@ -5,7 +5,7 @@ import {
   IconFileCode,
   IconTableOff,
 } from '@tabler/icons-react';
-import { memo, useMemo } from 'react';
+import { memo, useCallback, useEffect, useMemo, useRef } from 'react';
 import { SemanticStatusChip } from '@/shared/ui';
 import {
   sourceStatusLabel,
@@ -15,6 +15,7 @@ import {
   type EnvironmentMatrixSourceDetail,
   type EnvironmentInspectableSource,
 } from '../models/environment';
+import type { EnvironmentTrackerScrollPosition } from '../store/environment-tracker-view.store';
 import type { EnvironmentKeySelection } from './EnvironmentKeyDetails';
 import { CopyableKeyName } from './CopyableKeyName';
 import {
@@ -36,17 +37,119 @@ import {
 
 export function InspectEnvironmentMatrix({
   environment,
+  initialScrollPosition,
   matrix,
+  onScroll,
   onSelect,
   selectionStore,
   sources,
 }: {
   environment: Environment;
+  initialScrollPosition?: EnvironmentTrackerScrollPosition;
   matrix: EnvironmentMatrixPage;
+  onScroll?: (position: EnvironmentTrackerScrollPosition) => void;
   onSelect: (selection: EnvironmentKeySelection) => void;
   selectionStore: EnvironmentMatrixSelectionStore;
   sources: EnvironmentInspectableSource[];
 }) {
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
+  const isProgrammaticScrollRef = useRef(false);
+  const hasRestoredScrollRef = useRef(false);
+  const isMountedRef = useRef(true);
+  const prevPageRef = useRef(matrix.page);
+
+  useEffect(() => {
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (prevPageRef.current !== matrix.page) {
+      prevPageRef.current = matrix.page;
+      hasRestoredScrollRef.current = true;
+      const container = scrollContainerRef.current;
+      if (container) {
+        isProgrammaticScrollRef.current = true;
+        container.scrollTop = 0;
+        container.scrollLeft = 0;
+        requestAnimationFrame(() => {
+          isProgrammaticScrollRef.current = false;
+        });
+      }
+    }
+  }, [matrix.page]);
+
+  useEffect(() => {
+    if (
+      !initialScrollPosition ||
+      hasRestoredScrollRef.current ||
+      !matrix.rows.length
+    ) {
+      return;
+    }
+
+    let rafId: number;
+
+    const restore = (attemptsLeft = 5) => {
+      const container = scrollContainerRef.current;
+      if (!container || !isMountedRef.current) return;
+
+      isProgrammaticScrollRef.current = true;
+      container.scrollTop = initialScrollPosition.scrollTop;
+      container.scrollLeft = initialScrollPosition.scrollLeft;
+
+      const needsVertical = initialScrollPosition.scrollTop > 0;
+      const canScrollVertical = container.scrollHeight > container.clientHeight;
+
+      if (
+        needsVertical &&
+        !canScrollVertical &&
+        container.scrollHeight > 0 &&
+        attemptsLeft > 0
+      ) {
+        rafId = requestAnimationFrame(() => restore(attemptsLeft - 1));
+        return;
+      }
+
+      rafId = requestAnimationFrame(() => {
+        isProgrammaticScrollRef.current = false;
+        hasRestoredScrollRef.current = true;
+      });
+    };
+
+    restore();
+    const timeoutId = setTimeout(() => restore(3), 50);
+
+    return () => {
+      cancelAnimationFrame(rafId);
+      clearTimeout(timeoutId);
+    };
+  }, [initialScrollPosition, matrix.rows.length]);
+
+  const handleScroll = useCallback(
+    (event: React.UIEvent<HTMLDivElement>) => {
+      if (!isMountedRef.current || isProgrammaticScrollRef.current) {
+        return;
+      }
+      const target = event.currentTarget;
+      if (
+        target.scrollHeight <= target.clientHeight &&
+        target.scrollWidth <= target.clientWidth &&
+        target.scrollTop === 0 &&
+        target.scrollLeft === 0
+      ) {
+        return;
+      }
+      onScroll?.({
+        scrollLeft: target.scrollLeft,
+        scrollTop: target.scrollTop,
+      });
+    },
+    [onScroll],
+  );
+
   const environmentIndex = useMemo(
     () => matrix.environments.findIndex((item) => item.id === environment.id),
     [environment.id, matrix.environments],
@@ -114,8 +217,10 @@ export function InspectEnvironmentMatrix({
         <EnvironmentMatrixSelectionProvider store={selectionStore}>
           <Table className="min-h-0 flex-1" variant="secondary">
             <Table.ScrollContainer
+              ref={scrollContainerRef}
               className="h-full min-h-0 overflow-auto overscroll-contain"
               data-testid="inspect-environment-matrix-scroll"
+              onScroll={handleScroll}
             >
               <Table.Content
                 aria-label={`${environment.name} source-file key matrix`}
