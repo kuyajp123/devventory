@@ -7,3 +7,5 @@ export {
 } from './models/file-inventory';
 export type { FileCategory } from './models/file-inventory';
 export { FileInventoryPage } from './pages/FileInventoryPage';
+export { MarkdownViewer } from './components/MarkdownViewer';
+export type { MarkdownViewerProps } from './components/MarkdownViewer';

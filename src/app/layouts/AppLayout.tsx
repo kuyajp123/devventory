@@ -138,6 +138,7 @@ export function AppLayout() {
         (item.to !== '/dashboard' && location.pathname.startsWith(item.to)),
     )?.label ?? 'Workbench';
   const isFixedWorkspaceRoute =
+    location.pathname.startsWith('/files') ||
     location.pathname.startsWith('/environments') ||
     location.pathname.startsWith('/credential-vault') ||
     location.pathname === '/search';

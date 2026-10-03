@@ -291,6 +291,23 @@ impl From<ProjectDirectoryPage> for ProjectDirectoryPageDto {
     }
 }
 
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub(crate) struct ReadProjectFileInput {
+    pub(crate) project_id: String,
+    pub(crate) file_id: String,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct ProjectFileContentDto {
+    pub(crate) file_id: String,
+    pub(crate) relative_path: String,
+    pub(crate) content: String,
+    pub(crate) size_bytes: u64,
+    pub(crate) modified_at_ms: Option<i64>,
+}
+
 #[cfg(test)]
 mod tests {
     use super::{FileInventoryQueryInput, ListProjectDirectoryInput};

@@ -2,6 +2,7 @@ import { invokeCommand } from '@/shared/infrastructure/tauri/invoke-client';
 import {
   inventoryPageSchema,
   projectDirectoryPageSchema,
+  projectFileContentSchema,
   scanRunSchema,
   type InventoryFilters,
 } from '../models/file-inventory';
@@ -39,5 +40,12 @@ export const fileInventoryGateway = {
       input: { page, pageSize, projectId, relativePath },
     });
     return projectDirectoryPageSchema.parse(response);
+  },
+
+  async readProjectFileContent(projectId: string, fileId: string) {
+    const response = await invokeCommand<unknown>('read_project_file_content', {
+      input: { fileId, projectId },
+    });
+    return projectFileContentSchema.parse(response);
   },
 };

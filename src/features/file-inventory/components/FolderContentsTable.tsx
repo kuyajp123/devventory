@@ -1,6 +1,7 @@
-import { EmptyState, Spinner, Table } from '@heroui/react';
+import { Button, EmptyState, Spinner, Table, Tooltip } from '@heroui/react';
 import {
   IconCode,
+  IconEye,
   IconFile,
   IconFileOff,
   IconFileText,
@@ -45,6 +46,8 @@ interface FolderContentsTableProps {
   onSelectFile: (file: IndexedFile) => void;
   /** Currently selected file ID */
   selectedFileId: string | undefined;
+  /** Callback to preview a markdown file */
+  onPreviewMarkdown?: (file: IndexedFile) => void;
 }
 
 export function FolderContentsTable({
@@ -59,6 +62,7 @@ export function FolderContentsTable({
   onNavigateFolder,
   onSelectFile,
   selectedFileId,
+  onPreviewMarkdown,
 }: FolderContentsTableProps) {
   const isEmpty = subfolders.length === 0 && files.length === 0 && !isLoading;
 
@@ -76,7 +80,7 @@ export function FolderContentsTable({
 
   if (isEmpty) {
     return (
-      <EmptyState className="p-8 text-center">
+      <EmptyState className="p-8 text-center flex-1 flex flex-col items-center justify-center">
         <IconFileOff
           aria-hidden="true"
           className="mx-auto text-muted"
@@ -96,14 +100,17 @@ export function FolderContentsTable({
   }
 
   return (
-    <div className="relative">
+    <div className="relative flex flex-1 flex-col min-h-0 min-w-0 h-full">
       {isFetching && (
-        <div className="absolute right-2 top-2 z-10">
+        <div className="absolute right-2 top-2 z-20">
           <Spinner aria-label="Refreshing" size="sm" />
         </div>
       )}
-      <Table variant="secondary">
-        <Table.ScrollContainer>
+      <Table
+        className="flex flex-1 flex-col min-h-0 min-w-0"
+        variant="secondary"
+      >
+        <Table.ScrollContainer className="flex-1 min-h-0 min-w-0 overflow-auto">
           <Table.Content
             aria-label="Folder contents"
             onSortChange={(descriptor) => {
@@ -116,7 +123,7 @@ export function FolderContentsTable({
             }}
             sortDescriptor={{ column: sortBy, direction: sortDirection }}
           >
-            <Table.Header>
+            <Table.Header className="sticky top-0 z-10 bg-surface">
               <SortableColumn id="relativePath" isRowHeader label="Name" />
               <SortableColumn id="category" label="Category" />
               <SortableColumn id="sizeBytes" label="Size" />
@@ -169,11 +176,38 @@ export function FolderContentsTable({
                   onAction={() => onSelectFile(file)}
                 >
                   <Table.Cell className="max-w-md">
-                    <div className="flex items-center gap-2">
-                      <span className="shrink-0 text-muted">
-                        <FileIcon category={file.category} />
-                      </span>
-                      <span className="truncate font-medium">{file.name}</span>
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <span className="shrink-0 text-muted">
+                          <FileIcon category={file.category} />
+                        </span>
+                        <span className="truncate font-medium">
+                          {file.name}
+                        </span>
+                      </div>
+                      {onPreviewMarkdown &&
+                        (file.extension?.toLowerCase() === 'md' ||
+                          file.name.toLowerCase().endsWith('.md')) && (
+                          <Tooltip delay={0}>
+                            <Button
+                              aria-label={`Preview markdown for ${file.name}`}
+                              className="shrink-0 text-muted hover:text-accent"
+                              isIconOnly
+                              onPress={() => onPreviewMarkdown(file)}
+                              size="sm"
+                              variant="ghost"
+                            >
+                              <IconEye
+                                aria-hidden="true"
+                                size={ICON_SIZE.button}
+                                stroke={ICON_STROKE}
+                              />
+                            </Button>
+                            <Tooltip.Content placement="top">
+                              <p>Preview Markdown</p>
+                            </Tooltip.Content>
+                          </Tooltip>
+                        )}
                     </div>
                   </Table.Cell>
                   <Table.Cell className="capitalize">

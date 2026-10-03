@@ -19,6 +19,8 @@ export const fileInventoryKeys = {
     ['file-inventory', projectId, 'list', filters] as const,
   directory: (projectId: string, relativePath: string) =>
     ['file-inventory', projectId, 'directory', relativePath] as const,
+  fileContent: (projectId: string, fileId: string) =>
+    ['project-file-content', projectId, fileId] as const,
 };
 
 export function useFileInventoryQuery(
@@ -30,6 +32,7 @@ export function useFileInventoryQuery(
     enabled: enabled && Boolean(projectId),
     queryKey: fileInventoryKeys.list(projectId, filters),
     queryFn: () => fileInventoryGateway.list(projectId, filters),
+    staleTime: 30_000,
   });
 }
 
@@ -85,5 +88,20 @@ export function useRescanWatchedLocationMutation(projectId: string) {
       });
       await invalidateDerivedProjectQueries(queryClient, projectId);
     },
+  });
+}
+
+export function useProjectFileContentQuery(
+  projectId: string,
+  fileId: string | null | undefined,
+  enabled = true,
+) {
+  return useQuery({
+    enabled: enabled && Boolean(projectId) && Boolean(fileId),
+    queryKey: fileInventoryKeys.fileContent(projectId, fileId ?? ''),
+    queryFn: () =>
+      fileInventoryGateway.readProjectFileContent(projectId, fileId!),
+    staleTime: 5 * 60_000,
+    gcTime: 10 * 60_000,
   });
 }

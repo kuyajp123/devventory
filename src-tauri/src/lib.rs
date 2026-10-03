@@ -32,7 +32,12 @@ use features::environment_tracker::commands::{
     unlink_custom_environment_source, update_environment,
 };
 use features::file_inventory::commands::{
-    list_project_directory, list_project_files, rescan_project, rescan_watched_location,
+    list_project_directory, list_project_files, read_project_file_content, rescan_project,
+    rescan_watched_location,
+};
+use features::markdown_reader::commands::get_markdown_reader_document;
+use features::markdown_reader::{
+    markdown_path_from_args, open_markdown_reader, MarkdownReaderState,
 };
 use features::projects::commands::{
     create_project, delete_project, get_project, list_projects, scan_project_root,
@@ -73,12 +78,17 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_process::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
-        .plugin(tauri_plugin_single_instance::init(|app, argv, _cwd| {
+        .plugin(tauri_plugin_single_instance::init(|app, argv, cwd| {
             let is_autostart = argv.iter().any(|arg| arg == "--autostart");
-            if !is_autostart {
-                let _ = show_main_exclusive(app);
-            } else {
+            if is_autostart {
                 tracing::info!("Secondary autostart launch ignored while instance running");
+                return;
+            }
+
+            if let Some(path) = markdown_path_from_args(&argv, std::path::Path::new(&cwd)) {
+                open_markdown_reader(app, path);
+            } else {
+                let _ = show_main_exclusive(app);
             }
         }))
         .plugin(tauri_plugin_opener::init())
@@ -129,6 +139,7 @@ pub fn run() {
             ))?;
             app.manage(state);
             app.manage(QuickAccessState::new());
+            app.manage(MarkdownReaderState::new());
 
             let quick_panel_builder = tauri::WebviewWindowBuilder::new(
                 app,
@@ -260,7 +271,12 @@ pub fn run() {
             )?;
             app_state.start_agent_reminder_runtime(app_handle.clone());
 
-            if !is_autostart_launch {
+            let current_dir = std::env::current_dir().unwrap_or_default();
+            let markdown_launch_path = markdown_path_from_args(std::env::args(), &current_dir);
+
+            if let Some(path) = markdown_launch_path {
+                open_markdown_reader(&app_handle, path);
+            } else if !is_autostart_launch {
                 let _ = app::lifecycle::activate_main_window(&app_handle);
             } else if !is_tray_available {
                 tracing::warn!("Autostart launch without usable tray icon; falling back to showing main window");
@@ -320,6 +336,7 @@ pub fn run() {
             save_background_startup_preferences,
             list_project_directory,
             list_project_files,
+            read_project_file_content,
             rescan_project,
             rescan_watched_location,
             list_assets,
@@ -365,7 +382,8 @@ pub fn run() {
             set_quick_access_mode_command,
             get_agent_reminder_unread_state,
             acknowledge_agent_unread_reminders,
-            open_agent_unread_from_quick_access
+            open_agent_unread_from_quick_access,
+            get_markdown_reader_document
         ])
         .run(tauri::generate_context!())
         .expect("error while running Devventory");

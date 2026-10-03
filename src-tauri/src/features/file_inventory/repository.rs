@@ -40,6 +40,11 @@ pub(super) trait FileInventoryRepository: Send + Sync {
         error_summary: &'static str,
     ) -> Result<ScanRun, FileInventoryError>;
     async fn query(&self, query: &InventoryQuery) -> Result<InventoryPage, FileInventoryError>;
+    async fn get_file_by_id(
+        &self,
+        project_id: Uuid,
+        file_id: Uuid,
+    ) -> Result<Option<IndexedFile>, FileInventoryError>;
 }
 
 #[derive(Debug, Clone)]
@@ -353,6 +358,24 @@ impl FileInventoryRepository for SqliteFileInventoryRepository {
             recent_scans: self.recent_scans(query.project_id).await?,
             watched_locations: Vec::new(),
         })
+    }
+
+    async fn get_file_by_id(
+        &self,
+        project_id: Uuid,
+        file_id: Uuid,
+    ) -> Result<Option<IndexedFile>, FileInventoryError> {
+        let row = sqlx::query_as::<_, IndexedFileRow>(
+            "SELECT id, project_id, watched_location_id, relative_path, name, extension, mime_type, \
+             size_bytes, modified_at_ms, category, source_type, status, first_seen_at, last_seen_at, updated_at \
+             FROM indexed_files WHERE project_id = ? AND id = ?",
+        )
+        .bind(project_id.to_string())
+        .bind(file_id.to_string())
+        .fetch_optional(&self.pool)
+        .await?;
+
+        row.map(TryInto::try_into).transpose()
     }
 }
 

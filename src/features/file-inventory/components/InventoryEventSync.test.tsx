@@ -59,4 +59,39 @@ describe('InventoryEventSync', () => {
     act(() => listener({ event: 'inventory://changed', id: 1, payload: {} }));
     expect(invalidate).not.toHaveBeenCalled();
   });
+
+  it('does not invalidate open file content queries on inventory change', async () => {
+    const queryClient = new QueryClient();
+    const projectId = '30af17bd-2dd6-4b89-a5e7-8517191815a7';
+    queryClient.setQueryData(['project-file-content', projectId, 'file-1'], {
+      content: 'hello',
+    });
+    const query = queryClient
+      .getQueryCache()
+      .find({ queryKey: ['project-file-content', projectId, 'file-1'] });
+
+    render(
+      <QueryClientProvider client={queryClient}>
+        <InventoryEventSync />
+      </QueryClientProvider>,
+    );
+    await waitFor(() => expect(eventMocks.listen).toHaveBeenCalledOnce());
+    const listener = eventMocks.listen.mock.calls[0][1] as (
+      event: Event<unknown>,
+    ) => void;
+
+    act(() => {
+      listener({
+        event: 'inventory://changed',
+        id: 1,
+        payload: {
+          projectId,
+          scanId: 'f5443f4c-f04c-4ccf-850b-fbe53d24fcba',
+          status: 'completed',
+        },
+      });
+    });
+
+    expect(query?.isStale()).toBe(false);
+  });
 });

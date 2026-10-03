@@ -1,6 +1,6 @@
 use thiserror::Error;
 
-use crate::features::projects::{ProjectDirectoryError, ProjectError};
+use crate::features::projects::{ProjectDirectoryError, ProjectError, ProjectFileError};
 use crate::shared::errors::command::CommandError;
 
 #[derive(Debug, Error)]
@@ -11,6 +11,12 @@ pub(crate) enum FileInventoryError {
     Directory(#[from] ProjectDirectoryError),
     #[error("project directory contains too many entries")]
     DirectoryTooLarge,
+    #[error("project file operation failed")]
+    File(#[from] ProjectFileError),
+    #[error("requested file was not found")]
+    FileNotFound,
+    #[error("file size exceeds preview limit")]
+    FileTooLarge,
     #[error("filesystem operation failed")]
     Filesystem(#[from] std::io::Error),
     #[error("inventory filter is invalid")]
@@ -36,6 +42,31 @@ impl From<FileInventoryError> for CommandError {
             FileInventoryError::WatchedLocationNotFound => {
                 Self::not_found("The requested watched location could not be found.")
             }
+            FileInventoryError::FileNotFound => {
+                Self::not_found("The requested file could not be found.")
+            }
+            FileInventoryError::FileTooLarge => {
+                Self::invalid_input("The file is too large to preview safely (limit: 2 MB).")
+            }
+            FileInventoryError::File(error) => match error {
+                ProjectFileError::InvalidRelativePath | ProjectFileError::InvalidPathEncoding => {
+                    Self::invalid_input("The project-relative file path is invalid.")
+                }
+                ProjectFileError::LinkNotAllowed => {
+                    Self::invalid_input("Linked files are not available for preview.")
+                }
+                ProjectFileError::NotFound | ProjectFileError::ProjectNotFound => {
+                    Self::not_found("The requested project file could not be found.")
+                }
+                ProjectFileError::NotRegularFile => {
+                    Self::invalid_input("The requested path is not a regular file.")
+                }
+                ProjectFileError::RootUnavailable | ProjectFileError::Unreadable => {
+                    Self::filesystem_unavailable(
+                        "The requested file cannot be read. Check its permissions.",
+                    )
+                }
+            },
             FileInventoryError::Directory(error) => match error {
                 ProjectDirectoryError::InvalidRelativePath
                 | ProjectDirectoryError::InvalidPathEncoding => {

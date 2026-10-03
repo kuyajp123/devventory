@@ -70,6 +70,7 @@ vi.mock('../services/file-inventory.gateway', () => ({
   fileInventoryGateway: {
     list: vi.fn(),
     listDirectory: vi.fn(),
+    readProjectFileContent: vi.fn(),
     rescanProject: vi.fn(),
     rescanWatchedLocation: vi.fn(),
   },

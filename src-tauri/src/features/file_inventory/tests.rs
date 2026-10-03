@@ -358,6 +358,69 @@ async fn live_directory_pages_are_secure_bounded_and_apply_all_exclusions() {
     initialization.database.close().await;
 }
 
+#[tokio::test]
+async fn reads_project_file_content_and_enforces_limits() {
+    let workspace = tempdir().expect("temporary workspace");
+    let root = workspace.path().join("project");
+    fs::create_dir_all(&root).expect("project directory");
+    fs::write(root.join("README.md"), "# Devventory Documentation").expect("markdown file");
+
+    let initialization = initialize_database(&DatabasePaths::new(workspace.path().join("data")))
+        .await
+        .expect("database initialization");
+    let project_service = ProjectService::new(
+        SqliteProjectRepository::new(initialization.database.pool().clone()),
+        LocalProjectFilesystem,
+    );
+    let project = project_service
+        .create(CreateProject {
+            name: "Devventory".to_owned(),
+            description: None,
+            project_type: ProjectType::Desktop,
+            root_path: root.to_string_lossy().into_owned(),
+            watched_locations: vec![".".to_owned()],
+            exclusions: Vec::new(),
+        })
+        .await
+        .expect("project creation");
+    let repository = SqliteFileInventoryRepository::new(initialization.database.pool().clone());
+    let inventory = FileInventoryService::new(repository.clone(), project_service);
+
+    inventory
+        .reconcile_project(project.id(), ScanType::Initial)
+        .await
+        .expect("initial scan");
+
+    let page = inventory
+        .query(query(project.id(), None, None, 1, 10))
+        .await
+        .expect("inventory query");
+    let readme = page
+        .items
+        .into_iter()
+        .find(|file| file.relative_path == "README.md")
+        .expect("readme file");
+
+    let result = inventory
+        .read_file_content(project.id(), readme.id)
+        .await
+        .expect("file content");
+
+    assert_eq!(result.file_id, readme.id.to_string());
+    assert_eq!(result.relative_path, "README.md");
+    assert_eq!(result.content, "# Devventory Documentation");
+    assert_eq!(result.size_bytes, 26);
+
+    // Nonexistent file ID fails
+    let missing_id = uuid::Uuid::new_v4();
+    assert!(inventory
+        .read_file_content(project.id(), missing_id)
+        .await
+        .is_err());
+
+    initialization.database.close().await;
+}
+
 fn directory_query(
     project_id: uuid::Uuid,
     relative_path: &str,
