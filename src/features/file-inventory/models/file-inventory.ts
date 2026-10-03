@@ -146,3 +146,22 @@ export const inventoryChangedPayloadSchema = z.object({
   scanId: z.string().uuid(),
   status: scanStatusSchema,
 });
+
+export const projectFileContentSchema = z.object({
+  content: z.string(),
+  fileId: z.string().uuid(),
+  modifiedAtMs: z.number().int().nullable(),
+  relativePath: z.string().min(1),
+  sizeBytes: z.number().int().nonnegative(),
+});
+export type ProjectFileContent = z.infer<typeof projectFileContentSchema>;
+
+export function isMarkdownFile(file: {
+  name: string;
+  extension?: string | null;
+}): boolean {
+  return (
+    file.extension?.toLowerCase() === 'md' ||
+    file.name.toLowerCase().endsWith('.md')
+  );
+}

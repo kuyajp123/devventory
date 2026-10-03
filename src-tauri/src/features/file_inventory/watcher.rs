@@ -13,7 +13,7 @@ use tokio::time::{sleep_until, Instant};
 use uuid::Uuid;
 
 use crate::features::environment_tracker::EnvironmentService;
-use crate::features::projects::ResolvedProjectScanTarget;
+use crate::features::projects::{is_project_path_excluded, ResolvedProjectScanTarget};
 use crate::features::validation_center::{events::emit_validation_changed, ValidationService};
 
 use super::error::FileInventoryError;
@@ -208,14 +208,19 @@ impl InventoryRuntime {
                         .await
                     {
                         Ok(scan) => {
-                            emit_inventory_changed(&worker_app, &scan);
-                            refresh_environment_sources(
-                                &worker_app,
-                                &worker_environment_service,
-                                &worker_validation_service,
-                                project_id,
-                            )
-                            .await;
+                            if scan.files_added > 0
+                                || scan.files_updated > 0
+                                || scan.files_missing > 0
+                            {
+                                emit_inventory_changed(&worker_app, &scan);
+                                refresh_environment_sources(
+                                    &worker_app,
+                                    &worker_environment_service,
+                                    &worker_validation_service,
+                                    project_id,
+                                )
+                                .await;
+                            }
                         }
                         Err(error) => tracing::warn!(
                             project_id = %project_id,
@@ -258,6 +263,8 @@ impl InventoryRuntime {
         let mut replacements = HashMap::with_capacity(targets.len());
         for target in targets {
             let project_id = target.id;
+            let root_path = target.root_path.clone();
+            let exclusions = target.exclusions.clone();
             let sender = self.sender.clone();
             let overflowed_projects = Arc::clone(&self.overflowed_projects);
             let handler: NativeEventHandler = Box::new(move |result: notify::Result<Event>| {
@@ -266,6 +273,19 @@ impl InventoryRuntime {
                         let Some(kind) = logical_kind(&event.kind) else {
                             return;
                         };
+                        if !event.paths.is_empty()
+                            && event.paths.iter().all(|path| {
+                                if let Ok(relative) = path.strip_prefix(&root_path) {
+                                    let rel_str = relative.to_string_lossy();
+                                    let is_dir = path.is_dir();
+                                    is_project_path_excluded(&rel_str, is_dir, &exclusions)
+                                } else {
+                                    false
+                                }
+                            })
+                        {
+                            return;
+                        }
                         let message = WatchEvent {
                             project_id,
                             kind,
@@ -452,7 +472,7 @@ mod tests {
 
     use super::{
         logical_kind, EventCoalescer, InventoryRuntime, LogicalEventKind, NativeEventHandler,
-        ProjectWatcher, WatchEvent, WatcherFactory,
+        ProjectWatcher, WatchEvent, WatcherFactory, WATCH_CHANNEL_CAPACITY,
     };
 
     #[test]
@@ -529,6 +549,81 @@ mod tests {
             .expect("watcher registration");
 
         assert_eq!(*recorded.lock().expect("recorded paths"), [root]);
+    }
+
+    #[test]
+    fn ignores_events_where_all_paths_are_excluded() {
+        let root = PathBuf::from("C:/workspace/project");
+        let handler_slot = Arc::new(Mutex::new(None::<NativeEventHandler>));
+        let slot_clone = Arc::clone(&handler_slot);
+
+        struct CapturingFactory {
+            slot: Arc<Mutex<Option<NativeEventHandler>>>,
+        }
+        impl WatcherFactory for CapturingFactory {
+            fn create(
+                &self,
+                handler: NativeEventHandler,
+            ) -> notify::Result<Box<dyn ProjectWatcher>> {
+                *self.slot.lock().unwrap() = Some(handler);
+                Ok(Box::new(RecordingWatcher {
+                    recorded: Arc::new(Mutex::new(Vec::new())),
+                }))
+            }
+        }
+
+        let runtime =
+            InventoryRuntime::with_factory(Arc::new(CapturingFactory { slot: slot_clone }));
+
+        let project_id = Uuid::new_v4();
+        runtime
+            .replace_watchers(vec![ResolvedProjectScanTarget {
+                id: project_id,
+                root_path: root.clone(),
+                watched_locations: vec![ResolvedWatchedLocation {
+                    id: Uuid::new_v4(),
+                    relative_path: ".".to_owned(),
+                    absolute_path: root.clone(),
+                }],
+                exclusions: vec!["custom_build/".to_owned()],
+            }])
+            .expect("watcher registration");
+
+        let mut handler = handler_slot
+            .lock()
+            .unwrap()
+            .take()
+            .expect("handler captured");
+
+        // Fire event inside node_modules (built-in exclusion)
+        let excluded_path = root.join("node_modules").join("package.json");
+        handler(Ok(notify::Event {
+            kind: EventKind::Modify(ModifyKind::Any),
+            paths: vec![excluded_path],
+            attrs: Default::default(),
+        }));
+
+        // Fire event inside custom_build (custom exclusion)
+        let custom_excluded = root.join("custom_build").join("temp.txt");
+        handler(Ok(notify::Event {
+            kind: EventKind::Create(CreateKind::File),
+            paths: vec![custom_excluded],
+            attrs: Default::default(),
+        }));
+
+        // The channel should not have received any events
+        assert_eq!(runtime.sender.capacity(), WATCH_CHANNEL_CAPACITY);
+
+        // Now fire a valid event in src/
+        let valid_path = root.join("src").join("index.ts");
+        handler(Ok(notify::Event {
+            kind: EventKind::Create(CreateKind::File),
+            paths: vec![valid_path],
+            attrs: Default::default(),
+        }));
+
+        // Now the channel should have received 1 event
+        assert_eq!(runtime.sender.capacity(), WATCH_CHANNEL_CAPACITY - 1);
     }
 
     struct RecordingWatcherFactory {

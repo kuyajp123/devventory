@@ -22,13 +22,16 @@ import {
   useRescanProjectMutation,
   useRescanWatchedLocationMutation,
 } from '../hooks/use-file-inventory';
+import { MarkdownPreviewDrawer } from '../components/MarkdownPreviewDrawer';
 import {
   fileCategorySchema,
   fileStatusSchema,
   inventorySortFieldSchema,
+  isMarkdownFile,
   sortDirectionSchema,
   type FileCategory,
   type FileStatus,
+  type IndexedFile,
   type InventoryFilters as InventoryQueryFilters,
   type InventorySortField,
   type SortDirection,
@@ -46,6 +49,8 @@ export function FileInventoryPage() {
   const [view, setView] = useState<InventoryView>(() =>
     searchParams.get('view') === 'assets' ? 'assets' : 'explorer',
   );
+  const [previewMarkdownFile, setPreviewMarkdownFile] =
+    useState<IndexedFile | null>(null);
   const [folderSelection, setFolderSelection] = useState({
     path: '.',
     projectId,
@@ -156,6 +161,19 @@ export function FileInventoryPage() {
     );
   }
 
+  const handleAllFilesSelect = useCallback(
+    (file: IndexedFile) => {
+      if (previewMarkdownFile) {
+        if (isMarkdownFile(file)) {
+          setPreviewMarkdownFile(file);
+        } else {
+          setPreviewMarkdownFile(null);
+        }
+      }
+    },
+    [previewMarkdownFile],
+  );
+
   // Explorer view handlers
   const handleFolderChange = useCallback(
     (folderPath: string) => {
@@ -183,6 +201,7 @@ export function FileInventoryPage() {
 
   function changeView(nextView: InventoryView) {
     setView(nextView);
+    setPreviewMarkdownFile(null);
     const nextParams = new URLSearchParams(searchParams);
     if (nextView === 'assets') nextParams.set('view', 'assets');
     else nextParams.delete('view');
@@ -230,9 +249,9 @@ export function FileInventoryPage() {
   const latestScan = inventory.data?.recentScans[0];
 
   return (
-    <section className="flex w-full flex-col gap-3">
+    <section className="flex flex-1 flex-col min-h-0 min-w-0 gap-3 overflow-hidden">
       {/* Header */}
-      <header className="space-y-1">
+      <header className="space-y-1 shrink-0">
         <div className="flex items-center gap-2">
           <IconFiles
             aria-hidden="true"
@@ -254,86 +273,94 @@ export function FileInventoryPage() {
       </header>
 
       {/* Toolbar */}
-      <ExplorerToolbar
-        actions={
-          view !== 'allFiles' ? (
-            <AssetImportControl
-              destination={
-                view === 'explorer'
-                  ? selectedFolder
-                  : (activeProject.watchedLocations[0] ?? '.')
-              }
-              key={`${projectId}:${view}:${view === 'explorer' ? selectedFolder : (activeProject.watchedLocations[0] ?? '.')}`}
-              projectId={projectId}
-              watchedLocations={activeProject.watchedLocations}
-            />
-          ) : undefined
-        }
-        category={
-          view === 'explorer' ? explorerCategory : allFilesFilters.category
-        }
-        onCategoryChange={(cat) => {
-          if (view === 'explorer') {
-            setExplorerCategory(cat);
-            setExplorerPageState({ page: 1, projectId });
+      <div className="shrink-0">
+        <ExplorerToolbar
+          actions={
+            view !== 'allFiles' ? (
+              <AssetImportControl
+                destination={
+                  view === 'explorer'
+                    ? selectedFolder
+                    : (activeProject.watchedLocations[0] ?? '.')
+                }
+                key={`${projectId}:${view}:${view === 'explorer' ? selectedFolder : (activeProject.watchedLocations[0] ?? '.')}`}
+                projectId={projectId}
+                watchedLocations={activeProject.watchedLocations}
+              />
+            ) : undefined
           }
-        }}
-        onSearchChange={(value) => {
-          if (view === 'explorer') {
-            setSearchInput(value);
-            setExplorerPageState({ page: 1, projectId });
+          category={
+            view === 'explorer' ? explorerCategory : allFilesFilters.category
           }
-        }}
-        onStatusChange={(st) => {
-          if (view === 'explorer') {
-            setExplorerStatus(st);
-            setExplorerPageState({ page: 1, projectId });
+          onCategoryChange={(cat) => {
+            if (view === 'explorer') {
+              setExplorerCategory(cat);
+              setExplorerPageState({ page: 1, projectId });
+            }
+          }}
+          onSearchChange={(value) => {
+            if (view === 'explorer') {
+              setSearchInput(value);
+              setExplorerPageState({ page: 1, projectId });
+            }
+          }}
+          onStatusChange={(st) => {
+            if (view === 'explorer') {
+              setExplorerStatus(st);
+              setExplorerPageState({ page: 1, projectId });
+            }
+          }}
+          onViewChange={changeView}
+          search={
+            view === 'explorer' ? searchInput : (allFilesFilters.search ?? '')
           }
-        }}
-        onViewChange={changeView}
-        search={
-          view === 'explorer' ? searchInput : (allFilesFilters.search ?? '')
-        }
-        status={view === 'explorer' ? explorerStatus : allFilesFilters.status}
-        view={view}
-      />
+          status={view === 'explorer' ? explorerStatus : allFilesFilters.status}
+          view={view}
+        />
+      </div>
 
       {/* Scan Summary Bar */}
       {view !== 'assets' && (
-        <InventoryScanBar
-          directoriesVisited={latestScan?.directoriesVisited}
-          fileCount={
-            latestScan?.filesDiscovered ?? inventory.data?.totalItems ?? 0
-          }
-          isScanning={isScanning}
-          latestScan={latestScan}
-          onRescanProject={scanProject}
-        />
+        <div className="shrink-0">
+          <InventoryScanBar
+            directoriesVisited={latestScan?.directoriesVisited}
+            fileCount={
+              latestScan?.filesDiscovered ?? inventory.data?.totalItems ?? 0
+            }
+            isScanning={isScanning}
+            latestScan={latestScan}
+            onRescanProject={scanProject}
+          />
+        </div>
       )}
 
       {/* Error states */}
       {mutationError && (
-        <Alert role="alert" status="danger">
-          <Alert.Indicator />
-          <Alert.Content>
-            <Alert.Title>The scan could not be completed</Alert.Title>
-            <Alert.Description>
-              Existing inventory records were preserved.
-            </Alert.Description>
-          </Alert.Content>
-        </Alert>
+        <div className="shrink-0">
+          <Alert role="alert" status="danger">
+            <Alert.Indicator />
+            <Alert.Content>
+              <Alert.Title>The scan could not be completed</Alert.Title>
+              <Alert.Description>
+                Existing inventory records were preserved.
+              </Alert.Description>
+            </Alert.Content>
+          </Alert>
+        </div>
       )}
 
       {inventory.isError && view === 'allFiles' && (
-        <Alert role="alert" status="danger">
-          <Alert.Indicator />
-          <Alert.Content>
-            <Alert.Title>File inventory is unavailable</Alert.Title>
-            <Alert.Description>
-              Confirm the project root is connected and try again.
-            </Alert.Description>
-          </Alert.Content>
-        </Alert>
+        <div className="shrink-0">
+          <Alert role="alert" status="danger">
+            <Alert.Indicator />
+            <Alert.Content>
+              <Alert.Title>File inventory is unavailable</Alert.Title>
+              <Alert.Description>
+                Confirm the project root is connected and try again.
+              </Alert.Description>
+            </Alert.Content>
+          </Alert>
+        </div>
       )}
 
       {/* Explorer View */}
@@ -355,23 +382,27 @@ export function FileInventoryPage() {
       )}
 
       {view === 'assets' && (
-        <AssetBrowser key={projectId} projectId={projectId} />
+        <div className="flex-1 min-h-0 overflow-hidden flex flex-col">
+          <AssetBrowser key={projectId} projectId={projectId} />
+        </div>
       )}
 
       {/* All Files View (preserved existing behavior) */}
       {view === 'allFiles' && (
-        <>
-          <InventoryFiltersForm
-            key={`${allFilesFilters.search ?? ''}|${allFilesFilters.category ?? ''}|${allFilesFilters.extension ?? ''}|${allFilesFilters.status ?? ''}`}
-            onApply={applyAllFilesFilters}
-            onReset={() => setSearchParams({})}
-            values={allFilesFilterValues}
-          />
+        <div className="flex flex-1 flex-col min-h-0 min-w-0 overflow-hidden gap-3">
+          <div className="shrink-0">
+            <InventoryFiltersForm
+              key={`${allFilesFilters.search ?? ''}|${allFilesFilters.category ?? ''}|${allFilesFilters.extension ?? ''}|${allFilesFilters.status ?? ''}`}
+              onApply={applyAllFilesFilters}
+              onReset={() => setSearchParams({})}
+              values={allFilesFilterValues}
+            />
+          </div>
 
           {inventory.isPending && (
             <div
               aria-label="Loading file inventory"
-              className="space-y-3"
+              className="space-y-3 shrink-0"
               role="status"
             >
               <Skeleton className="h-12 w-full rounded-md" />
@@ -381,7 +412,7 @@ export function FileInventoryPage() {
 
           {inventory.data && (
             <>
-              <div className="flex items-center justify-between gap-4 py-1 font-mono text-xs text-muted">
+              <div className="flex items-center justify-between gap-4 py-1 font-mono text-xs text-muted shrink-0">
                 <p aria-live="polite">
                   {inventory.data.totalItems.toLocaleString()} file
                   {inventory.data.totalItems === 1 ? '' : 's'}
@@ -396,25 +427,44 @@ export function FileInventoryPage() {
                 )}
               </div>
 
-              <div className="rounded-md border border-divider bg-surface overflow-hidden">
-                <InventoryTable
-                  files={inventory.data.items}
-                  hasFilters={hasFilters(allFilesFilters)}
-                  onSortChange={changeAllFilesSort}
-                  sortBy={allFilesFilters.sortBy}
-                  sortDirection={allFilesFilters.sortDirection}
-                />
-              </div>
+              <div className="flex flex-1 gap-4 items-start min-h-0 overflow-hidden">
+                <div className="flex-1 flex flex-col min-h-0 min-w-0 h-full">
+                  <div className="rounded-md border border-divider bg-surface overflow-hidden flex-1 flex flex-col min-h-0">
+                    <InventoryTable
+                      files={inventory.data.items}
+                      hasFilters={hasFilters(allFilesFilters)}
+                      onPreviewMarkdown={setPreviewMarkdownFile}
+                      onSelectFile={handleAllFilesSelect}
+                      onSortChange={changeAllFilesSort}
+                      selectedFileId={previewMarkdownFile?.id}
+                      sortBy={allFilesFilters.sortBy}
+                      sortDirection={allFilesFilters.sortDirection}
+                    />
+                  </div>
 
-              <AppPagination
-                ariaLabel="File inventory pages"
-                onPageChange={changeAllFilesPage}
-                page={inventory.data.page}
-                totalPages={inventory.data.totalPages}
-              />
+                  <div className="shrink-0 pt-2">
+                    <AppPagination
+                      ariaLabel="File inventory pages"
+                      onPageChange={changeAllFilesPage}
+                      page={inventory.data.page}
+                      totalPages={inventory.data.totalPages}
+                    />
+                  </div>
+                </div>
+
+                {previewMarkdownFile && projectId && (
+                  <MarkdownPreviewDrawer
+                    className="border border-divider rounded-md h-full min-h-[400px]"
+                    file={previewMarkdownFile}
+                    key={previewMarkdownFile.id}
+                    onClose={() => setPreviewMarkdownFile(null)}
+                    projectId={projectId}
+                  />
+                )}
+              </div>
             </>
           )}
-        </>
+        </div>
       )}
     </section>
   );

@@ -80,6 +80,34 @@ describe('fileInventoryGateway', () => {
     });
   });
 
+  it('requests project file content through the typed command boundary', async () => {
+    const projectId = '30af17bd-2dd6-4b89-a5e7-8517191815a7';
+    const fileId = 'e2bbfaeb-c155-4e78-9fe8-f99ec059d042';
+    mockIPC((command, args) => {
+      expect(command).toBe('read_project_file_content');
+      expect(args).toEqual({
+        input: { fileId, projectId },
+      });
+      return {
+        content: '# Hello Markdown',
+        fileId,
+        modifiedAtMs: 1700000000000,
+        relativePath: 'README.md',
+        sizeBytes: 16,
+      };
+    });
+
+    await expect(
+      fileInventoryGateway.readProjectFileContent(projectId, fileId),
+    ).resolves.toEqual({
+      content: '# Hello Markdown',
+      fileId,
+      modifiedAtMs: 1700000000000,
+      relativePath: 'README.md',
+      sizeBytes: 16,
+    });
+  });
+
   it('rejects malformed backend metadata', async () => {
     mockIPC(() => ({ items: [{ relativePath: '../escape' }] }));
     await expect(

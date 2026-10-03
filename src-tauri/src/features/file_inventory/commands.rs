@@ -6,7 +6,7 @@ use crate::shared::errors::command::CommandError;
 
 use super::dto::{
     FileInventoryQueryInput, InventoryPageDto, ListProjectDirectoryInput, ProjectDirectoryPageDto,
-    ScanRunDto,
+    ProjectFileContentDto, ReadProjectFileInput, ScanRunDto,
 };
 use super::model::{InventoryQuery, ProjectDirectoryQuery, ScanType};
 
@@ -65,6 +65,20 @@ pub(crate) async fn rescan_watched_location(
         .reconcile_watched_location(project_id, watched_location_id)
         .await
         .map(Into::into)
+        .map_err(Into::into)
+}
+
+#[tauri::command]
+pub(crate) async fn read_project_file_content(
+    state: State<'_, AppState>,
+    input: ReadProjectFileInput,
+) -> Result<ProjectFileContentDto, CommandError> {
+    let project_id = parse_id(&input.project_id)?;
+    let file_id = parse_id(&input.file_id)?;
+    state
+        .file_inventory_service()
+        .read_file_content(project_id, file_id)
+        .await
         .map_err(Into::into)
 }
 

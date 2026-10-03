@@ -3,16 +3,18 @@ import { useCallback, useMemo, useRef, useState } from 'react';
 import { AssetFileInspector } from '@/features/asset-library';
 import { AppPagination } from '@/shared/ui/AppPagination';
 import { useProjectDirectoryQuery } from '../hooks/use-file-inventory';
-import type {
-  IndexedFile,
-  InventoryFilters,
-  InventoryPage,
-  InventorySortField,
-  SortDirection,
+import {
+  isMarkdownFile,
+  type IndexedFile,
+  type InventoryFilters,
+  type InventoryPage,
+  type InventorySortField,
+  type SortDirection,
 } from '../models/file-inventory';
 import { getFolderBreadcrumbs } from '../models/inventory-tree';
 import { FolderBreadcrumb } from './FolderBreadcrumb';
 import { FolderContentsTable } from './FolderContentsTable';
+import { MarkdownPreviewDrawer } from './MarkdownPreviewDrawer';
 import { ProjectTree } from './ProjectTree';
 
 const MIN_TREE_WIDTH = 180;
@@ -48,6 +50,8 @@ export function FileExplorer({
 }: FileExplorerProps) {
   const [treeWidth, setTreeWidth] = useState(DEFAULT_TREE_WIDTH);
   const [selectedFile, setSelectedFile] = useState<IndexedFile | null>(null);
+  const [previewMarkdownFile, setPreviewMarkdownFile] =
+    useState<IndexedFile | null>(null);
   const dividerRef = useRef<HTMLDivElement>(null);
   const directory = useProjectDirectoryQuery(projectId, selectedFolder);
   const subfolders = directory.data?.pages.flatMap((page) => page.items) ?? [];
@@ -68,13 +72,29 @@ export function FileExplorer({
   const handleSelectFolder = useCallback(
     (folderPath: string) => {
       setSelectedFile(null);
+      setPreviewMarkdownFile(null);
       onFolderChange(folderPath);
     },
     [onFolderChange],
   );
 
-  const handleSelectFile = useCallback((file: IndexedFile) => {
-    setSelectedFile((current) => (current?.id === file.id ? null : file));
+  const handleSelectFile = useCallback(
+    (file: IndexedFile) => {
+      setSelectedFile((current) => (current?.id === file.id ? null : file));
+      if (previewMarkdownFile) {
+        if (isMarkdownFile(file)) {
+          setPreviewMarkdownFile(file);
+        } else {
+          setPreviewMarkdownFile(null);
+        }
+      }
+    },
+    [previewMarkdownFile],
+  );
+
+  const handlePreviewMarkdown = useCallback((file: IndexedFile) => {
+    setPreviewMarkdownFile(file);
+    setSelectedFile(file);
   }, []);
 
   const handleDividerPointerDown = useCallback(
@@ -107,21 +127,18 @@ export function FileExplorer({
   );
 
   return (
-    <div
-      className="flex min-h-0 flex-1 rounded-md border border-divider bg-surface"
-      style={{ height: 'calc(100vh - 240px)', minHeight: '400px' }}
-    >
+    <div className="flex min-h-0 flex-1 rounded-md border border-divider bg-surface overflow-hidden">
       <div
         className="flex shrink-0 flex-col overflow-hidden border-r border-divider bg-sidebar rounded-l-md"
         style={{ width: treeWidth }}
       >
-        <div className="flex h-8 items-center border-b border-divider px-3">
+        <div className="flex h-8 items-center border-b border-divider px-3 shrink-0">
           <span className="font-mono text-[11px] font-semibold uppercase tracking-wider text-muted">
             Explorer
           </span>
           <span className="ml-auto font-mono text-[10px] text-muted">Live</span>
         </div>
-        <div className="flex-1 overflow-y-auto overflow-x-hidden">
+        <div className="flex-1 overflow-y-auto overflow-x-hidden min-h-0">
           <ProjectTree
             onSelectFolder={handleSelectFolder}
             projectId={projectId}
@@ -141,7 +158,7 @@ export function FileExplorer({
       />
 
       <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
-        <div className="border-b border-divider">
+        <div className="border-b border-divider shrink-0">
           <FolderBreadcrumb
             onNavigate={handleSelectFolder}
             segments={breadcrumbs}
@@ -149,7 +166,7 @@ export function FileExplorer({
         </div>
 
         {directory.isError && (
-          <Alert className="m-3" role="alert" status="danger">
+          <Alert className="m-3 shrink-0" role="alert" status="danger">
             <Alert.Indicator />
             <Alert.Content>
               <Alert.Title>This directory could not be read</Alert.Title>
@@ -169,7 +186,7 @@ export function FileExplorer({
         )}
 
         {entriesUnreadable > 0 && (
-          <Alert className="m-3 mb-0" role="status" status="warning">
+          <Alert className="m-3 mb-0 shrink-0" role="status" status="warning">
             <Alert.Indicator />
             <Alert.Content>
               <Alert.Title>Some folders were unavailable</Alert.Title>
@@ -181,16 +198,17 @@ export function FileExplorer({
           </Alert>
         )}
 
-        <div className="flex-1 overflow-auto">
+        <div className="flex-1 min-h-0 overflow-hidden flex flex-col">
           <FolderContentsTable
             files={folderContents?.items ?? []}
             hasFilters={hasFilters}
             isFetching={isFolderFetching && !isFolderLoading}
             isLoading={isFolderLoading || directory.isPending}
             onNavigateFolder={handleSelectFolder}
+            onPreviewMarkdown={handlePreviewMarkdown}
             onSelectFile={handleSelectFile}
             onSortChange={onSortChange}
-            selectedFileId={selectedFile?.id}
+            selectedFileId={previewMarkdownFile?.id ?? selectedFile?.id}
             sortBy={filters.sortBy}
             sortDirection={filters.sortDirection}
             subfolders={subfolders}
@@ -199,7 +217,7 @@ export function FileExplorer({
 
         {(directory.hasNextPage ||
           (folderContents && folderContents.totalPages > 1)) && (
-          <div className="flex flex-wrap items-center justify-between gap-3 border-t border-divider px-3 py-2">
+          <div className="flex flex-wrap items-center justify-between gap-3 border-t border-divider px-3 py-2 shrink-0">
             <div>
               {directory.hasNextPage && (
                 <Button
@@ -225,10 +243,21 @@ export function FileExplorer({
         )}
       </div>
 
-      {selectedFile && (
+      {selectedFile && !previewMarkdownFile && (
         <AssetFileInspector
           file={selectedFile}
           onClose={() => setSelectedFile(null)}
+          onPreviewMarkdown={() => handlePreviewMarkdown(selectedFile)}
+        />
+      )}
+
+      {previewMarkdownFile && (
+        <MarkdownPreviewDrawer
+          className="border-l border-divider rounded-r-md h-full"
+          file={previewMarkdownFile}
+          key={previewMarkdownFile.id}
+          onClose={() => setPreviewMarkdownFile(null)}
+          projectId={projectId}
         />
       )}
     </div>

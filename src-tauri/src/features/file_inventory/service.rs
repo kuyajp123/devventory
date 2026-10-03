@@ -5,6 +5,7 @@ use tokio::sync::mpsc;
 use uuid::Uuid;
 
 use super::directory::LocalDirectoryLister;
+use super::dto::ProjectFileContentDto;
 use super::error::FileInventoryError;
 use super::model::{
     InventoryPage, InventoryQuery, InventoryWatchedLocation, PersistenceSummary,
@@ -12,9 +13,10 @@ use super::model::{
 };
 use super::repository::{FileInventoryRepository, SqliteFileInventoryRepository};
 use super::scanner::{LocalFileScanner, ScanMessage};
-use crate::features::projects::{ProjectService, ResolvedProjectScanTarget};
+use crate::features::projects::{ProjectFileError, ProjectService, ResolvedProjectScanTarget};
 
 const SCAN_CHANNEL_CAPACITY: usize = 8;
+const MAX_PREVIEW_SIZE_BYTES: u64 = 2 * 1024 * 1024; // 2 MB
 
 #[derive(Debug, Clone)]
 pub(crate) struct FileInventoryService {
@@ -68,6 +70,39 @@ impl FileInventoryService {
         tokio::task::spawn_blocking(move || lister.list(target, query.page, query.page_size))
             .await
             .map_err(|_| FileInventoryError::RuntimeUnavailable)?
+    }
+
+    pub(crate) async fn read_file_content(
+        &self,
+        project_id: Uuid,
+        file_id: Uuid,
+    ) -> Result<ProjectFileContentDto, FileInventoryError> {
+        let indexed_file = self
+            .repository
+            .get_file_by_id(project_id, file_id)
+            .await?
+            .ok_or(FileInventoryError::FileNotFound)?;
+
+        let resolved_file = self
+            .project_service
+            .resolve_regular_project_file(project_id, &indexed_file.relative_path)
+            .await?;
+
+        if resolved_file.size_bytes > MAX_PREVIEW_SIZE_BYTES {
+            return Err(FileInventoryError::FileTooLarge);
+        }
+
+        let content = tokio::fs::read_to_string(&resolved_file.absolute_path)
+            .await
+            .map_err(|_| FileInventoryError::File(ProjectFileError::Unreadable))?;
+
+        Ok(ProjectFileContentDto {
+            file_id: indexed_file.id.to_string(),
+            relative_path: indexed_file.relative_path,
+            content,
+            size_bytes: resolved_file.size_bytes,
+            modified_at_ms: resolved_file.modified_at_ms,
+        })
     }
 
     pub(crate) async fn reconcile_project(

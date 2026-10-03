@@ -1,6 +1,7 @@
 import { Alert, Button, Chip, Skeleton, Spinner } from '@heroui/react';
 import {
   IconEdit,
+  IconEye,
   IconFile,
   IconHeartFilled,
   IconLayersLinked,
@@ -33,9 +34,11 @@ export interface AssetInspectorFile {
 export function AssetFileInspector({
   file,
   onClose,
+  onPreviewMarkdown,
 }: {
   file: AssetInspectorFile;
   onClose: () => void;
+  onPreviewMarkdown?: (file: AssetInspectorFile) => void;
 }) {
   const asset = useAssetQuery(file.projectId, file.id);
   const variants = useAssetVariantsQuery(file.projectId, file.id);
@@ -86,6 +89,25 @@ export function AssetFileInspector({
             value={formatModified(file.modifiedAtMs)}
           />
           <Definition label="Status" value={capitalize(file.status)} />
+          {onPreviewMarkdown &&
+            (file.extension?.toLowerCase() === 'md' ||
+              file.name.toLowerCase().endsWith('.md')) && (
+              <div className="pt-2">
+                <Button
+                  className="w-full font-mono text-xs"
+                  onPress={() => onPreviewMarkdown(file)}
+                  size="sm"
+                  variant="primary"
+                >
+                  <IconEye
+                    aria-hidden="true"
+                    size={ICON_SIZE.button}
+                    stroke={ICON_STROKE}
+                  />
+                  Preview Markdown
+                </Button>
+              </div>
+            )}
         </InspectorSection>
 
         {asset.isPending && (

@@ -32,6 +32,57 @@ describe('FolderContentsTable status presentation', () => {
     expectStatusTone('Active', 'success');
     expectStatusTone('Missing', 'warning');
   });
+
+  it('renders markdown preview button for .md files and calls onPreviewMarkdown', async () => {
+    const handlePreviewMarkdown = vi.fn();
+    renderWithProviders(
+      <FolderContentsTable
+        files={[markdownFile]}
+        hasFilters={false}
+        isFetching={false}
+        isLoading={false}
+        onNavigateFolder={vi.fn()}
+        onPreviewMarkdown={handlePreviewMarkdown}
+        onSelectFile={vi.fn()}
+        onSortChange={vi.fn()}
+        selectedFileId={undefined}
+        sortBy="relativePath"
+        sortDirection="ascending"
+        subfolders={[]}
+      />,
+    );
+
+    const previewBtn = screen.getByRole('button', {
+      name: `Preview markdown for ${markdownFile.name}`,
+    });
+    expect(previewBtn).toBeInTheDocument();
+
+    previewBtn.click();
+    expect(handlePreviewMarkdown).toHaveBeenCalledWith(markdownFile);
+  });
+
+  it('calls onSelectFile when clicking a file row', async () => {
+    const handleSelectFile = vi.fn();
+    renderWithProviders(
+      <FolderContentsTable
+        files={[markdownFile]}
+        hasFilters={false}
+        isFetching={false}
+        isLoading={false}
+        onNavigateFolder={vi.fn()}
+        onSelectFile={handleSelectFile}
+        onSortChange={vi.fn()}
+        selectedFileId={undefined}
+        sortBy="relativePath"
+        sortDirection="ascending"
+        subfolders={[]}
+      />,
+    );
+
+    const cell = screen.getByText('README.md');
+    cell.click();
+    expect(handleSelectFile).toHaveBeenCalledWith(markdownFile);
+  });
 });
 
 function expectStatusTone(label: string, tone: 'success' | 'warning') {
@@ -67,4 +118,13 @@ const missingFile: IndexedFile = {
   name: 'missing.ts',
   relativePath: 'src/missing.ts',
   status: 'missing',
+};
+
+const markdownFile: IndexedFile = {
+  ...activeFile,
+  category: 'document',
+  extension: 'md',
+  id: '98765432-d130-4be4-8479-607f3aad826c',
+  name: 'README.md',
+  relativePath: 'README.md',
 };

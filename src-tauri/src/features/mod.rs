@@ -6,6 +6,7 @@ pub(crate) mod credential_vault;
 pub(crate) mod dashboard;
 pub(crate) mod environment_tracker;
 pub(crate) mod file_inventory;
+pub(crate) mod markdown_reader;
 pub(crate) mod projects;
 pub(crate) mod search;
 pub(crate) mod settings;

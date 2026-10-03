@@ -4,6 +4,7 @@ import { getCurrentWindow } from '@tauri-apps/api/window';
 import { AppProviders } from './app/providers/AppProviders';
 import App from './app/App';
 import { QuickAccessApp } from './features/quick-access';
+import { StandaloneMarkdownReaderApp } from './features/markdown-reader';
 import { setupContextMenuPrevention } from './app/utils/context-menu';
 import './index.css';
 
@@ -22,6 +23,12 @@ async function bootstrap() {
     createRoot(document.getElementById('root')!).render(
       <StrictMode>
         <QuickAccessApp />
+      </StrictMode>,
+    );
+  } else if (windowLabel === 'markdown-reader') {
+    createRoot(document.getElementById('root')!).render(
+      <StrictMode>
+        <StandaloneMarkdownReaderApp />
       </StrictMode>,
     );
   } else {
