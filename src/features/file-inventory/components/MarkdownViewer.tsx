@@ -82,10 +82,18 @@ function highlightInContainer(
 ): number {
   if (!container) return 0;
 
-  // 1. Remove previous marks and restore text nodes
+  const trimmedQuery = query.trim();
   const existingMarks = container.querySelectorAll<HTMLElement>(
     'mark[data-markdown-match]',
   );
+
+  // If there are no existing marks to remove and no query to apply, avoid touching the DOM
+  if (existingMarks.length === 0 && !trimmedQuery) {
+    return 0;
+  }
+
+  // 1. Remove previous marks and restore text nodes
+  const parentsToNormalize = new Set<Node>();
   existingMarks.forEach((m) => {
     const parent = m.parentNode;
     if (parent) {
@@ -93,11 +101,14 @@ function highlightInContainer(
         parent.insertBefore(m.firstChild, m);
       }
       parent.removeChild(m);
+      parentsToNormalize.add(parent);
     }
   });
-  container.normalize();
 
-  const trimmedQuery = query.trim();
+  parentsToNormalize.forEach((parent) => {
+    parent.normalize();
+  });
+
   if (!trimmedQuery) return 0;
 
   const doc = container.ownerDocument;
@@ -473,11 +484,13 @@ export const MarkdownViewer = memo(function MarkdownViewer({
       <div
         aria-label="Raw Markdown content"
         className="h-full overflow-auto font-mono text-xs p-4 bg-surface text-foreground leading-relaxed select-text selection:bg-accent/30 selection:text-foreground"
+        key="markdown-raw-view"
         ref={containerRef}
         tabIndex={0}
       >
         <div
           className="table w-full select-text transition-[zoom] duration-100"
+          key="markdown-raw-table"
           style={{ zoom: zoomLevel / 100 }}
         >
           {rawLines.map((line, idx) => (
@@ -502,11 +515,13 @@ export const MarkdownViewer = memo(function MarkdownViewer({
     <div
       aria-label="Rendered Markdown content"
       className="markdown-body h-full overflow-auto p-6 bg-surface text-foreground select-text selection:bg-accent/30 selection:text-foreground space-y-3 max-w-none text-sm leading-relaxed"
+      key="markdown-rendered-view"
       ref={containerRef}
       tabIndex={0}
     >
       <div
         className="transition-[zoom] duration-100"
+        key="markdown-rendered-wrapper"
         style={{ zoom: zoomLevel / 100 }}
       >
         <ReactMarkdown

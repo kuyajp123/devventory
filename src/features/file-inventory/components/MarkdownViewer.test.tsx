@@ -253,4 +253,128 @@ const greeting = "hello world";
     expect(mark).toHaveAttribute('data-active-match', 'true');
     expect(handleMatchCountChange).toHaveBeenCalledWith(1);
   });
+
+  it('reproduces switching files and toggling to raw mode without crashing', () => {
+    const file1 =
+      '# Devventory\n\nDevventory is an offline-first Tauri desktop application.\n\n- `npm run dev` starts the browser development server.\n\n```powershell\nnpm ci\n```';
+    const file2 =
+      '# Devventory engineering rules\n\n## Scope\n\n- Keep the application offline-first.\n- Reuse the existing application state.\n\n```text\nsrc/\n├── app/\n```';
+
+    const { rerender } = render(
+      <MarkdownViewer
+        content={file1}
+        relativePath="README.md"
+        sizeBytes={file1.length}
+        viewMode="rendered"
+      />,
+    );
+
+    expect(
+      screen.getByRole('heading', { level: 1, name: /devventory/i }),
+    ).toBeInTheDocument();
+
+    rerender(
+      <MarkdownViewer
+        content={file2}
+        relativePath="AGENTS.md"
+        sizeBytes={file2.length}
+        viewMode="rendered"
+      />,
+    );
+
+    expect(
+      screen.getByRole('heading', {
+        level: 1,
+        name: /devventory engineering rules/i,
+      }),
+    ).toBeInTheDocument();
+
+    expect(() => {
+      rerender(
+        <MarkdownViewer
+          content={file2}
+          relativePath="AGENTS.md"
+          sizeBytes={file2.length}
+          viewMode="raw"
+        />,
+      );
+    }).not.toThrow();
+
+    expect(screen.getByLabelText('Raw Markdown content')).toBeInTheDocument();
+  });
+
+  it('safely toggles between rendered and raw modes when searching and clearing queries', () => {
+    const handleMatchCountChange = vi.fn();
+    const content =
+      '# Search Title\n\nSearchable text with **bold** and `code`.';
+
+    const { rerender } = render(
+      <MarkdownViewer
+        activeMatchIndex={0}
+        content={content}
+        onMatchCountChange={handleMatchCountChange}
+        relativePath="doc.md"
+        searchQuery="Search"
+        sizeBytes={content.length}
+        viewMode="rendered"
+      />,
+    );
+
+    const marks = screen.getAllByText('Search');
+    expect(marks.length).toBeGreaterThanOrEqual(1);
+    expect(marks[0].tagName).toBe('MARK');
+
+    // Switch to raw mode while search query is active
+    rerender(
+      <MarkdownViewer
+        activeMatchIndex={0}
+        content={content}
+        onMatchCountChange={handleMatchCountChange}
+        relativePath="doc.md"
+        searchQuery="Search"
+        sizeBytes={content.length}
+        viewMode="raw"
+      />,
+    );
+
+    expect(screen.getByLabelText('Raw Markdown content')).toBeInTheDocument();
+
+    // Switch back to rendered mode and clear search query
+    rerender(
+      <MarkdownViewer
+        activeMatchIndex={0}
+        content={content}
+        onMatchCountChange={handleMatchCountChange}
+        relativePath="doc.md"
+        searchQuery=""
+        sizeBytes={content.length}
+        viewMode="rendered"
+      />,
+    );
+
+    expect(
+      screen.getByLabelText('Rendered Markdown content'),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByText((_content, element) => element?.tagName === 'MARK'),
+    ).not.toBeInTheDocument();
+  });
+
+  it('does not touch DOM when search query is empty and no marks exist', () => {
+    const content = '# Title\n\nParagraph text.';
+    render(
+      <MarkdownViewer
+        content={content}
+        relativePath="doc.md"
+        sizeBytes={content.length}
+        viewMode="rendered"
+      />,
+    );
+
+    const renderedContainer = screen.getByLabelText(
+      'Rendered Markdown content',
+    );
+    // Ensure no marks were inserted
+    expect(renderedContainer.querySelectorAll('mark')).toHaveLength(0);
+  });
 });
