@@ -1,3 +1,6 @@
+import { formatFileSize, MarkdownViewer } from '@/features/file-inventory';
+import { ICON_SIZE, ICON_STROKE } from '@/shared/constants/icon.constants';
+import { TauriCommandError } from '@/shared/infrastructure/tauri/tauri-error';
 import {
   Alert,
   Button,
@@ -21,9 +24,6 @@ import {
   IconZoomReset,
 } from '@tabler/icons-react';
 import { memo, useCallback, useEffect, useRef, useState } from 'react';
-import { formatFileSize, MarkdownViewer } from '@/features/file-inventory';
-import { ICON_SIZE, ICON_STROKE } from '@/shared/constants/icon.constants';
-import { TauriCommandError } from '@/shared/infrastructure/tauri/tauri-error';
 import { useStandaloneMarkdownDocument } from '../hooks/use-standalone-markdown';
 
 const DEFAULT_ZOOM = 100;
@@ -216,6 +216,27 @@ export const StandaloneMarkdownReader = memo(
 
           {/* Zoom controls */}
           <div className="flex items-center rounded-md border border-divider p-0.5 bg-surface-secondary/40 shrink-0">
+            {zoomLevel > DEFAULT_ZOOM && (
+              <Tooltip delay={0}>
+                <Button
+                  aria-label="Reset zoom to default"
+                  className="h-7 w-7 min-w-7 p-0 text-accent hover:text-foreground"
+                  isIconOnly
+                  onPress={handleResetZoom}
+                  size="sm"
+                  variant="ghost"
+                >
+                  <IconZoomReset
+                    aria-hidden="true"
+                    size={ICON_SIZE.small}
+                    stroke={ICON_STROKE}
+                  />
+                </Button>
+                <Tooltip.Content placement="bottom">
+                  <p>Reset zoom to {DEFAULT_ZOOM}%</p>
+                </Tooltip.Content>
+              </Tooltip>
+            )}
             <Tooltip delay={0}>
               <Button
                 aria-label="Decrease zoom"
@@ -280,28 +301,6 @@ export const StandaloneMarkdownReader = memo(
                 <p>Zoom in (Max {MAX_ZOOM}%)</p>
               </Tooltip.Content>
             </Tooltip>
-
-            {zoomLevel > DEFAULT_ZOOM && (
-              <Tooltip delay={0}>
-                <Button
-                  aria-label="Reset zoom to default"
-                  className="h-7 w-7 min-w-7 p-0 text-accent hover:text-foreground"
-                  isIconOnly
-                  onPress={handleResetZoom}
-                  size="sm"
-                  variant="ghost"
-                >
-                  <IconZoomReset
-                    aria-hidden="true"
-                    size={ICON_SIZE.small}
-                    stroke={ICON_STROKE}
-                  />
-                </Button>
-                <Tooltip.Content placement="bottom">
-                  <p>Reset zoom to {DEFAULT_ZOOM}%</p>
-                </Tooltip.Content>
-              </Tooltip>
-            )}
           </div>
 
           {/* Action icons */}
@@ -508,6 +507,7 @@ export const StandaloneMarkdownReader = memo(
             <MarkdownViewer
               activeMatchIndex={activeMatchIndex}
               content={document.content}
+              key={`${document.path}:${viewMode}`}
               onMatchCountChange={handleMatchCountChange}
               relativePath={document.fileName}
               searchQuery={searchQuery}

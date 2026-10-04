@@ -1,3 +1,4 @@
+import fs from 'node:fs';
 import { screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -332,13 +333,14 @@ describe('MarkdownPreviewDrawer', () => {
   });
 
   it('updates displayed content when switching to a different file', async () => {
+    const user = userEvent.setup();
     const mockFile2: IndexedFile = {
       ...mockFile,
       id: 'f2-test-id',
       name: 'CHANGELOG.md',
       relativePath: 'CHANGELOG.md',
     };
-    const changelogContent = '# Changelog\n\n- Initial release.';
+    const changelogContent = fs.readFileSync('AGENTS.md', 'utf8');
 
     vi.mocked(fileInventoryGateway.readProjectFileContent).mockImplementation(
       async (_projId, fileId) => {
@@ -386,7 +388,12 @@ describe('MarkdownPreviewDrawer', () => {
       expect(
         screen.getByRole('heading', { level: 2, name: 'CHANGELOG.md' }),
       ).toBeInTheDocument();
-      expect(screen.getByText(/initial release/i)).toBeInTheDocument();
+      expect(screen.getByText(/engineering rules/i)).toBeInTheDocument();
     });
+
+    const rawButton = screen.getByRole('button', { name: /^raw$/i });
+    await user.click(rawButton);
+
+    expect(screen.getByLabelText('Raw Markdown content')).toBeInTheDocument();
   });
 });

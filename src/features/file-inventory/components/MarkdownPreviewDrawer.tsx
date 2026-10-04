@@ -532,6 +532,7 @@ export const MarkdownPreviewDrawer = memo(function MarkdownPreviewDrawer({
           <MarkdownViewer
             activeMatchIndex={activeMatchIndex}
             content={fileContentQuery.data.content}
+            key={`${file.id}:${viewMode}`}
             onMatchCountChange={handleMatchCountChange}
             onOpenInVsCode={handleOpenInVsCode}
             relativePath={file.relativePath}
