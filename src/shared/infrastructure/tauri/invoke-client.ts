@@ -15,6 +15,12 @@ export async function invokeCommand<TResponse>(
 }
 
 const safeMessages: Record<string, string> = {
+  CLOUD_SYNC_CONFIGURATION_INVALID:
+    'Check the Worker URL, workspace ID, device ID, and publisher token. Production URLs must use HTTPS on workers.dev.',
+  CLOUD_SYNC_CREDENTIALS_UNAVAILABLE:
+    'The publisher token could not be saved or read in Windows Credential Manager. Enter it again and retry.',
+  CLOUD_SYNC_CONNECTION_UNAVAILABLE:
+    'The cloud operation could not be completed. Check the connection and Cloud Sync status.',
   AGENT_USAGE_CONFLICT:
     'That Agent Usage account or quota window is already being tracked.',
   ASSET_CONFLICT:

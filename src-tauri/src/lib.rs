@@ -270,6 +270,7 @@ pub fn run() {
                 app_state.start_inventory_runtime(app_handle.clone()),
             )?;
             app_state.start_agent_reminder_runtime(app_handle.clone());
+            app_state.cloud_sync_service().start();
 
             let current_dir = std::env::current_dir().unwrap_or_default();
             let markdown_launch_path = markdown_path_from_args(std::env::args(), &current_dir);
@@ -289,6 +290,11 @@ pub fn run() {
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
+            features::cloud_sync::commands::get_cloud_sync_status,
+            features::cloud_sync::commands::configure_cloud_sync,
+            features::cloud_sync::commands::set_cloud_sync_enabled,
+            features::cloud_sync::commands::synchronize_cloud_now,
+            features::cloud_sync::commands::rebuild_cloud_sync,
             health_check,
             list_agent_accounts,
             save_agent_account,

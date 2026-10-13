@@ -2,6 +2,7 @@ import { Navigate, type RouteObject } from 'react-router';
 import { AgentUsagePage } from '@/features/agent-usage';
 import { AppHealthPage } from '@/features/app-health';
 import { CredentialVaultPage } from '@/features/credential-vault';
+import { CloudSyncSettingsSection } from '@/features/cloud-sync';
 import { EnvironmentTrackerPage } from '@/features/environment-tracker';
 import {
   LegacyProjectRedirect,
@@ -55,6 +56,7 @@ export const appRoutes: RouteObject[] = [
         children: [
           { index: true, element: <Navigate replace to="notifications" /> },
           { path: 'notifications', Component: NotificationsSettingsSection },
+          { path: 'cloud-sync', Component: CloudSyncSettingsSection },
           {
             path: 'background-startup',
             Component: BackgroundStartupSettingsSection,

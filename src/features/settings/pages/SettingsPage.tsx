@@ -3,11 +3,13 @@ import {
   IconDeviceDesktop,
   IconInfoCircle,
   IconSettings,
+  IconCloud,
 } from '@tabler/icons-react';
 import { NavLink, Outlet } from 'react-router';
 import { ICON_SIZE, ICON_STROKE } from '@/shared/constants/icon.constants';
 
 const settingsSections = [
+  { icon: IconCloud, label: 'Cloud Sync', to: '/settings/cloud-sync' },
   {
     icon: IconBell,
     label: 'Notifications',

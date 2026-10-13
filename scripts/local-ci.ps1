@@ -15,6 +15,8 @@ $checks = @(
   @{ Name = 'Frontend unit tests'; Directory = $repositoryRoot; Command = 'npm.cmd'; Arguments = @('run', 'test:unit') },
   @{ Name = 'Git hook tests'; Directory = $repositoryRoot; Command = 'npm.cmd'; Arguments = @('run', 'test:hooks') },
   @{ Name = 'Release tooling tests'; Directory = $repositoryRoot; Command = 'npm.cmd'; Arguments = @('run', 'test:release-tools') },
+  @{ Name = 'Cloud Worker types'; Directory = $repositoryRoot; Command = 'npm.cmd'; Arguments = @('run', 'cloud:typecheck') },
+  @{ Name = 'Cloud Worker integration tests'; Directory = $repositoryRoot; Command = 'npm.cmd'; Arguments = @('run', 'test:cloud') },
   @{ Name = 'Browser E2E tests'; Directory = $repositoryRoot; Command = 'npm.cmd'; Arguments = @('run', 'test:e2e') },
   @{ Name = 'Frontend production build'; Directory = $repositoryRoot; Command = 'npm.cmd'; Arguments = @('run', 'build') },
   @{ Name = 'Rust format'; Directory = $tauriRoot; Command = 'cargo'; Arguments = @('fmt', '--check') },

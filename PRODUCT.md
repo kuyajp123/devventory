@@ -34,10 +34,11 @@ An offline-first, local-first developer inventory tool that indexes metadata in 
 - Environment key name parsing and tracking (persisting key definitions and schemas only).
 - A global Credential Vault for user-entered credentials, with metadata and project/environment associations in SQLite and optional values encrypted in a password-protected local Stronghold snapshot.
 - Bounded file system scanning and local file watcher event reconciliation.
+- Optional private Cloudflare metadata mirror for projects, Environment Tracker, and current Agent Usage, published by one desktop with explicit first-upload approval.
 
 ### Constraints
 
-- Strictly offline-first: no external HTTP APIs, cloud synchronization, or remote database dependencies in the MVP.
+- Offline-first: SQLite remains authoritative and every local save works without a network. Cloud Sync is disabled by default; only its authenticated Rust transport may publish the three allowlisted metadata features. Cloud data never rewrites desktop state.
 - Project files remain the source of truth; indexed files store metadata only and avoid full file duplication.
 - Scanned environment-file values are never persisted; Environment Tracker, search, validation, dashboards, and exports consume key metadata only.
 - Optional values entered explicitly in Credential Vault are persisted only in encrypted Stronghold storage. SQLite stores an opaque secret reference, never the plaintext value.

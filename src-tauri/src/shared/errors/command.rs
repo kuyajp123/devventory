@@ -5,6 +5,9 @@ use super::AppError;
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 enum CommandErrorCode {
+    CloudSyncConfigurationInvalid,
+    CloudSyncCredentialsUnavailable,
+    CloudSyncConnectionUnavailable,
     AgentUsageConflict,
     AssetConflict,
     CredentialVaultPasswordIncorrect,
@@ -39,6 +42,24 @@ pub(crate) struct CommandError {
 }
 
 impl CommandError {
+    pub(crate) fn cloud_sync_configuration_invalid() -> Self {
+        Self {
+            code: CommandErrorCode::CloudSyncConfigurationInvalid,
+            message: "Check the Worker URL, workspace ID, device ID, and publisher token.",
+            recoverable: true,
+        }
+    }
+    pub(crate) fn cloud_sync_credentials_unavailable() -> Self {
+        Self {
+            code: CommandErrorCode::CloudSyncCredentialsUnavailable,
+            message:
+                "The publisher token could not be saved or read in Windows Credential Manager.",
+            recoverable: true,
+        }
+    }
+    pub(crate) fn cloud_sync_connection_unavailable() -> Self {
+        Self{code:CommandErrorCode::CloudSyncConnectionUnavailable,message:"The cloud operation could not be completed. Check the connection and Cloud Sync status.",recoverable:true}
+    }
     pub(crate) fn agent_usage_conflict(message: &'static str) -> Self {
         Self {
             code: CommandErrorCode::AgentUsageConflict,
@@ -225,6 +246,11 @@ impl CommandError {
 
     pub(crate) fn code(&self) -> &'static str {
         match self.code {
+            CommandErrorCode::CloudSyncConfigurationInvalid => "CLOUD_SYNC_CONFIGURATION_INVALID",
+            CommandErrorCode::CloudSyncCredentialsUnavailable => {
+                "CLOUD_SYNC_CREDENTIALS_UNAVAILABLE"
+            }
+            CommandErrorCode::CloudSyncConnectionUnavailable => "CLOUD_SYNC_CONNECTION_UNAVAILABLE",
             CommandErrorCode::AgentUsageConflict => "AGENT_USAGE_CONFLICT",
             CommandErrorCode::AssetConflict => "ASSET_CONFLICT",
             CommandErrorCode::CredentialVaultPasswordIncorrect => {

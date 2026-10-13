@@ -1,0 +1,300 @@
+use super::{
+    credentials::{Credentials, NativeCredentials},
+    model::{SyncConfig, SyncStatus},
+    repository::SyncRepository,
+    transport::{validate_url, SyncError, Transport},
+};
+use chrono::Utc;
+use serde::Deserialize;
+use sqlx::SqlitePool;
+use std::sync::{
+    atomic::{AtomicBool, Ordering},
+    Arc,
+};
+use std::time::Duration;
+use tokio::sync::{Mutex, Notify};
+use zeroize::Zeroizing;
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub(crate) struct ConfigureSync {
+    pub(crate) api_url: String,
+    pub(crate) workspace_id: String,
+    pub(crate) device_id: String,
+    pub(crate) publisher_token: Option<String>,
+}
+#[derive(Clone)]
+pub(crate) struct CloudSyncService {
+    repository: SyncRepository,
+    credentials: Arc<dyn Credentials>,
+    gate: Arc<Mutex<()>>,
+    active: Arc<AtomicBool>,
+    cancel: Arc<AtomicBool>,
+    wake: Arc<Notify>,
+    started: Arc<AtomicBool>,
+    shutdown: Arc<Notify>,
+}
+impl std::fmt::Debug for CloudSyncService {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter
+            .debug_struct("CloudSyncService")
+            .finish_non_exhaustive()
+    }
+}
+struct ActiveGuard(Arc<AtomicBool>);
+impl Drop for ActiveGuard {
+    fn drop(&mut self) {
+        self.0.store(false, Ordering::Release);
+    }
+}
+impl CloudSyncService {
+    pub(crate) fn new(pool: SqlitePool) -> Self {
+        Self::with_credentials(pool, Arc::new(NativeCredentials))
+    }
+    pub(crate) fn with_credentials(pool: SqlitePool, credentials: Arc<dyn Credentials>) -> Self {
+        Self {
+            repository: SyncRepository::new(pool),
+            credentials,
+            gate: Arc::new(Mutex::new(())),
+            active: Arc::new(AtomicBool::new(false)),
+            cancel: Arc::new(AtomicBool::new(false)),
+            wake: Arc::new(Notify::new()),
+            started: Arc::new(AtomicBool::new(false)),
+            shutdown: Arc::new(Notify::new()),
+        }
+    }
+    pub(crate) fn start(&self) {
+        if self.started.swap(true, Ordering::AcqRel) {
+            return;
+        }
+        let service = self.clone();
+        tauri::async_runtime::spawn(async move {
+            let mut interval = tokio::time::interval(Duration::from_secs(2));
+            interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
+            loop {
+                tokio::select! {_ = interval.tick()=>{},_ = service.wake.notified()=>{},_ = service.shutdown.notified()=>break}
+                let _ = service.synchronize(false).await;
+            }
+        });
+    }
+    pub(crate) async fn configure(&self, input: ConfigureSync) -> Result<SyncStatus, SyncError> {
+        self.cancel.store(true, Ordering::Release);
+        let _gate = self.gate.lock().await;
+        let url = validate_url(&input.api_url)?;
+        let workspace_id = uuid::Uuid::parse_str(&input.workspace_id)
+            .map_err(|_| SyncError::InvalidConfiguration)?
+            .to_string();
+        let device_id = uuid::Uuid::parse_str(&input.device_id)
+            .map_err(|_| SyncError::InvalidConfiguration)?
+            .to_string();
+        let identity = format!("{}|{}:{}", url, workspace_id, device_id);
+        if let Some(token) = input.publisher_token.filter(|value| !value.is_empty()) {
+            let token = Zeroizing::new(token);
+            if token.len() != 64
+                || !token
+                    .chars()
+                    .all(|c| c.is_ascii_digit() || ('a'..='f').contains(&c))
+            {
+                return Err(SyncError::InvalidConfiguration);
+            }
+            let credentials = self.credentials.clone();
+            tokio::task::spawn_blocking(move || credentials.save(&identity, &token))
+                .await
+                .map_err(|_| SyncError::CredentialUnavailable)?
+                .map_err(|_| SyncError::CredentialUnavailable)?;
+        } else {
+            let credentials = self.credentials.clone();
+            tokio::task::spawn_blocking(move || credentials.load(&identity))
+                .await
+                .map_err(|_| SyncError::CredentialUnavailable)?
+                .map_err(|_| SyncError::CredentialUnavailable)?;
+        }
+        self.repository
+            .configure(&url, &workspace_id, &device_id)
+            .await?;
+        self.status().await
+    }
+    pub(crate) fn shutdown(&self) {
+        self.cancel.store(true, Ordering::Release);
+        self.shutdown.notify_one();
+    }
+    pub(crate) async fn set_enabled(
+        &self,
+        enabled: bool,
+        confirmed: bool,
+    ) -> Result<SyncStatus, SyncError> {
+        if !enabled {
+            self.cancel.store(true, Ordering::Release);
+        }
+        let _gate = self.gate.lock().await;
+        let config = self.repository.config().await?;
+        if enabled && (!confirmed || config.workspace_id.is_none()) {
+            return Err(SyncError::InvalidConfiguration);
+        }
+        self.repository.set_enabled(enabled).await?;
+        self.wake.notify_one();
+        self.status().await
+    }
+    pub(crate) async fn status(&self) -> Result<SyncStatus, SyncError> {
+        let config = self.repository.config().await?;
+        let pending = self.repository.pending().await?;
+        let configured = config.workspace_id.is_some() && !config.api_url.is_empty();
+        let state = if !configured {
+            "notConfigured"
+        } else if !config.enabled {
+            "paused"
+        } else if self.active.load(Ordering::Acquire) {
+            "syncing"
+        } else if let Some(code) = config.blocked_code.as_deref() {
+            match code {
+                "OFFLINE" => "offline",
+                "RATE_LIMITED" => "retrying",
+                "RECOVERY_REQUIRED" => "recoveryRequired",
+                _ => "blocked",
+            }
+        } else if pending > 0 {
+            "pending"
+        } else if config.last_successful_at.is_none() {
+            "ready"
+        } else {
+            "synced"
+        };
+        Ok(SyncStatus {
+            enabled: config.enabled,
+            configured,
+            api_url: config.api_url,
+            workspace_id: config.workspace_id,
+            device_id: config.device_id,
+            state: state.into(),
+            pending_scopes: pending,
+            last_successful_at: config.last_successful_at,
+            problem: config.blocked_code,
+            preview: self.repository.preview().await?,
+        })
+    }
+    async fn token(&self, config: &SyncConfig) -> Result<Zeroizing<String>, SyncError> {
+        let identity = format!(
+            "{}|{}:{}",
+            validate_url(&config.api_url)?,
+            config
+                .workspace_id
+                .as_deref()
+                .ok_or(SyncError::InvalidConfiguration)?,
+            config
+                .device_id
+                .as_deref()
+                .ok_or(SyncError::InvalidConfiguration)?
+        );
+        let credentials = self.credentials.clone();
+        let token = tokio::task::spawn_blocking(move || credentials.load(&identity))
+            .await
+            .map_err(|_| SyncError::CredentialUnavailable)?
+            .map_err(|_| SyncError::CredentialUnavailable)?;
+        if token.len() != 64 {
+            return Err(SyncError::CredentialUnavailable);
+        }
+        Ok(token)
+    }
+    pub(crate) async fn synchronize(&self, manual: bool) -> Result<(), SyncError> {
+        let Ok(_gate) = self.gate.try_lock() else {
+            return Ok(());
+        };
+        self.cancel.store(false, Ordering::Release);
+        let config = self.repository.config().await?;
+        if !config.enabled || self.repository.pending().await? == 0 {
+            return Ok(());
+        }
+        if !manual {
+            if config.blocked_code.is_some() && config.retry_at.is_none() {
+                return Ok(());
+            }
+            if config
+                .retry_at
+                .is_some_and(|time| time > Utc::now().timestamp())
+            {
+                return Ok(());
+            }
+            if !self.repository.ready().await? {
+                return Ok(());
+            }
+        }
+        self.active.store(true, Ordering::Release);
+        let _active = ActiveGuard(self.active.clone());
+        let result = self.publish_next(&config).await;
+        if matches!(result, Err(SyncError::SnapshotExpired)) {
+            self.repository.discard_expired().await?;
+            return Ok(());
+        }
+        if matches!(result, Err(SyncError::Cancelled)) {
+            return result;
+        }
+        if let Err(error) = &result {
+            let jitter = i64::from(uuid::Uuid::new_v4().as_bytes()[0] % 5);
+            let retry = if let SyncError::RateLimited(delay) = error {
+                Some((*delay).clamp(1, 86400))
+            } else if error.transient() {
+                Some(
+                    (5_i64.saturating_mul(1_i64 << config.retry_attempt.clamp(0, 6))).min(300)
+                        + jitter,
+                )
+            } else {
+                None
+            };
+            self.repository.failure(error.code(), retry).await?;
+            tracing::debug!(code = error.code(), "Cloud synchronization deferred");
+        }
+        result
+    }
+    async fn publish_next(&self, config: &SyncConfig) -> Result<(), SyncError> {
+        let token = self.token(config).await?;
+        let transport = Transport::new(config)?;
+        let remote = transport.status(config, &token).await?;
+        if remote.stream_id.is_some() && remote.stream_id != config.stream_id {
+            return Err(SyncError::RecoveryRequired);
+        }
+        let local = self.repository.revisions().await?;
+        for head in remote.heads {
+            if local
+                .iter()
+                .find(|(kind, id, _, _, _)| kind == &head.scope_kind && id == &head.scope_id)
+                .is_none_or(|(_, _, revision, acknowledged, prepared)| {
+                    *revision < head.revision
+                        || (acknowledged.as_deref() != Some(&head.snapshot_id)
+                            && prepared.as_deref() != Some(&head.snapshot_id))
+                })
+            {
+                return Err(SyncError::RecoveryRequired);
+            }
+        }
+        if let Some(upload) = self.repository.prepare_next().await? {
+            let received = transport.publish(&upload, &token, &self.cancel).await?;
+            self.repository.acknowledge(&upload, &received).await?;
+        }
+        Ok(())
+    }
+    pub(crate) async fn rebuild(&self, confirmation: &str) -> Result<SyncStatus, SyncError> {
+        let _gate = self.gate.lock().await;
+        if confirmation != "rebuild cloud metadata" {
+            return Err(SyncError::InvalidConfiguration);
+        }
+        let config = self.repository.config().await?;
+        let token = self.token(&config).await?;
+        let transport = Transport::new(&config)?;
+        transport.status(&config, &token).await?;
+        let stream = uuid::Uuid::new_v4().to_string();
+        let response: serde_json::Value = transport
+            .request(
+                reqwest::Method::POST,
+                "/v1/sync/rebuild",
+                &token,
+                Some(serde_json::json!({"confirm":confirmation,"streamId":stream}).to_string()),
+            )
+            .await?;
+        if response["protocolVersion"] != 1 || response["streamId"] != stream {
+            return Err(SyncError::InvalidResponse);
+        }
+        self.repository.rebuild(&stream).await?;
+        self.wake.notify_one();
+        self.status().await
+    }
+}

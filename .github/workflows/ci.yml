@@ -54,6 +54,9 @@ jobs:
       - name: Run release tooling tests
         run: npm run test:release-tools
 
+      - name: Verify cloud Worker types and integration
+        run: npm run cloud:typecheck && npm run test:cloud
+
       - name: Run browser tests
         run: npm run test:e2e
 
@@ -67,6 +70,17 @@ jobs:
     steps:
       - name: Check out repository
         uses: actions/checkout@v7
+
+      # Rust's cloud acceptance test starts the real local Worker/D1 runtime.
+      - name: Set up Node.js for cloud acceptance
+        uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: package-lock.json
+
+      - name: Install local Worker test dependencies
+        run: npm ci
 
       - name: Install Rust quality components
         run: rustup component add clippy

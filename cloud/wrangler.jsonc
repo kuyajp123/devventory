@@ -1,0 +1,28 @@
+{
+  "$schema": "../node_modules/wrangler/config-schema.json",
+  "name": "devventory-sync",
+  "main": "src/worker.ts",
+  "compatibility_date": "2026-06-11",
+  "workers_dev": true,
+  "preview_urls": false,
+  "vars": {
+    "SYNC_WORKSPACE_ID": "5e82c593-5cd0-4fd8-ba9d-e3318d228af6",
+    "SYNC_PUBLISHER_DEVICE_ID": "2d0e9e06-c60e-4ecc-a7d1-5ce4be53f444",
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "devventory-sync",
+      "database_id": "98a2797c-88ba-4840-8420-af5af3241f46",
+      "migrations_dir": "migrations",
+    },
+  ],
+  "ratelimits": [
+    {
+      "name": "SYNC_RATE_LIMITER",
+      "namespace_id": "1001",
+      "simple": { "limit": 60, "period": 60 },
+    },
+  ],
+  "triggers": { "crons": ["17 * * * *"] },
+}

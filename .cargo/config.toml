@@ -1,0 +1,5 @@
+[env]
+# Real Stronghold password derivation has interactive-latency assertions.
+# Run test bodies serially so unrelated tests do not consume their CPU budget.
+# Compilation remains parallel; explicit test-harness arguments can override this.
+RUST_TEST_THREADS = { value = "1", force = false }
