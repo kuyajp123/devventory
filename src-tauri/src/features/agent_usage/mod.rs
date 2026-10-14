@@ -1,4 +1,6 @@
+mod cloud;
 pub(crate) mod commands;
+pub(crate) use cloud::cloud_records;
 mod domain;
 mod dto;
 mod error;

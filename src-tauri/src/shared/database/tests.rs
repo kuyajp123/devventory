@@ -172,7 +172,7 @@ async fn snapshots_an_existing_database_before_applying_pending_migrations() {
     assert!(snapshot.file_path.starts_with(paths.backups_directory()));
     assert!(snapshot.file_path.is_file());
     assert_eq!(snapshot.from_version, 0);
-    assert_eq!(snapshot.to_version, 15);
+    assert_eq!(snapshot.to_version, 17);
 
     let backup_options = SqliteConnectOptions::new()
         .filename(&snapshot.file_path)
@@ -221,6 +221,34 @@ async fn upgrades_a_database_that_already_applied_the_immutable_asset_migration(
     let initial = initialize_database(&paths)
         .await
         .expect("initial database should migrate");
+
+    // Remove the later cloud schema before reconstructing the historical fixture.
+    let cloud_triggers: Vec<String> = query_scalar(
+        "SELECT name FROM sqlite_master WHERE type='trigger' AND name LIKE 'cloud_sync_%'",
+    )
+    .fetch_all(initial.database.pool())
+    .await
+    .expect("cloud trigger names should load");
+    for name in cloud_triggers {
+        let identifier = name.replace('"', "\"\"");
+        // Names come only from the disposable test schema; quote identifiers.
+        query(sqlx::AssertSqlSafe(format!(
+            "DROP TRIGGER \"{identifier}\""
+        )))
+        .execute(initial.database.pool())
+        .await
+        .expect("cloud triggers should be absent from the version 4 fixture");
+    }
+    for statement in [
+        "DROP TABLE cloud_sync_uploads",
+        "DROP TABLE cloud_sync_scopes",
+        "DROP TABLE cloud_sync_config",
+    ] {
+        query(statement)
+            .execute(initial.database.pool())
+            .await
+            .expect("cloud tables should be absent from the version 4 fixture");
+    }
 
     query("DROP TABLE IF EXISTS search_history")
         .execute(initial.database.pool())
@@ -314,6 +342,10 @@ async fn upgrades_a_database_that_already_applied_the_immutable_asset_migration(
         .execute(initial.database.pool())
         .await
         .expect("environments should be absent from the version 4 fixture");
+    query("DROP TABLE IF EXISTS cloud_sync_device_registrations")
+        .execute(initial.database.pool())
+        .await
+        .expect("cloud device registrations should be absent from the version 4 fixture");
     query("DELETE FROM _sqlx_migrations WHERE version >= 5")
         .execute(initial.database.pool())
         .await
@@ -341,9 +373,9 @@ async fn upgrades_a_database_that_already_applied_the_immutable_asset_migration(
         .expect("latest migration version should load");
 
     assert_eq!(snapshot.from_version, 4);
-    assert_eq!(snapshot.to_version, 15);
+    assert_eq!(snapshot.to_version, 17);
     assert!(snapshot.file_path.is_file());
-    assert_eq!(latest_applied, 15);
+    assert_eq!(latest_applied, 17);
     assert!(index_exists(upgraded.database.pool(), "indexed_files_project_size_idx").await);
     assert!(
         index_exists(

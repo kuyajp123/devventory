@@ -753,6 +753,118 @@ fn matrix_cell(
     })
 }
 
+/// Read the same matrix keys and cell classification as the desktop, using the
+/// snapshot transaction's connection. Only tracking metadata crosses the wire.
+pub(crate) async fn cloud_records(
+    connection: &mut sqlx::SqliteConnection,
+    project_id: &str,
+) -> Result<Vec<crate::shared::cloud::CloudRecord>, sqlx::Error> {
+    use crate::shared::cloud::{file_display_name, select_records, CloudRecord};
+    use serde_json::json;
+    let mut records = select_records(connection,"environment",
+        "SELECT id,json_object('id',id,'name',name,'description',description,'sortOrder',sort_order,'createdAt',created_at,'updatedAt',updated_at) AS payload FROM environments WHERE project_id=? ORDER BY sort_order,id",&[project_id]).await?;
+    let environments = sqlx::query_as::<_,EnvironmentRow>(
+        "SELECT id,project_id,name,description,sort_order,created_at,updated_at FROM environments WHERE project_id=? ORDER BY sort_order,id")
+        .bind(project_id).fetch_all(&mut *connection).await?.into_iter().map(|row|Environment::try_from(row).map_err(|error|sqlx::Error::Decode(Box::new(error)))).collect::<Result<Vec<_>,_>>()?;
+    let sources = sqlx::query_as::<_,EnvironmentSourceRow>(
+        "SELECT id,project_id,environment_id,relative_path,sort_order,parse_status,last_observed_size_bytes,last_observed_modified_at_ms,last_parsed_at,last_successful_parse_at,last_issue_line,last_issue_code,last_issue_message,created_at,updated_at FROM environment_sources WHERE project_id=? ORDER BY sort_order,id")
+        .bind(project_id).fetch_all(&mut *connection).await?.into_iter().map(|row|EnvironmentSource::try_from(row).map_err(|error|sqlx::Error::Decode(Box::new(error)))).collect::<Result<Vec<_>,_>>()?;
+    for source in &sources {
+        records.push(CloudRecord::new("source",format!("{}:{}",source.id,source.environment_id),json!({
+            "id":source.id,"environmentId":source.environment_id,"name":file_display_name(&source.relative_path),"origin":"file",
+            "parseStatus":source.parse_status,"sortOrder":source.sort_order,"lastParsedAt":source.last_parsed_at,"lastSuccessfulParseAt":source.last_successful_parse_at
+        })));
+    }
+    records.extend(select_records(connection,"source",
+        "SELECT s.id||':'||e.environment_id AS id,json_object('id',s.id,'environmentId',e.environment_id,'name',s.name,'origin','custom','parseStatus','custom','sortOrder',s.sort_order,'lastParsedAt',NULL,'lastSuccessfulParseAt',NULL) AS payload FROM credential_sources s JOIN credentials c ON c.source_id=s.id JOIN credential_environment_links e ON e.credential_id=c.id WHERE e.project_id=? GROUP BY s.id,e.environment_id ORDER BY s.id,e.environment_id",&[project_id]).await?);
+    let rule_names=sqlx::query_as::<_,(String,String)>("SELECT key_name,normalized_key FROM environment_key_rules WHERE project_id=? AND enabled=1 ORDER BY normalized_key,id")
+        .bind(project_id).fetch_all(&mut *connection).await?;
+    let rule_keys = rule_names
+        .into_iter()
+        .map(|(name, normalized_name)| EnvironmentMatrixRuleKey {
+            name,
+            normalized_name,
+        })
+        .collect::<Vec<_>>();
+    let rule_json =
+        serde_json::to_string(&rule_keys).map_err(|error| sqlx::Error::Decode(Box::new(error)))?;
+    let query = EnvironmentMatrixQuery {
+        project_id: Uuid::parse_str(project_id)
+            .map_err(|error| sqlx::Error::Decode(Box::new(error)))?,
+        environment_id: None,
+        search: None,
+        page: 1,
+        page_size: 100,
+    };
+    let mut builder = QueryBuilder::<Sqlite>::new("");
+    push_matrix_keys(&mut builder, &query, &rule_json);
+    builder.push(" SELECT id,name FROM matrix_keys ORDER BY normalized_name,id");
+    let definitions = builder
+        .build_query_as::<KeyDefinitionRow>()
+        .fetch_all(&mut *connection)
+        .await?;
+    let occurrences=sqlx::query_as::<_,OccurrenceRow>(
+        "SELECT o.key_definition_id,o.environment_id,o.source_id,o.line_number,o.is_commented,o.is_duplicate,'file' AS origin,s.relative_path AS source_name,s.relative_path,s.sort_order,NULL AS credential_id FROM environment_key_occurrences o JOIN environment_sources s ON s.id=o.source_id WHERE o.project_id=?
+         UNION ALL
+         SELECT l.key_definition_id,e.environment_id,c.source_id,NULL AS line_number,0 AS is_commented,0 AS is_duplicate,'custom' AS origin,s.name AS source_name,NULL AS relative_path,s.sort_order,c.id AS credential_id FROM credential_project_links l JOIN credentials c ON c.id=l.credential_id JOIN credential_environment_links e ON e.credential_id=l.credential_id AND e.project_id=l.project_id JOIN credential_sources s ON s.id=c.source_id WHERE l.project_id=? ORDER BY source_id,line_number,credential_id")
+        .bind(project_id).bind(project_id).fetch_all(&mut *connection).await?;
+    let mut grouped = HashMap::<(Uuid, Uuid), Vec<OccurrenceRow>>::new();
+    for occurrence in occurrences {
+        let key = occurrence
+            .key_definition_id()
+            .map_err(|error| sqlx::Error::Decode(Box::new(error)))?;
+        let env = occurrence
+            .environment_id()
+            .map_err(|error| sqlx::Error::Decode(Box::new(error)))?;
+        grouped.entry((key, env)).or_default().push(occurrence);
+    }
+    let mut seen = std::collections::HashSet::new();
+    for definition in definitions {
+        let key_id = format!("key:{}", definition.name.trim().to_ascii_uppercase());
+        if !seen.insert(key_id.clone()) {
+            continue;
+        }
+        records.push(CloudRecord::new(
+            "key",
+            &key_id,
+            json!({"name":definition.name}),
+        ));
+        let definition_id = definition
+            .id()
+            .map_err(|error| sqlx::Error::Decode(Box::new(error)))?;
+        for environment in &environments {
+            let occurrences = definition_id
+                .and_then(|id| grouped.get(&(id, environment.id)))
+                .map(Vec::as_slice)
+                .unwrap_or_default();
+            let env_sources = sources
+                .iter()
+                .filter(|source| source.environment_id == environment.id)
+                .collect::<Vec<_>>();
+            let cell = matrix_cell(occurrences, &env_sources)
+                .map_err(|error| sqlx::Error::Decode(Box::new(error)))?;
+            let cell_id = format!("{}:{}", key_id, environment.id);
+            records.push(CloudRecord::new(
+                "cell",
+                &cell_id,
+                json!({"keyId":key_id,"environmentId":environment.id,"state":cell.state}),
+            ));
+            for (index, detail) in cell.source_details.iter().enumerate() {
+                let source_name = if detail.origin == EnvironmentSourceOrigin::File {
+                    file_display_name(&detail.source_name)
+                } else {
+                    detail.source_name.clone()
+                };
+                records.push(CloudRecord::new("occurrence",format!("{cell_id}:{index}"),json!({
+                    "keyId":key_id,"environmentId":environment.id,"sourceId":detail.source_id,"sourceName":source_name,
+                    "origin":detail.origin,"lineNumber":detail.line_number,"isCommented":detail.is_commented
+                })));
+            }
+        }
+    }
+    Ok(records)
+}
+
 fn push_matrix_keys(
     builder: &mut QueryBuilder<Sqlite>,
     query: &EnvironmentMatrixQuery,

@@ -1,7 +1,9 @@
 pub(crate) mod agent_usage;
 pub(crate) mod app_health;
 pub(crate) mod asset_library;
+pub(crate) mod authentication;
 pub(crate) mod backups;
+pub(crate) mod cloud_sync;
 pub(crate) mod credential_vault;
 pub(crate) mod dashboard;
 pub(crate) mod environment_tracker;

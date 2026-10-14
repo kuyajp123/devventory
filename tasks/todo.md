@@ -6,3 +6,48 @@
 - [x] Task 4: Streamline `AppUpdateModal` for downloading/installing/relaunching progress overlay
 - [x] Task 5: Add unit tests in `AboutUpdatesSettingsSection.test.tsx`, `AppUpdateIndicator.test.tsx`, and `AppUpdateModal.test.tsx`
 - [x] Task 6: Run all verification and quality gates (typecheck, lint, format check, unit tests, build)
+
+## Firebase authentication and isolated Cloud Sync
+
+- [x] Inspect the saved Cloud Sync checkpoint and existing native credential/transport boundaries.
+- [x] Confirm Firebase Spark, email/password scope, and isolated workspaces for all users.
+- [x] Check public Firebase configuration reachability after Authentication is enabled (HTTP 200; not a sign-in acceptance test).
+- [x] Review and approve the [implementation plan](../docs/firebase-authentication-implementation-plan.md).
+- [x] Define account/session contracts and forbidden cross-account authorization tests.
+  - Acceptance: safe token-free UI contract; wrong account/project/verification cannot authorize a workspace.
+  - Verify: focused contract and Worker auth tests.
+  - Files: authentication types/gateway, Worker auth contracts/tests (at most 5).
+- [x] Add Firebase verification and isolated workspace provisioning to the Worker.
+  - Acceptance: verified UID owns one server-allocated workspace; concurrent provisioning is idempotent.
+  - Verify: `npm run cloud:typecheck` and focused local D1 tests.
+  - Files: next D1 migration, Worker auth/provisioning modules and tests (at most 5).
+- [x] Add registered-publisher authorization and protected legacy workspace claim.
+  - Acceptance: publishing device proof is required; only legacy credential owner can adopt existing data; snapshot protocol remains compatible.
+  - Verify: Worker device/claim tests plus existing local D1 snapshot tests.
+  - Files: Worker device/claim modules, integration boundary and tests (at most 5).
+- [x] Implement Rust email/password requests and safe native sessions.
+  - Acceptance: readable errors, bounded responses, credential-store-only refresh persistence and safe rotation.
+  - Verify: `cargo test authentication` with mocked HTTP/credential fixtures.
+  - Files: Rust auth models/transport/credentials/service/tests (split into two slices if needed).
+- [x] Bind the current local sync coordinator to the authenticated account/device.
+  - Acceptance: durable queue preserved; stale sessions and account switching cannot send or acknowledge another user's uploads.
+  - Verify: `cargo test cloud_sync` and account-switch/offline integration tests.
+  - Files: next desktop migration, Cloud Sync service/transport/repository/tests (at most 5).
+- [x] Register typed Tauri commands and feature composition.
+  - Acceptance: React has no direct network calls or tokens; local startup works with missing auth configuration.
+  - Verify: Rust compilation and frontend typecheck/gateway tests.
+  - Files: auth commands/module, application state, command registration, frontend public entry (at most 5).
+- [x] Build sign-in/up/reset/verification UI in the existing Settings flow.
+  - Acceptance: accessible status/error/loading states; blue accent; local features and locked Vault stay independent.
+  - Verify: focused authentication/Cloud Sync component tests and browser journey.
+  - Files: auth form/hooks/components/tests, Settings/Cloud Sync integration (split into slices of at most 5).
+- [x] Finish the normal account-based Cloud Sync setup and legacy-claim confirmation.
+  - Acceptance: new users do not enter UUIDs/raw publisher tokens; first upload remains explicit and legacy data is not rebuilt.
+  - Verify: browser flows and local D1 claim/provisioning acceptance.
+  - Files: Cloud Sync setup/confirmation components, gateway contract and tests (at most 5).
+- [x] Run full frontend/Rust/Worker verification and record results in [the verification report](../docs/firebase-authentication-verification.md).
+- [x] Apply approved production D1 migration 3 and deploy the updated Worker. Existing six projects and legacy authorization still work; no workspace is claimed automatically.
+- [x] Confirm private-user sign-in, verified legacy claim, and enabled idle state through user feedback and read-only local/D1 checks; the six original projects remain visible.
+- [ ] Complete a newly authenticated upload, offline reconnect across restart, and isolated second-account production acceptance with user-entered credentials.
+- [x] Clarify empty-queue, progress, pending, and error feedback; disable redundant manual sync without changing the background coordinator.
+- [x] Mark the ADR accepted after local ownership/compatibility validation. No mobile implementation, commit, push, or release in this scope.

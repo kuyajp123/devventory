@@ -44,4 +44,6 @@ Phase 2 initializes an SQLx SQLite pool in Tauri's application-local data direct
 
 Rust code follows the same feature-first boundary as the frontend: settings and backup SQL is owned by repositories under `src-tauri/src/features/`; connection, migration, snapshot, error, and tracing mechanics live under `src-tauri/src/shared/`. Tauri commands receive managed application state and serialize stable error codes rather than raw SQLx or filesystem errors.
 
-Project onboarding, project tables, folder selection, scanning, cloud services, Supabase, and HTTP synchronization remain intentionally out of scope until their later phases.
+Optional Cloud Sync publishes only project, Environment Tracker, and Agent Usage metadata through Rust to Cloudflare D1. Firebase email/password accounts own isolated logical workspaces; users do not create their own Cloudflare databases. Local features and Credential Vault remain independent of sign-in.
+
+See the [Firebase authentication and Cloud Sync operating guide](docs/firebase-authentication-setup.md) for Firebase console preparation, protected adoption of the existing private workspace, deployment, and acceptance tests. The [original Cloud Sync guide](docs/cloud-sync-phase-1-setup.md) documents the legacy private-token bootstrap. Mobile, bidirectional editing, Supabase, and secret-value synchronization are not implemented.

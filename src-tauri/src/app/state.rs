@@ -1,5 +1,7 @@
 use std::path::Path;
 
+use crate::features::authentication::AuthService;
+use crate::features::cloud_sync::CloudSyncService;
 use tauri::AppHandle;
 
 use crate::features::agent_usage::{
@@ -33,6 +35,8 @@ use std::sync::Arc;
 #[derive(Debug)]
 pub(crate) struct AppState {
     database: Database,
+    cloud_sync_service: CloudSyncService,
+    authentication_service: AuthService,
     agent_usage_service: AgentUsageService,
     file_inventory_service: FileInventoryService,
     asset_service: AssetService,
@@ -44,6 +48,11 @@ pub(crate) struct AppState {
     agent_reminder_runtime: AgentReminderRuntime,
     notification_session_state: Arc<NotificationSessionState>,
     lifecycle_state: Arc<ApplicationLifecycleState>,
+}
+impl Drop for AppState {
+    fn drop(&mut self) {
+        self.cloud_sync_service.shutdown();
+    }
 }
 
 impl AppState {
@@ -128,7 +137,13 @@ impl AppState {
             &data_directory,
         );
 
+        let authentication_service = AuthService::new();
         Ok(Self {
+            cloud_sync_service: CloudSyncService::new(
+                database.pool().clone(),
+                authentication_service.clone(),
+            ),
+            authentication_service,
             database,
             agent_usage_service,
             asset_service,
@@ -148,6 +163,12 @@ impl AppState {
 
     pub(crate) fn lifecycle_state(&self) -> Arc<ApplicationLifecycleState> {
         self.lifecycle_state.clone()
+    }
+    pub(crate) fn cloud_sync_service(&self) -> &CloudSyncService {
+        &self.cloud_sync_service
+    }
+    pub(crate) fn authentication_service(&self) -> &AuthService {
+        &self.authentication_service
     }
 
     pub(crate) fn notification_session_state(&self) -> Arc<NotificationSessionState> {
@@ -242,7 +263,7 @@ impl AppState {
 
     #[cfg(test)]
     pub(crate) async fn close(self) {
-        self.database.close().await;
+        self.database.clone().close().await;
     }
 }
 

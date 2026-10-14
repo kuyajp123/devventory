@@ -139,13 +139,15 @@ The PowerShell runner executes these stages sequentially and stops at the first 
 4. `npm run test:unit`
 5. `npm run test:hooks`
 6. `npm run test:release-tools`
-7. `npm run test:e2e`
-8. `npm run build`
-9. `cargo fmt --check` from `src-tauri`
-10. `cargo clippy --all-targets --all-features -- -D warnings` from `src-tauri`
-11. `cargo test` from `src-tauri`
-12. `cargo check` from `src-tauri`
-13. `cargo audit` from `src-tauri`
+7. `npm run cloud:typecheck`
+8. `npm run test:cloud` (local D1; no Cloudflare account required)
+9. `npm run test:e2e`
+10. `npm run build`
+11. `cargo fmt --check` from `src-tauri`
+12. `cargo clippy --all-targets --all-features -- -D warnings` from `src-tauri`
+13. `cargo test` from `src-tauri`
+14. `cargo check` from `src-tauri`
+15. `cargo audit` from `src-tauri`
 
 List the configured stages without running them:
 
@@ -155,13 +157,17 @@ npm run ci:local -- -ListOnly
 
 ### Parallel behavior
 
-The 13 top-level stages do not overlap. Individual tools still use internal parallelism:
+The 15 top-level stages do not overlap. Individual tools still use internal parallelism:
 
 - Vitest uses up to four workers locally and two when the `CI` environment variable is present.
 - Playwright has `fullyParallel: true` and uses the worker count selected for the local machine. The verified run used four workers.
-- Cargo parallelizes compilation and Rust tests using its normal worker behavior.
+- Cargo compilation remains parallel. Rust test bodies run one at a time by default through the repository's `.cargo/config.toml`. This applies to ordinary `cargo test`, local CI, and release verification, including commands run from `src-tauri`.
 
-This avoids running separate E2E shards against competing Vite servers while still using multiple CPU cores inside each suite.
+This avoids running separate E2E shards against competing Vite servers while still using multiple CPU cores for frontend suites and compilation.
+
+The Rust default prevents CPU-heavy database and cloud integration tests from competing with the Vault's real password-derivation latency checks. All tests and the five-second Vault assertions still run unchanged; the Rust test stage takes longer in exchange for reproducible timing. This does not serialize application work or change encryption settings.
+
+For an intentional parallel stress run from `src-tauri`, use `cargo test -- --test-threads=4`. An existing `RUST_TEST_THREADS` environment variable also overrides the default; leave it unset for normal CI.
 
 ### Last verified baseline
 

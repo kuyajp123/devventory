@@ -34,10 +34,12 @@ An offline-first, local-first developer inventory tool that indexes metadata in 
 - Environment key name parsing and tracking (persisting key definitions and schemas only).
 - A global Credential Vault for user-entered credentials, with metadata and project/environment associations in SQLite and optional values encrypted in a password-protected local Stronghold snapshot.
 - Bounded file system scanning and local file watcher event reconciliation.
+- Optional private Cloudflare metadata mirror for projects, Environment Tracker, and current Agent Usage, published by one desktop with explicit first-upload approval.
+- Optional Firebase email/password accounts connect isolated logical Cloudflare workspaces in one shared D1 database. Account access is separate from the local Credential Vault master password.
 
 ### Constraints
 
-- Strictly offline-first: no external HTTP APIs, cloud synchronization, or remote database dependencies in the MVP.
+- Offline-first: SQLite remains authoritative and every local save works without a network. Cloud Sync is disabled by default; only its authenticated Rust transport may publish the three allowlisted metadata features. Cloud data never rewrites desktop state.
 - Project files remain the source of truth; indexed files store metadata only and avoid full file duplication.
 - Scanned environment-file values are never persisted; Environment Tracker, search, validation, dashboards, and exports consume key metadata only.
 - Optional values entered explicitly in Credential Vault are persisted only in encrypted Stronghold storage. SQLite stores an opaque secret reference, never the plaintext value.
@@ -59,7 +61,7 @@ An offline-first, local-first developer inventory tool that indexes metadata in 
 
 ## Product Principles
 
-1. **Offline-First Authority**: Every feature, search, and workflow functions completely offline without requiring network access, user login, or remote services.
+1. **Offline-First Authority**: Every local feature, search, and workflow functions completely offline without requiring network access, user login, or remote services. Optional cloud account and publishing operations require connectivity; they never block local saves.
 2. **In-Place Truth**: Project files remain inside original project directories; Devventory indexes non-destructive metadata and manages explicit asset imports without cloning or modifying user repositories unnecessarily.
 3. **Privacy by Design**: Scanned secret values are excluded from persistence and from every derived feature. Values explicitly entrusted to Credential Vault are encrypted locally, revealed only on demand while unlocked, and never stored in SQLite.
 4. **Focused Desktop Ergonomics**: High-density, fast keyboard-friendly UI tailored for developer speed, deep file scannability, and minimal cognitive load.
