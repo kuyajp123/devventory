@@ -398,6 +398,6 @@ pub fn run() {
             open_agent_unread_from_quick_access,
             get_markdown_reader_document
         ])
-        .run(tauri::generate_context!())
+        .run(app::runtime_profile::configure_context(tauri::generate_context!()))
         .expect("error while running Devventory");
 }

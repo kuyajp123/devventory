@@ -15,6 +15,8 @@ Devventory is an offline-first Tauri desktop application for keeping a local inv
 
 Rust checks run from `src-tauri` with `cargo fmt --check`, `cargo clippy --all-targets --all-features -- -D warnings`, `cargo test`, and `cargo check`. The local quality suite also audits `Cargo.lock` with RustSec's `cargo-audit`.
 
+Desktop development uses a separate `com.paul.devventory.dev` data and credential profile; packaged builds retain `com.paul.devventory`. See [development and installed profiles](docs/development-and-installed-profiles.md) before copying data or testing older installers.
+
 ## Local CI automation
 
 GitHub-hosted CI does not run automatically on pushes or pull requests. The repository's Git `pre-push` hook runs the complete local suite before every `git push`; a failing check exits nonzero and prevents the push. `npm ci` installs the tracked hooks automatically through the package `prepare` script.

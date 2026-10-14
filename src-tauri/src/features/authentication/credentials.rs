@@ -1,4 +1,6 @@
 use super::AuthError;
+#[cfg(windows)]
+use crate::shared::runtime_profile::RuntimeProfile;
 use zeroize::Zeroizing;
 // Retains no identity or credential. Its presence prevents a restarted app
 // from interpreting sign-out as a never-configured legacy publisher.
@@ -14,8 +16,11 @@ pub(crate) struct NativeSessionStore {
 impl NativeSessionStore {
     #[cfg(windows)]
     fn entry(&self) -> Result<keyring::Entry, AuthError> {
-        keyring::Entry::new("com.paul.devventory.authentication", &self.identity)
-            .map_err(|_| AuthError::CredentialUnavailable)
+        keyring::Entry::new(
+            &RuntimeProfile::current().credential_service("authentication"),
+            &self.identity,
+        )
+        .map_err(|_| AuthError::CredentialUnavailable)
     }
 }
 impl SessionStore for NativeSessionStore {
