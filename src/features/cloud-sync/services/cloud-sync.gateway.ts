@@ -8,6 +8,12 @@ async function command(name: string, args?: Record<string, unknown>) {
   return cloudSyncStatusSchema.parse(await invokeCommand<unknown>(name, args));
 }
 export const cloudSyncGateway = {
+  connectAccount: (claimLegacy: boolean, replacePublisher: boolean) =>
+    command('connect_account_cloud_sync', {
+      confirmation: 'link this local database',
+      claimLegacy,
+      replacePublisher,
+    }),
   status: () => command('get_cloud_sync_status'),
   configure: (input: ConfigureCloudSync) =>
     command('configure_cloud_sync', { input }),

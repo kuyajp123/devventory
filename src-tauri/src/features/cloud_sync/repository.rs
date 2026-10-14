@@ -16,13 +16,31 @@ impl SyncRepository {
         Self { pool }
     }
     pub(crate) async fn config(&self) -> Result<SyncConfig, sqlx::Error> {
-        sqlx::query_as("SELECT enabled,api_url,workspace_id,device_id,stream_id,last_successful_at,blocked_code,retry_at,retry_attempt FROM cloud_sync_config WHERE singleton=1").fetch_one(&self.pool).await
+        sqlx::query_as("SELECT owner_uid,enabled,api_url,workspace_id,device_id,stream_id,last_successful_at,blocked_code,retry_at,retry_attempt FROM cloud_sync_config WHERE singleton=1").fetch_one(&self.pool).await
     }
     pub(crate) async fn configure(
         &self,
         url: &str,
         workspace: &str,
         device: &str,
+    ) -> Result<(), sqlx::Error> {
+        self.configure_owned(url, workspace, device, None).await
+    }
+    pub(crate) async fn registration_id(&self, uid: &str) -> Result<String, sqlx::Error> {
+        sqlx::query("INSERT OR IGNORE INTO cloud_sync_device_registrations(firebase_uid,registration_id) VALUES (?,?)").bind(uid).bind(Uuid::new_v4().to_string()).execute(&self.pool).await?;
+        sqlx::query_scalar(
+            "SELECT registration_id FROM cloud_sync_device_registrations WHERE firebase_uid=?",
+        )
+        .bind(uid)
+        .fetch_one(&self.pool)
+        .await
+    }
+    pub(crate) async fn configure_owned(
+        &self,
+        url: &str,
+        workspace: &str,
+        device: &str,
+        owner_uid: Option<&str>,
     ) -> Result<(), sqlx::Error> {
         let previous = self.config().await?;
         let mut tx = self.pool.begin().await?;
@@ -46,7 +64,7 @@ impl SyncRepository {
                 .execute(&mut *tx)
                 .await?;
         }
-        sqlx::query("UPDATE cloud_sync_config SET api_url=?,workspace_id=?,device_id=?,enabled=0,blocked_code=NULL,retry_at=NULL,retry_attempt=0 WHERE singleton=1").bind(url).bind(workspace).bind(device).execute(&mut *tx).await?;
+        sqlx::query("UPDATE cloud_sync_config SET api_url=?,workspace_id=?,device_id=?,owner_uid=?,enabled=0,blocked_code=NULL,retry_at=NULL,retry_attempt=0 WHERE singleton=1").bind(url).bind(workspace).bind(device).bind(owner_uid).execute(&mut *tx).await?;
         tx.commit().await
     }
     pub(crate) async fn set_enabled(&self, enabled: bool) -> Result<(), sqlx::Error> {

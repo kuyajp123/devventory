@@ -1,11 +1,19 @@
 use super::model::{PreparedUpload, SyncConfig, PROTOCOL_VERSION};
+use crate::features::authentication::AuthError;
 use reqwest::{Client, Method, Url};
 use serde::{de::DeserializeOwned, Deserialize};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
+use zeroize::Zeroizing;
 
 #[derive(Debug, thiserror::Error)]
 pub(crate) enum SyncError {
+    #[error(transparent)]
+    Authentication(#[from] AuthError),
+    #[error("Another publishing desktop is registered")]
+    PublisherAlreadyRegistered,
+    #[error("The existing workspace requires a protected claim")]
+    LegacyClaimRequired,
     #[error("Synchronization was paused")]
     Cancelled,
     #[error("The prepared cloud snapshot expired")]
@@ -32,6 +40,9 @@ pub(crate) enum SyncError {
 impl SyncError {
     pub(crate) fn code(&self) -> &'static str {
         match self {
+            Self::Authentication(error) => error.code(),
+            Self::PublisherAlreadyRegistered => "PUBLISHER_ALREADY_REGISTERED",
+            Self::LegacyClaimRequired => "LEGACY_CLAIM_REQUIRED",
             Self::Cancelled => "CANCELLED",
             Self::SnapshotExpired => "SNAPSHOT_EXPIRED",
             Self::InvalidConfiguration => "INVALID_CONFIGURATION",
@@ -48,7 +59,10 @@ impl SyncError {
     pub(crate) fn transient(&self) -> bool {
         matches!(
             self,
-            Self::Offline | Self::Storage(_) | Self::RateLimited(_)
+            Self::Offline
+                | Self::Storage(_)
+                | Self::RateLimited(_)
+                | Self::Authentication(AuthError::Offline | AuthError::RateLimited)
         )
     }
 }
@@ -102,6 +116,8 @@ pub(crate) struct Acknowledgement {
 pub(crate) struct Transport {
     client: Client,
     url: String,
+    device_token: Option<Zeroizing<String>>,
+    legacy_proof: Option<Zeroizing<String>>,
 }
 impl Transport {
     pub(crate) fn new(config: &SyncConfig) -> Result<Self, SyncError> {
@@ -112,7 +128,20 @@ impl Transport {
             .redirect(reqwest::redirect::Policy::none())
             .build()
             .map_err(|_| SyncError::Offline)?;
-        Ok(Self { client, url })
+        Ok(Self {
+            client,
+            url,
+            device_token: None,
+            legacy_proof: None,
+        })
+    }
+    pub(crate) fn with_device(mut self, credential: Zeroizing<String>) -> Self {
+        self.device_token = Some(credential);
+        self
+    }
+    pub(crate) fn with_legacy_proof(mut self, credential: Zeroizing<String>) -> Self {
+        self.legacy_proof = Some(credential);
+        self
     }
     pub(crate) async fn request<T: DeserializeOwned>(
         &self,
@@ -126,6 +155,17 @@ impl Transport {
             .request(method, format!("{}{path}", self.url))
             .bearer_auth(token)
             .header("Content-Type", "application/json");
+        for (name, credential) in [
+            ("X-Devventory-Device", self.device_token.as_ref()),
+            ("X-Devventory-Legacy-Publisher", self.legacy_proof.as_ref()),
+        ] {
+            if let Some(credential) = credential {
+                let mut value = reqwest::header::HeaderValue::from_str(credential)
+                    .map_err(|_| SyncError::CredentialUnavailable)?;
+                value.set_sensitive(true);
+                request = request.header(name, value);
+            }
+        }
         if let Some(body) = body {
             request = request.body(body);
         }
@@ -133,6 +173,7 @@ impl Transport {
         if !response.status().is_success() {
             return Err(match response.status().as_u16() {
                 401 | 403 => SyncError::Unauthorized,
+                409 if path == "/v1/devices" => SyncError::PublisherAlreadyRegistered,
                 409 => SyncError::RecoveryRequired,
                 410 => SyncError::SnapshotExpired,
                 400 | 413 | 415 | 422 => SyncError::InvalidPayload,

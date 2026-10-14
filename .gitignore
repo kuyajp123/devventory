@@ -19,6 +19,7 @@ cloud/.dev.vars*
 cloud/.env*
 !cloud/.dev.vars.example
 cloud/credentials.local.json
+cloud/auth-secrets.local.json
 
 # Editor directories and files
 .vscode/*

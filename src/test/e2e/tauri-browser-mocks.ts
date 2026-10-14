@@ -99,6 +99,62 @@ export function installTauriBrowserMocks() {
   mockIPC(
     (command, args) => {
       if (
+        [
+          'get_auth_session',
+          'sign_in_account',
+          'sign_out_account',
+          'refresh_auth_session',
+          'send_auth_verification',
+          'reset_account_password',
+        ].includes(command)
+      ) {
+        const current = JSON.parse(
+          database.settings['auth-session'] ??
+            '{"configured":true,"state":"signedOut","account":null}',
+        ) as {
+          configured: boolean;
+          state: string;
+          account: {
+            userId: string;
+            email: string;
+            emailVerified: boolean;
+          } | null;
+        };
+        const parameters = commandArguments(args);
+        if (command === 'sign_in_account') {
+          const input = parameters.input as {
+            email: string;
+            password: string;
+            signUp: boolean;
+          };
+          if (input.password === 'wrong-password')
+            throw { code: 'AUTH_INVALID_CREDENTIALS', recoverable: true };
+          current.account = {
+            userId: input.email === 'bob@example.com' ? 'bob' : 'alice',
+            email: input.email,
+            emailVerified: !input.signUp,
+          };
+          current.state = input.signUp ? 'verificationRequired' : 'signedIn';
+        }
+        if (command === 'refresh_auth_session' && current.account) {
+          current.account.emailVerified = true;
+          current.state = 'signedIn';
+        }
+        if (command === 'sign_out_account') {
+          current.account = null;
+          current.state = 'signedOut';
+          const cloud = JSON.parse(database.settings['cloud-sync'] ?? '{}');
+          cloud.enabled = false;
+          database.settings['cloud-sync'] = JSON.stringify(cloud);
+        }
+        database.settings['auth-session'] = JSON.stringify(current);
+        persist();
+        return command === 'send_auth_verification' ||
+          command === 'reset_account_password'
+          ? null
+          : current;
+      }
+      if (
         command.includes('cloud_sync') ||
         command === 'synchronize_cloud_now'
       ) {
@@ -107,8 +163,26 @@ export function installTauriBrowserMocks() {
           workspaceId?: string;
           deviceId?: string;
           enabled?: boolean;
+          ownerUid?: string;
         };
         const parameters = commandArguments(args);
+        if (command === 'connect_account_cloud_sync') {
+          const auth = JSON.parse(
+            database.settings['auth-session'] ?? '{}',
+          ) as { account?: { userId: string; emailVerified: boolean } };
+          if (!auth.account?.emailVerified)
+            throw { code: 'AUTH_VERIFICATION_REQUIRED', recoverable: true };
+          Object.assign(config, {
+            ownerUid: auth.account.userId,
+            apiUrl: 'https://synthetic.workers.dev',
+            workspaceId:
+              auth.account.userId === 'alice'
+                ? '11111111-1111-4111-8111-111111111111'
+                : '33333333-3333-4333-8333-333333333333',
+            deviceId: '22222222-2222-4222-8222-222222222222',
+            enabled: false,
+          });
+        }
         if (command === 'configure_cloud_sync') {
           const input = parameters.input as {
             apiUrl: string;
@@ -127,6 +201,7 @@ export function installTauriBrowserMocks() {
         database.settings['cloud-sync'] = JSON.stringify(config);
         persist();
         return {
+          ownerUid: config.ownerUid ?? null,
           enabled: config.enabled ?? false,
           configured: Boolean(config.workspaceId),
           apiUrl: config.apiUrl ?? '',

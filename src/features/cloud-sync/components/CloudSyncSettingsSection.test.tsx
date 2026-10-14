@@ -5,6 +5,17 @@ import { renderWithProviders } from '@/test/render';
 import { cloudSyncGateway } from '@/features/cloud-sync/services/cloud-sync.gateway';
 import { CloudSyncSettingsSection } from '@/features/cloud-sync/components/CloudSyncSettingsSection';
 import type { CloudSyncStatus } from '@/features/cloud-sync/models/cloud-sync';
+import { authenticationGateway } from '@/features/authentication/services/authentication.gateway';
+vi.mock('@/features/authentication/services/authentication.gateway', () => ({
+  authenticationGateway: {
+    session: vi.fn(),
+    signIn: vi.fn(),
+    signOut: vi.fn(),
+    refresh: vi.fn(),
+    verify: vi.fn(),
+    reset: vi.fn(),
+  },
+}));
 
 vi.mock('@/features/cloud-sync/services/cloud-sync.gateway', () => ({
   cloudSyncGateway: {
@@ -13,9 +24,11 @@ vi.mock('@/features/cloud-sync/services/cloud-sync.gateway', () => ({
     setEnabled: vi.fn(),
     syncNow: vi.fn(),
     rebuild: vi.fn(),
+    connectAccount: vi.fn(),
   },
 }));
 const paused: CloudSyncStatus = {
+  ownerUid: null,
   enabled: false,
   configured: true,
   apiUrl: 'https://private.workers.dev',
@@ -37,7 +50,219 @@ const paused: CloudSyncStatus = {
 };
 describe('Cloud Sync settings', () => {
   beforeEach(() => {
+    vi.mocked(authenticationGateway.session).mockResolvedValue({
+      configured: true,
+      state: 'signedOut',
+      account: null,
+    });
     vi.mocked(cloudSyncGateway.status).mockResolvedValue(paused);
+  });
+  it('shows a disabled up-to-date button and clear success feedback when the queue is empty', async () => {
+    const user = userEvent.setup();
+    vi.mocked(cloudSyncGateway.status).mockResolvedValue({
+      ...paused,
+      enabled: true,
+      state: 'synced',
+      pendingScopes: 0,
+      lastSuccessfulAt: '2026-10-14T00:00:00Z',
+    });
+    renderWithProviders(<CloudSyncSettingsSection />);
+    const button = await screen.findByRole('button', { name: 'Up to date' });
+    expect(button).toBeDisabled();
+    expect(
+      screen.getByText('No local changes are waiting to upload.'),
+    ).toBeVisible();
+    await user.click(button);
+    expect(cloudSyncGateway.syncNow).not.toHaveBeenCalled();
+  });
+  it('does not claim a successful upload when a newly enabled workspace has no metadata', async () => {
+    vi.mocked(cloudSyncGateway.status).mockResolvedValue({
+      ...paused,
+      enabled: true,
+      state: 'ready',
+      pendingScopes: 0,
+    });
+    renderWithProviders(<CloudSyncSettingsSection />);
+    expect(
+      await screen.findByRole('button', { name: 'Nothing to sync' }),
+    ).toBeDisabled();
+    expect(
+      screen.queryByRole('button', { name: 'Up to date' }),
+    ).not.toBeInTheDocument();
+  });
+  it('enables manual synchronization when changes are pending and updates the button after success', async () => {
+    const user = userEvent.setup();
+    vi.mocked(cloudSyncGateway.status).mockResolvedValue({
+      ...paused,
+      enabled: true,
+      state: 'pending',
+    });
+    vi.mocked(cloudSyncGateway.syncNow).mockResolvedValue({
+      ...paused,
+      enabled: true,
+      state: 'synced',
+      pendingScopes: 0,
+      lastSuccessfulAt: '2026-10-14T00:00:00Z',
+    });
+    renderWithProviders(<CloudSyncSettingsSection />);
+    await user.click(await screen.findByRole('button', { name: 'Sync now' }));
+    expect(
+      await screen.findByRole('button', { name: 'Up to date' }),
+    ).toBeDisabled();
+  });
+  it('keeps a disabled progress button while a manual sync is running', async () => {
+    const user = userEvent.setup();
+    let complete!: (value: CloudSyncStatus) => void;
+    vi.mocked(cloudSyncGateway.status).mockResolvedValue({
+      ...paused,
+      enabled: true,
+      state: 'pending',
+    });
+    vi.mocked(cloudSyncGateway.syncNow).mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          complete = resolve;
+        }),
+    );
+    renderWithProviders(<CloudSyncSettingsSection />);
+    await user.click(await screen.findByRole('button', { name: 'Sync now' }));
+    expect(
+      await screen.findByRole('button', { name: 'Syncing…' }),
+    ).toBeDisabled();
+    complete({ ...paused, enabled: true, state: 'pending' });
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: 'Sync now' })).toBeEnabled(),
+    );
+  });
+  it('does not hide an unknown failure behind an empty queue', async () => {
+    vi.mocked(cloudSyncGateway.status).mockResolvedValue({
+      ...paused,
+      enabled: true,
+      state: 'blocked',
+      pendingScopes: 0,
+      problem: 'UNRECOGNIZED_FAILURE',
+    });
+    renderWithProviders(<CloudSyncSettingsSection />);
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'Cloud sync could not complete. Your changes remain saved locally.',
+    );
+    expect(
+      screen.queryByRole('button', { name: 'Up to date' }),
+    ).not.toBeInTheDocument();
+  });
+  it('reports a failed status refresh rather than presenting cached success as current', async () => {
+    vi.mocked(cloudSyncGateway.status)
+      .mockResolvedValueOnce({
+        ...paused,
+        enabled: true,
+        state: 'synced',
+        pendingScopes: 0,
+        lastSuccessfulAt: '2026-10-14T00:00:00Z',
+      })
+      .mockRejectedValue(new Error('private backend details'));
+    renderWithProviders(<CloudSyncSettingsSection />);
+    expect(
+      await screen.findByRole('button', { name: 'Up to date' }),
+    ).toBeDisabled();
+    expect(
+      await screen.findByRole(
+        'button',
+        { name: 'Retry status' },
+        { timeout: 8000 },
+      ),
+    ).toBeEnabled();
+    expect(
+      screen.getByRole('button', { name: 'Status unavailable' }),
+    ).toBeDisabled();
+    expect(
+      screen.queryByText('private backend details'),
+    ).not.toBeInTheDocument();
+  });
+  it('offers reconnection when this account publishing credential is rejected', async () => {
+    vi.mocked(authenticationGateway.session).mockResolvedValue({
+      configured: true,
+      state: 'signedIn',
+      account: {
+        userId: 'alice',
+        email: 'alice@example.com',
+        emailVerified: true,
+      },
+    });
+    vi.mocked(cloudSyncGateway.status).mockResolvedValue({
+      ...paused,
+      ownerUid: 'alice',
+      state: 'blocked',
+      problem: 'UNAUTHORIZED',
+    });
+    renderWithProviders(<CloudSyncSettingsSection />);
+    expect(
+      await screen.findByRole('button', {
+        name: 'Reconnect publishing desktop',
+      }),
+    ).toBeEnabled();
+    expect(cloudSyncGateway.connectAccount).not.toHaveBeenCalled();
+  });
+  it('keeps account recovery controls available when cloud status fails', async () => {
+    vi.mocked(cloudSyncGateway.status).mockRejectedValue(
+      new Error('private storage details'),
+    );
+    vi.mocked(authenticationGateway.session).mockResolvedValue({
+      configured: true,
+      state: 'signedIn',
+      account: {
+        userId: 'alice',
+        email: 'alice@example.com',
+        emailVerified: true,
+      },
+    });
+    renderWithProviders(<CloudSyncSettingsSection />);
+    expect(
+      await screen.findByRole('button', { name: 'Sign out' }),
+    ).toBeEnabled();
+    expect(await screen.findByRole('button', { name: 'Retry' })).toBeEnabled();
+  });
+  it('requires account-link confirmation and preserves the separate first-upload review', async () => {
+    const user = userEvent.setup();
+    vi.mocked(authenticationGateway.session).mockResolvedValue({
+      configured: true,
+      state: 'signedIn',
+      account: {
+        userId: 'alice',
+        email: 'alice@example.com',
+        emailVerified: true,
+      },
+    });
+    vi.mocked(cloudSyncGateway.status).mockResolvedValue({
+      ...paused,
+      configured: false,
+      workspaceId: null,
+      deviceId: null,
+      state: 'notConfigured',
+    });
+    vi.mocked(cloudSyncGateway.connectAccount).mockResolvedValue({
+      ...paused,
+      ownerUid: 'alice',
+    });
+    renderWithProviders(<CloudSyncSettingsSection />);
+    await user.click(
+      await screen.findByRole('button', { name: 'Connect cloud workspace' }),
+    );
+    expect(cloudSyncGateway.connectAccount).not.toHaveBeenCalled();
+    await user.click(
+      within(screen.getByRole('dialog')).getByRole('button', {
+        name: 'Link this computer',
+      }),
+    );
+    await waitFor(() =>
+      expect(cloudSyncGateway.connectAccount).toHaveBeenCalledWith(
+        false,
+        false,
+      ),
+    );
+    expect(cloudSyncGateway.setEnabled).not.toHaveBeenCalled();
+    expect(
+      await screen.findByRole('button', { name: 'Review and enable sync' }),
+    ).toBeEnabled();
   });
   it('requires reviewing the upload before enabling synchronization', async () => {
     const user = userEvent.setup();

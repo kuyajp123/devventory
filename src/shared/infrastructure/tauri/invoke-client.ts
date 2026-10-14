@@ -15,6 +15,26 @@ export async function invokeCommand<TResponse>(
 }
 
 const safeMessages: Record<string, string> = {
+  AUTH_INVALID_CREDENTIALS: 'Email or password is incorrect.',
+  AUTH_INVALID_INPUT:
+    'Check the email address and password requirements. If you already have an account, sign in instead.',
+  AUTH_CONFIGURATION:
+    'Authentication is not configured. Check the Firebase setup.',
+  AUTH_OFFLINE:
+    'Authentication is unreachable. Check your connection and retry.',
+  AUTH_RATE_LIMITED: 'Too many requests. Wait before retrying.',
+  AUTH_SESSION_EXPIRED: 'Sign in again to continue.',
+  AUTH_VERIFICATION_REQUIRED: 'Verify your email before using Cloud Sync.',
+  AUTH_ACCOUNT_MISMATCH:
+    'This local database is linked to a different cloud account. Review the account change before linking it.',
+  AUTH_CREDENTIAL_UNAVAILABLE:
+    'The session could not be stored securely in Windows Credential Manager.',
+  AUTH_INVALID_RESPONSE:
+    'The authentication service returned an invalid response. Try again.',
+  AUTH_PUBLISHER_EXISTS:
+    'Another publishing desktop is registered. Confirm replacement before using this computer.',
+  AUTH_LEGACY_CLAIM_REQUIRED:
+    'Confirm the protected claim of your existing cloud workspace.',
   CLOUD_SYNC_CONFIGURATION_INVALID:
     'Check the Worker URL, workspace ID, device ID, and publisher token. Production URLs must use HTTPS on workers.dev.',
   CLOUD_SYNC_CREDENTIALS_UNAVAILABLE:

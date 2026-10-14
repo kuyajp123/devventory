@@ -1,6 +1,7 @@
 import { z } from 'zod';
 
 export const cloudSyncStatusSchema = z.strictObject({
+  ownerUid: z.string().max(128).nullable().default(null),
   enabled: z.boolean(),
   configured: z.boolean(),
   apiUrl: z.string(),
@@ -51,11 +52,23 @@ export const stateLabels: Record<CloudSyncStatus['state'], string> = {
   synced: 'Metadata is synced',
 };
 export const problemMessages: Record<string, string> = {
+  AUTH_SESSION_EXPIRED:
+    'Sign in again. Pending edits remain saved on this computer.',
+  AUTH_ACCOUNT_MISMATCH:
+    'Sign in to the linked account, or explicitly review linking this computer to another account.',
+  AUTH_VERIFICATION_REQUIRED:
+    'Verify your account email before synchronization can continue.',
+  AUTH_OFFLINE:
+    'Authentication is temporarily unreachable. Pending edits remain saved locally.',
+  AUTH_RATE_LIMITED:
+    'Authentication requests are limited. Devventory will retry.',
+  AUTH_CREDENTIAL_UNAVAILABLE:
+    'Windows Credential Manager could not read the account session. Sign in again.',
   INVALID_CONFIGURATION: 'Check the Worker address and workspace/device IDs.',
   CREDENTIAL_UNAVAILABLE:
-    'Enter the publisher token again. Windows Credential Manager could not read it.',
+    'Windows Credential Manager could not read the publishing credential. Reconnect this desktop; in legacy mode, enter the publisher token again.',
   UNAUTHORIZED:
-    'The publisher token was rejected. Save the correct token and retry.',
+    'Publishing credentials were rejected. Reconnect this desktop; in legacy mode, save the correct publisher token.',
   RECOVERY_REQUIRED:
     'Cloud data is newer or belongs to another publisher stream. Review before replacing it with this desktop’s data.',
   INVALID_PAYLOAD:

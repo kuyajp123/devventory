@@ -8,6 +8,9 @@ import {
   activationSchema,
 } from './contracts.ts';
 import type { SnapshotManifest } from './contracts.ts';
+import { ApiError, json, sha256, equal } from './http.ts';
+import { verifyFirebaseToken } from './firebase-auth.ts';
+import { authorizeAccount, handleWorkspaceRequest } from './workspace-auth.ts';
 
 export interface Env {
   DB: D1Database;
@@ -15,41 +18,11 @@ export interface Env {
   SYNC_PUBLISHER_DEVICE_ID: string;
   SYNC_PUBLISHER_TOKEN_HASH?: string;
   SYNC_READER_TOKEN_HASH?: string;
+  FIREBASE_PROJECT_ID?: string;
+  SYNC_DEVICE_SIGNING_KEY?: string;
   SYNC_RATE_LIMITER: {
     limit(input: { key: string }): Promise<{ success: boolean }>;
   };
-}
-class ApiError extends Error {
-  status: number;
-  code: string;
-  constructor(status: number, code: string) {
-    super(code);
-    this.status = status;
-    this.code = code;
-  }
-}
-const headers = {
-  'Content-Type': 'application/json',
-  'Cache-Control': 'no-store',
-  'X-Content-Type-Options': 'nosniff',
-};
-const json = (value: unknown, status = 200) =>
-  new Response(JSON.stringify(value), { status, headers });
-async function sha256(value: string) {
-  const bytes = await crypto.subtle.digest(
-    'SHA-256',
-    new TextEncoder().encode(value),
-  );
-  return Array.from(new Uint8Array(bytes), (b) =>
-    b.toString(16).padStart(2, '0'),
-  ).join('');
-}
-function equal(left: string, right: string) {
-  if (left.length !== right.length) return false;
-  let diff = 0;
-  for (let i = 0; i < left.length; i++)
-    diff |= left.charCodeAt(i) ^ right.charCodeAt(i);
-  return diff === 0;
 }
 async function authorize(request: Request, env: Env) {
   if (
@@ -60,6 +33,14 @@ async function authorize(request: Request, env: Env) {
     throw new ApiError(503, 'NOT_CONFIGURED');
   const bearer = request.headers.get('Authorization') ?? '';
   if (!/^Bearer [a-f0-9]{64}$/.test(bearer))
+    throw new ApiError(401, 'UNAUTHORIZED');
+  if (
+    await env.DB.prepare(
+      'SELECT workspace_id FROM cloud_workspaces WHERE workspace_id=?',
+    )
+      .bind(env.SYNC_WORKSPACE_ID)
+      .first()
+  )
     throw new ApiError(401, 'UNAUTHORIZED');
   const digest = await sha256(bearer.slice(7));
   const publisher = equal(digest, env.SYNC_PUBLISHER_TOKEN_HASH);
@@ -446,109 +427,158 @@ async function cleanup(env: Env) {
   ]);
 }
 
-export default {
-  async fetch(request: Request, env: Env): Promise<Response> {
-    try {
-      const publisher = await authorize(request, env),
-        url = new URL(request.url),
-        path = url.pathname;
-      if (request.method === 'GET' && path === '/v1/projects')
-        return await readRecords(url, env, 'project', 'project');
-      if (request.method === 'GET' && path === '/v1/agent-accounts')
-        return await readRecords(url, env, 'agentAccount', 'agentAccount');
-      const tracker = /^\/v1\/projects\/([a-f0-9-]{36})\/tracker$/.exec(path);
-      if (request.method === 'GET' && tracker) {
-        const kind = url.searchParams.get('kind') ?? 'key';
-        if (
-          ![
-            'environment',
-            'source',
-            'key',
-            'cell',
-            'occurrence',
-            'rule',
-            'ruleTarget',
-            'issue',
-            'validation',
-          ].includes(kind)
-        )
-          throw new ApiError(422, 'INVALID_INPUT');
-        return await readRecords(url, env, 'project', kind, tracker[1]);
-      }
-      const quotas = /^\/v1\/agent-accounts\/([a-f0-9-]{36})\/quotas$/.exec(
-        path,
-      );
-      if (request.method === 'GET' && quotas)
-        return await readRecords(url, env, 'agentAccount', 'quota', quotas[1]);
-      if (request.method === 'GET' && path === '/v1/sync/status') {
-        const heads = publisher
-          ? (
-              await env.DB.prepare(
-                'SELECT scope_kind AS scopeKind,scope_id AS scopeId,revision,snapshot_id AS snapshotId FROM scope_heads WHERE workspace_id=?',
-              )
-                .bind(env.SYNC_WORKSPACE_ID)
-                .all()
-            ).results
-          : [];
-        return json({
-          protocolVersion: 1,
-          workspaceId: env.SYNC_WORKSPACE_ID,
-          deviceId: env.SYNC_PUBLISHER_DEVICE_ID,
-          streamId: (await state(env))?.stream_id ?? null,
-          heads,
-        });
-      }
-      if (request.method === 'POST' && path === '/v1/sync/rebuild') {
-        const parsed = rebuildSchema.safeParse((await body(request)).value);
-        if (!parsed.success) throw new ApiError(422, 'INVALID_INPUT');
-        const input = parsed.data;
-        await env.DB.batch([
-          env.DB.prepare('DELETE FROM scope_heads WHERE workspace_id=?').bind(
-            env.SYNC_WORKSPACE_ID,
-          ),
-          env.DB.prepare(
-            'UPDATE snapshots SET retiring=1 WHERE workspace_id=?',
-          ).bind(env.SYNC_WORKSPACE_ID),
-          env.DB.prepare(
-            'INSERT INTO workspace_state (workspace_id,device_id,stream_id) VALUES (?,?,?) ON CONFLICT(workspace_id) DO UPDATE SET stream_id=excluded.stream_id,device_id=excluded.device_id',
-          ).bind(
-            env.SYNC_WORKSPACE_ID,
-            env.SYNC_PUBLISHER_DEVICE_ID,
-            input.streamId as string,
-          ),
-        ]);
-        return json({ protocolVersion: 1, streamId: input.streamId });
-      }
-      if (request.method === 'POST' && path === '/v1/sync/snapshots')
-        return await begin(request, env);
-      const chunk =
-        /^\/v1\/sync\/snapshots\/([a-f0-9-]{36})\/chunks\/(\d+)$/.exec(path);
-      if (request.method === 'PUT' && chunk)
-        return await upload(request, env, chunk[1], Number(chunk[2]));
-      const activation =
-        /^\/v1\/sync\/snapshots\/([a-f0-9-]{36})\/activate$/.exec(path);
-      if (request.method === 'POST' && activation)
-        return await activate(request, env, activation[1]);
-      throw new ApiError(404, 'NOT_FOUND');
-    } catch (error) {
-      const failure =
-        error instanceof ApiError
-          ? error
-          : new ApiError(503, 'STORAGE_UNAVAILABLE');
-      const response = json(
-        {
-          error: {
-            code: failure.code,
-            message: 'Cloud synchronization request could not be completed.',
+export function createWorker(verify = verifyFirebaseToken) {
+  return {
+    async fetch(request: Request, baseEnv: Env): Promise<Response> {
+      try {
+        const url = new URL(request.url),
+          path = url.pathname;
+        const credential =
+          request.headers.get('Authorization')?.match(/^Bearer (\S+)$/)?.[1] ??
+          '';
+        const accountPath =
+          path === '/v1/workspaces' ||
+          path === '/v1/workspaces/claim' ||
+          path === '/v1/devices';
+        let env = baseEnv,
+          publisher: boolean;
+        if (accountPath || credential.includes('.')) {
+          const identity = await verify(
+            credential,
+            baseEnv.FIREBASE_PROJECT_ID ?? '',
+          );
+          if (accountPath)
+            return await handleWorkspaceRequest(
+              request,
+              baseEnv,
+              identity,
+              path,
+              async () => (await body(request, 4096)).value,
+            );
+          ({ env, publisher } = await authorizeAccount(
+            request,
+            baseEnv,
+            identity,
+          ));
+        } else publisher = await authorize(request, baseEnv);
+        if (request.method === 'GET' && path === '/v1/projects')
+          return await readRecords(url, env, 'project', 'project');
+        if (request.method === 'GET' && path === '/v1/agent-accounts')
+          return await readRecords(url, env, 'agentAccount', 'agentAccount');
+        const tracker = /^\/v1\/projects\/([a-f0-9-]{36})\/tracker$/.exec(path);
+        if (request.method === 'GET' && tracker) {
+          const kind = url.searchParams.get('kind') ?? 'key';
+          if (
+            ![
+              'environment',
+              'source',
+              'key',
+              'cell',
+              'occurrence',
+              'rule',
+              'ruleTarget',
+              'issue',
+              'validation',
+            ].includes(kind)
+          )
+            throw new ApiError(422, 'INVALID_INPUT');
+          return await readRecords(url, env, 'project', kind, tracker[1]);
+        }
+        const quotas = /^\/v1\/agent-accounts\/([a-f0-9-]{36})\/quotas$/.exec(
+          path,
+        );
+        if (request.method === 'GET' && quotas)
+          return await readRecords(
+            url,
+            env,
+            'agentAccount',
+            'quota',
+            quotas[1],
+          );
+        if (request.method === 'GET' && path === '/v1/sync/status') {
+          const heads = publisher
+            ? (
+                await env.DB.prepare(
+                  'SELECT scope_kind AS scopeKind,scope_id AS scopeId,revision,snapshot_id AS snapshotId FROM scope_heads WHERE workspace_id=?',
+                )
+                  .bind(env.SYNC_WORKSPACE_ID)
+                  .all()
+              ).results
+            : [];
+          return json({
+            protocolVersion: 1,
+            workspaceId: env.SYNC_WORKSPACE_ID,
+            deviceId: env.SYNC_PUBLISHER_DEVICE_ID,
+            streamId: (await state(env))?.stream_id ?? null,
+            heads,
+          });
+        }
+        if (request.method === 'POST' && path === '/v1/sync/rebuild') {
+          const parsed = rebuildSchema.safeParse((await body(request)).value);
+          if (!parsed.success) throw new ApiError(422, 'INVALID_INPUT');
+          const input = parsed.data;
+          await env.DB.batch([
+            env.DB.prepare('DELETE FROM scope_heads WHERE workspace_id=?').bind(
+              env.SYNC_WORKSPACE_ID,
+            ),
+            env.DB.prepare(
+              'UPDATE snapshots SET retiring=1 WHERE workspace_id=?',
+            ).bind(env.SYNC_WORKSPACE_ID),
+            env.DB.prepare(
+              'INSERT INTO workspace_state (workspace_id,device_id,stream_id) VALUES (?,?,?) ON CONFLICT(workspace_id) DO UPDATE SET stream_id=excluded.stream_id,device_id=excluded.device_id',
+            ).bind(
+              env.SYNC_WORKSPACE_ID,
+              env.SYNC_PUBLISHER_DEVICE_ID,
+              input.streamId as string,
+            ),
+          ]);
+          return json({ protocolVersion: 1, streamId: input.streamId });
+        }
+        if (request.method === 'POST' && path === '/v1/sync/snapshots')
+          return await begin(request, env);
+        const chunk =
+          /^\/v1\/sync\/snapshots\/([a-f0-9-]{36})\/chunks\/(\d+)$/.exec(path);
+        if (request.method === 'PUT' && chunk)
+          return await upload(request, env, chunk[1], Number(chunk[2]));
+        const activation =
+          /^\/v1\/sync\/snapshots\/([a-f0-9-]{36})\/activate$/.exec(path);
+        if (request.method === 'POST' && activation)
+          return await activate(request, env, activation[1]);
+        throw new ApiError(404, 'NOT_FOUND');
+      } catch (error) {
+        const failure =
+          error instanceof ApiError
+            ? error
+            : new ApiError(503, 'STORAGE_UNAVAILABLE');
+        const response = json(
+          {
+            error: {
+              code: failure.code,
+              message: 'Cloud synchronization request could not be completed.',
+            },
           },
-        },
-        failure.status,
-      );
-      if (failure.status === 429) response.headers.set('Retry-After', '60');
-      return response;
-    }
-  },
-  async scheduled(_event: ScheduledController, env: Env) {
-    await cleanup(env);
-  },
-};
+          failure.status,
+        );
+        if (failure.status === 429) response.headers.set('Retry-After', '60');
+        return response;
+      }
+    },
+    async scheduled(_event: ScheduledController, env: Env) {
+      await cleanup(env);
+      const workspaces = await env.DB.prepare(
+        'SELECT workspace_id FROM cloud_workspaces WHERE workspace_id<>? ORDER BY last_cleanup_at,workspace_id LIMIT 5',
+      )
+        .bind(env.SYNC_WORKSPACE_ID)
+        .all<{ workspace_id: string }>();
+      for (const owned of workspaces.results) {
+        await cleanup({ ...env, SYNC_WORKSPACE_ID: owned.workspace_id });
+        await env.DB.prepare(
+          'UPDATE cloud_workspaces SET last_cleanup_at=unixepoch() WHERE workspace_id=?',
+        )
+          .bind(owned.workspace_id)
+          .run();
+      }
+    },
+  };
+}
+export default createWorker();

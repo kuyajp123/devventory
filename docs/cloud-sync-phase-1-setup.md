@@ -1,5 +1,7 @@
 # Cloud Sync Phase 1: setup and operating guide
 
+For account-enabled builds, use the [Firebase account setup guide](firebase-authentication-setup.md). The private-token steps below document the original bootstrap; preserve existing credentials and use protected account adoption rather than generating a second workspace.
+
 Devventory keeps its SQLite database and local behavior. Opt-in Cloud Sync publishes all projects, Environment Tracker metadata/results (including linked custom tracker entries), and current Agent Usage accounts/quotas to one private Cloudflare workspace. The desktop is the sole writer. Mobile and public account registration are later phases.
 
 Cloud data is a metadata mirror, not a full Devventory backup. Local paths, scanned file contents, environment values, Vault notes/values, Stronghold files, assets, notification delivery records, and release credentials are excluded. Project descriptions, rule descriptions, project/source/key names, and agent account identifiers are included: avoid putting secrets into these metadata fields.

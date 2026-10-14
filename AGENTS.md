@@ -26,6 +26,7 @@
 - Inventory scans store metadata only, stay inside canonical registered roots, apply exclusions before descent, skip symbolic links and junctions, use bounded batches, and never expose raw filesystem errors.
 - Watcher callbacks only enqueue bounded, sanitized change signals. Services and repositories perform authoritative reconciliation and persistence.
 - Do not add persistent content search, global search, Supabase, or broad frontend filesystem dependencies or permissions. Optional Cloud Sync may publish only projects, Environment Tracker metadata/results, and Agent Usage through its authenticated Rust transport and private Cloudflare Worker. Keep paths, file contents, environment values, Vault secrets, and assets local. Automatic file-inventory scans store metadata only; user-initiated secret imports remain scoped to Credential Vault and Stronghold encryption.
+- Optional Firebase email/password identity belongs to the authentication feature and its Rust transport. Local features never require sign-in. Worker authorization resolves workspace ownership from verified Firebase identity; publishing also requires the registered desktop credential. Refresh/device credentials stay in Windows Credential Manager, ID tokens stay in Rust memory, and React receives only safe session metadata. Firebase is not an application database; do not add Firestore, Firebase Storage, Functions, or browser token persistence in this phase.
 
 ## Framework-neutral feature organization
 

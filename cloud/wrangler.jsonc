@@ -6,6 +6,7 @@
   "workers_dev": true,
   "preview_urls": false,
   "vars": {
+    "FIREBASE_PROJECT_ID": "devventory",
     "SYNC_WORKSPACE_ID": "5e82c593-5cd0-4fd8-ba9d-e3318d228af6",
     "SYNC_PUBLISHER_DEVICE_ID": "2d0e9e06-c60e-4ecc-a7d1-5ce4be53f444",
   },

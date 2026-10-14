@@ -1,5 +1,6 @@
 use std::path::Path;
 
+use crate::features::authentication::AuthService;
 use crate::features::cloud_sync::CloudSyncService;
 use tauri::AppHandle;
 
@@ -35,6 +36,7 @@ use std::sync::Arc;
 pub(crate) struct AppState {
     database: Database,
     cloud_sync_service: CloudSyncService,
+    authentication_service: AuthService,
     agent_usage_service: AgentUsageService,
     file_inventory_service: FileInventoryService,
     asset_service: AssetService,
@@ -135,8 +137,13 @@ impl AppState {
             &data_directory,
         );
 
+        let authentication_service = AuthService::new();
         Ok(Self {
-            cloud_sync_service: CloudSyncService::new(database.pool().clone()),
+            cloud_sync_service: CloudSyncService::new(
+                database.pool().clone(),
+                authentication_service.clone(),
+            ),
+            authentication_service,
             database,
             agent_usage_service,
             asset_service,
@@ -159,6 +166,9 @@ impl AppState {
     }
     pub(crate) fn cloud_sync_service(&self) -> &CloudSyncService {
         &self.cloud_sync_service
+    }
+    pub(crate) fn authentication_service(&self) -> &AuthService {
+        &self.authentication_service
     }
 
     pub(crate) fn notification_session_state(&self) -> Arc<NotificationSessionState> {

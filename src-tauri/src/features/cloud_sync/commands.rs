@@ -11,6 +11,11 @@ fn main_window(window: &WebviewWindow) -> Result<(), CommandError> {
 }
 fn command_error(error: SyncError) -> CommandError {
     match error {
+        SyncError::Authentication(error) => CommandError::authentication(error.code()),
+        SyncError::PublisherAlreadyRegistered => {
+            CommandError::authentication("PUBLISHER_ALREADY_REGISTERED")
+        }
+        SyncError::LegacyClaimRequired => CommandError::authentication("LEGACY_CLAIM_REQUIRED"),
         SyncError::InvalidConfiguration => CommandError::cloud_sync_configuration_invalid(),
         SyncError::CredentialUnavailable => CommandError::cloud_sync_credentials_unavailable(),
         SyncError::Storage(_) => {
@@ -18,6 +23,21 @@ fn command_error(error: SyncError) -> CommandError {
         }
         _ => CommandError::cloud_sync_connection_unavailable(),
     }
+}
+#[tauri::command]
+pub(crate) async fn connect_account_cloud_sync(
+    window: WebviewWindow,
+    state: State<'_, AppState>,
+    confirmation: String,
+    claim_legacy: bool,
+    replace_publisher: bool,
+) -> Result<SyncStatus, CommandError> {
+    main_window(&window)?;
+    state
+        .cloud_sync_service()
+        .connect_account(&confirmation, claim_legacy, replace_publisher)
+        .await
+        .map_err(command_error)
 }
 #[tauri::command]
 pub(crate) async fn get_cloud_sync_status(

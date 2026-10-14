@@ -65,6 +65,7 @@ pub(crate) fn pack_records(records: Vec<CloudRecord>) -> Result<Vec<String>, sql
 
 #[derive(Debug, Clone, sqlx::FromRow)]
 pub(crate) struct SyncConfig {
+    pub(crate) owner_uid: Option<String>,
     pub(crate) enabled: bool,
     pub(crate) api_url: String,
     pub(crate) workspace_id: Option<String>,
@@ -89,6 +90,7 @@ pub(crate) struct UploadPreview {
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub(crate) struct SyncStatus {
+    pub(crate) owner_uid: Option<String>,
     pub(crate) enabled: bool,
     pub(crate) configured: bool,
     pub(crate) api_url: String,

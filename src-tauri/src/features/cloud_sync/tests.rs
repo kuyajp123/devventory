@@ -16,6 +16,45 @@ async fn add_project(pool: &SqlitePool, id: &str) {
 }
 
 #[tokio::test]
+async fn claiming_same_destination_preserves_prepared_upload_and_revision_lineage() {
+    let (_directory, pool) = database().await;
+    let repository = SyncRepository::new(pool.clone());
+    let project = uuid::Uuid::new_v4().to_string();
+    let workspace = uuid::Uuid::new_v4().to_string();
+    let device = uuid::Uuid::new_v4().to_string();
+    add_project(&pool, &project).await;
+    repository
+        .configure("https://test.workers.dev", &workspace, &device)
+        .await
+        .unwrap();
+    let prepared = repository.prepare_next().await.unwrap().unwrap();
+    repository
+        .configure_owned(
+            "https://test.workers.dev",
+            &workspace,
+            &device,
+            Some("alice"),
+        )
+        .await
+        .unwrap();
+    assert_eq!(
+        repository.config().await.unwrap().owner_uid.as_deref(),
+        Some("alice")
+    );
+    let after = repository.prepare_next().await.unwrap().unwrap();
+    assert_eq!(prepared.manifest.snapshot_id, after.manifest.snapshot_id);
+    assert_eq!(prepared.manifest.stream_id, after.manifest.stream_id);
+    assert_eq!(
+        repository.registration_id("alice").await.unwrap(),
+        repository.registration_id("alice").await.unwrap()
+    );
+    assert_ne!(
+        repository.registration_id("alice").await.unwrap(),
+        repository.registration_id("bob").await.unwrap()
+    );
+}
+
+#[tokio::test]
 async fn cloud_queue_is_transactional_durable_and_coalesces_edits() {
     let (_directory, pool) = database().await;
     let id = uuid::Uuid::new_v4().to_string();

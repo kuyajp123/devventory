@@ -5,6 +5,18 @@ use super::AppError;
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 enum CommandErrorCode {
+    AuthInvalidCredentials,
+    AuthInvalidInput,
+    AuthConfiguration,
+    AuthOffline,
+    AuthRateLimited,
+    AuthSessionExpired,
+    AuthVerificationRequired,
+    AuthAccountMismatch,
+    AuthCredentialUnavailable,
+    AuthInvalidResponse,
+    AuthPublisherExists,
+    AuthLegacyClaimRequired,
     CloudSyncConfigurationInvalid,
     CloudSyncCredentialsUnavailable,
     CloudSyncConnectionUnavailable,
@@ -42,6 +54,27 @@ pub(crate) struct CommandError {
 }
 
 impl CommandError {
+    pub(crate) fn authentication(code: &str) -> Self {
+        let (code, message) = match code {
+            "AUTH_INVALID_CREDENTIALS" => (CommandErrorCode::AuthInvalidCredentials, "Email or password is incorrect."),
+            "AUTH_INVALID_INPUT" => (CommandErrorCode::AuthInvalidInput, "Check the email address and password requirements."),
+            "AUTH_CONFIGURATION" => (CommandErrorCode::AuthConfiguration, "Authentication is not configured. Check the Firebase setup."),
+            "AUTH_OFFLINE" => (CommandErrorCode::AuthOffline, "Authentication is unreachable. Check your connection and retry."),
+            "AUTH_RATE_LIMITED" => (CommandErrorCode::AuthRateLimited, "Too many requests. Wait before retrying."),
+            "AUTH_SESSION_EXPIRED" => (CommandErrorCode::AuthSessionExpired, "Sign in again to continue."),
+            "AUTH_VERIFICATION_REQUIRED" => (CommandErrorCode::AuthVerificationRequired, "Verify your email before using Cloud Sync."),
+            "AUTH_ACCOUNT_MISMATCH" => (CommandErrorCode::AuthAccountMismatch, "This local database is linked to a different cloud account. Review the account change before linking it."),
+            "AUTH_CREDENTIAL_UNAVAILABLE" => (CommandErrorCode::AuthCredentialUnavailable, "The session could not be stored securely in Windows Credential Manager."),
+            "PUBLISHER_ALREADY_REGISTERED" => (CommandErrorCode::AuthPublisherExists, "Another publishing desktop is registered. Confirm replacement before using this computer."),
+            "LEGACY_CLAIM_REQUIRED" => (CommandErrorCode::AuthLegacyClaimRequired, "Confirm the protected claim of your existing cloud workspace."),
+            _ => (CommandErrorCode::AuthInvalidResponse, "The authentication service returned an invalid response. Try again."),
+        };
+        Self {
+            code,
+            message,
+            recoverable: true,
+        }
+    }
     pub(crate) fn cloud_sync_configuration_invalid() -> Self {
         Self {
             code: CommandErrorCode::CloudSyncConfigurationInvalid,
@@ -246,6 +279,18 @@ impl CommandError {
 
     pub(crate) fn code(&self) -> &'static str {
         match self.code {
+            CommandErrorCode::AuthInvalidCredentials => "AUTH_INVALID_CREDENTIALS",
+            CommandErrorCode::AuthInvalidInput => "AUTH_INVALID_INPUT",
+            CommandErrorCode::AuthConfiguration => "AUTH_CONFIGURATION",
+            CommandErrorCode::AuthOffline => "AUTH_OFFLINE",
+            CommandErrorCode::AuthRateLimited => "AUTH_RATE_LIMITED",
+            CommandErrorCode::AuthSessionExpired => "AUTH_SESSION_EXPIRED",
+            CommandErrorCode::AuthVerificationRequired => "AUTH_VERIFICATION_REQUIRED",
+            CommandErrorCode::AuthAccountMismatch => "AUTH_ACCOUNT_MISMATCH",
+            CommandErrorCode::AuthCredentialUnavailable => "AUTH_CREDENTIAL_UNAVAILABLE",
+            CommandErrorCode::AuthInvalidResponse => "AUTH_INVALID_RESPONSE",
+            CommandErrorCode::AuthPublisherExists => "AUTH_PUBLISHER_EXISTS",
+            CommandErrorCode::AuthLegacyClaimRequired => "AUTH_LEGACY_CLAIM_REQUIRED",
             CommandErrorCode::CloudSyncConfigurationInvalid => "CLOUD_SYNC_CONFIGURATION_INVALID",
             CommandErrorCode::CloudSyncCredentialsUnavailable => {
                 "CLOUD_SYNC_CREDENTIALS_UNAVAILABLE"
