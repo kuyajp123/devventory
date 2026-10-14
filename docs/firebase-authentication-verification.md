@@ -1,8 +1,8 @@
 # Firebase authentication verification
 
-Checkpoint: 2026-10-14, branch `codex/authkit-sign-in`, based on the saved Cloud Sync checkpoint `d16cc57884909235df273babba379844cc784db8`. Implementation is uncommitted and unpushed. Application source version remains `0.1.0`; no application release, tag, or signing-key rotation was performed.
+Checkpoint: 2026-10-14, branch `codex/authkit-sign-in`. The original authentication implementation is now committed at `89aded88691c04d0cc639bb13d2e618e1df3b175` and is the subject of PR31. The subsequent PR31 recovery-hardening changes are local, uncommitted and unpushed. Application source version remains `0.1.0`; no application release, tag, or signing-key rotation was performed for this hardening.
 
-## Automated results
+## Original implementation automated results
 
 | Check                                                                   | Result                                                                                                             |
 | ----------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
@@ -66,3 +66,30 @@ The first browser run overlapped the production build and hit two initial naviga
 Continue from the already linked, enabled original profile. Edit safe synthetic metadata and confirm a new authenticated upload updates the cloud mirror. Then test offline edits across full restart/reconnect and an isolated second account/profile. Do not repeat adoption or rebuild cloud data to test the status UI. See [the operating guide](firebase-authentication-setup.md). Do not send passwords, ID/refresh/device tokens, ignored credential files, or secret hashes in chat.
 
 Synthetic tests and preserved legacy access do not prove those real-user flows. No mobile work starts before this acceptance checkpoint succeeds.
+
+## PR31 recovery hardening: local verification
+
+All three reviewed findings are addressed without changing database migrations, dependencies, the snapshot protocol, source version, signing identity, or application data:
+
+- Existing device receipts require the current native publishing credential. A copied SQLite registration ID alone returns 409, including concurrent initial-registration copies. Missing proof requires explicit publisher replacement, which revokes the old credential while preserving the cloud stream.
+- Account changes hold the coordinator behind an authentication epoch until explicit enable succeeds. A failed SQLite pause cannot be undone by resetting per-upload cancellation. Clearing an account atomically replaces native credentials with a non-secret signed-out marker; a restarted app cannot treat that marker as permission to resume legacy publishing. The original publishing credential remains available for protected adoption.
+- An unreadable account offers **Clear saved sign-in**, with busy/error/retry feedback and no data deletion. A failed native clear leaves status reload inspecting the retained entry instead of falsely reporting a successful recovery.
+
+Regression-first verification reproduced the original receipt leak (HTTP 200 instead of 409), automatic resume after SQLite pause failure, missing recovery control, sign-out/restart resume, and false cleared-session status after a failed native write. Those targeted tests now pass. An independent read-only review caught the restart case and found no remaining actionable defects after its correction. Security-hardening, surgical-patch, test-driven development, incremental verification, code-review, and existing-interface UI-hardening guidance kept the work scoped; browser validation used Playwright because Chrome DevTools was unavailable.
+
+| Post-hardening check                                                    | Result                                                                  |
+| ----------------------------------------------------------------------- | ----------------------------------------------------------------------- |
+| Frontend lint, format, TypeScript and production build                  | Pass; existing Vite large-chunk warning                                 |
+| Full frontend unit suite, two workers                                   | 568 passed, 1 skipped, 0 failed; 112 passing files and one skipped file |
+| Full browser suite, two workers, without concurrent verification jobs   | 21 passed, 0 failed                                                     |
+| Worker integration tests and typecheck                                  | 34 passed, 0 failed                                                     |
+| Focused native authentication tests                                     | 12 passed, 0 failed                                                     |
+| Rust fmt, Clippy all targets/features with warnings denied, cargo check | Pass                                                                    |
+| Full Rust suite, including Vault and local D1 publisher integration     | 162 passed, 0 failed; binary/doc tests pass                             |
+| Git whitespace, migration and dependency preservation                   | Pass; no migration, lockfile or dependency changes                      |
+
+The first full browser run passed 20 journeys and timed out at the existing onboarding journey's 60-second limit while other verification jobs were running. That unchanged journey passed alone in 35.2 seconds with tracing enabled. After the other verification jobs finished, the full two-worker browser rerun passed all 21 journeys in 1.3 minutes; onboarding completed in 15.4 seconds. This is consistent with contention rather than a reproduced product regression. No onboarding code, assertion or timeout was changed.
+
+Recovery-screen screenshots at desktop and 1000×650 use synthetic data and show readable controls without overflow. No real credential or production record was accessed for these regression tests. Native publishing credentials and existing local/cloud data were not cleared or rotated by the test harness.
+
+**Rollout is pending:** this hardening has not been committed, pushed, deployed, merged, or used to publish an application release. Production still runs the previously recorded Worker version; the receipt-proof fix becomes live only after deploying the updated Worker. See the [rollout instructions](firebase-authentication-setup.md#pr31-recovery-hardening-rollout), then restart/use the updated desktop. Review threads were not resolved remotely.

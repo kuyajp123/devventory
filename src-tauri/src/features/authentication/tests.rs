@@ -1,6 +1,8 @@
 use super::{
-    config::FirebaseConfig, credentials::SessionStore, transport::FirebaseClient, AuthError,
-    AuthService,
+    config::FirebaseConfig,
+    credentials::{SessionStore, SIGNED_OUT_MARKER},
+    transport::FirebaseClient,
+    AuthError, AuthService,
 };
 use std::sync::{Arc, Mutex};
 use zeroize::Zeroizing;
@@ -15,8 +17,8 @@ impl SessionStore for MemoryStore {
         *self.0.lock().unwrap() = Some(value.into());
         Ok(())
     }
-    fn delete(&self) -> Result<(), AuthError> {
-        *self.0.lock().unwrap() = None;
+    fn clear(&self) -> Result<(), AuthError> {
+        *self.0.lock().unwrap() = Some(SIGNED_OUT_MARKER.into());
         Ok(())
     }
 }
@@ -101,7 +103,7 @@ async fn sign_in_keeps_credentials_native_and_sign_out_removes_them() {
         Err(AuthError::AccountMismatch)
     ));
     service.sign_out().await.unwrap();
-    assert!(store.0.lock().unwrap().is_none());
+    assert_eq!(store.0.lock().unwrap().as_deref(), Some(SIGNED_OUT_MARKER));
     assert_eq!(service.session().await.unwrap().state, "signedOut");
 }
 #[tokio::test]
@@ -205,7 +207,7 @@ async fn temporary_refresh_failure_preserves_session_but_revoked_refresh_clears_
         service.authorization_for("alice").await,
         Err(AuthError::SessionExpired)
     ));
-    assert!(store.0.lock().unwrap().is_none());
+    assert_eq!(store.0.lock().unwrap().as_deref(), Some(SIGNED_OUT_MARKER));
     assert_eq!(service.session().await.unwrap().state, "signedOut");
 }
 #[tokio::test]
@@ -269,10 +271,139 @@ async fn sign_out_clears_native_credentials_even_when_cloud_storage_is_unavailab
         .await
         .unwrap();
     assert_eq!(signed_out.state, "signedOut");
-    assert!(store.0.lock().unwrap().is_none());
+    assert_eq!(store.0.lock().unwrap().as_deref(), Some(SIGNED_OUT_MARKER));
     assert!(service.generation() > before);
     assert!(matches!(
         service.authorization_for("alice").await,
         Err(AuthError::SessionExpired)
     ));
+}
+
+#[tokio::test]
+async fn clearing_a_damaged_native_session_does_not_require_loading_it() {
+    for value in [
+        "not valid session JSON".to_owned(),
+        serde_json::json!({"account":{"userId":"alice","email":"alice@example.com","emailVerified":true},"refreshToken":"x".repeat(2049)}).to_string(),
+    ] {
+        let store = Arc::new(MemoryStore(Mutex::new(Some(value))));
+        let service = AuthService::with_parts(config(), FirebaseClient::new().unwrap(), store.clone());
+        assert!(matches!(service.session().await, Err(AuthError::CredentialUnavailable)));
+        let pool = sqlx::SqlitePool::connect("sqlite::memory:").await.unwrap();
+        let cloud = crate::features::cloud_sync::CloudSyncService::new(pool.clone(), service.clone());
+        pool.close().await;
+        assert_eq!(super::commands::sign_out_and_pause(&service, &cloud).await.unwrap().state, "signedOut");
+        assert_eq!(store.0.lock().unwrap().as_deref(), Some(SIGNED_OUT_MARKER));
+        assert_eq!(service.session().await.unwrap().state, "signedOut");
+    }
+}
+
+#[tokio::test]
+async fn restarted_account_or_unreadable_session_cannot_enable_legacy_publishing() {
+    use crate::features::cloud_sync::CloudSyncService;
+    use crate::shared::database::{initialize_database, DatabasePaths};
+    for store in [
+        remembered_store(),
+        Arc::new(MemoryStore(Mutex::new(Some("damaged".into())))),
+    ] {
+        let directory = tempfile::tempdir().unwrap();
+        let database = initialize_database(&DatabasePaths::new(directory.path()))
+            .await
+            .unwrap();
+        let pool = database.database.pool().clone();
+        sqlx::query("UPDATE cloud_sync_config SET enabled=1,api_url='https://synthetic.workers.dev',workspace_id=?,device_id=?")
+            .bind(uuid::Uuid::new_v4().to_string()).bind(uuid::Uuid::new_v4().to_string()).execute(&pool).await.unwrap();
+        let authentication =
+            AuthService::with_parts(config(), FirebaseClient::new().unwrap(), store);
+        let cloud = CloudSyncService::new(pool.clone(), authentication);
+        let rejected = cloud.set_enabled(true, true).await.unwrap_err();
+        assert!([
+            AuthError::AccountMismatch.code(),
+            AuthError::CredentialUnavailable.code()
+        ]
+        .contains(&rejected.code()));
+        pool.close().await;
+    }
+}
+
+#[tokio::test]
+async fn sign_out_pause_survives_restart_when_sqlite_cannot_save_the_pause() {
+    use crate::features::cloud_sync::CloudSyncService;
+    use crate::shared::database::{initialize_database, DatabasePaths};
+    let directory = tempfile::tempdir().unwrap();
+    let database = initialize_database(&DatabasePaths::new(directory.path()))
+        .await
+        .unwrap();
+    let pool = database.database.pool().clone();
+    sqlx::query("UPDATE cloud_sync_config SET enabled=1,api_url='https://synthetic.workers.dev',workspace_id=?,device_id=?")
+        .bind(uuid::Uuid::new_v4().to_string()).bind(uuid::Uuid::new_v4().to_string()).execute(&pool).await.unwrap();
+    sqlx::query("CREATE TRIGGER reject_account_pause BEFORE UPDATE OF enabled ON cloud_sync_config WHEN NEW.enabled=0 BEGIN SELECT RAISE(FAIL, 'synthetic pause failure'); END")
+        .execute(&pool).await.unwrap();
+    let store = remembered_store();
+    let authentication =
+        AuthService::with_parts(config(), FirebaseClient::new().unwrap(), store.clone());
+    let cloud = CloudSyncService::new(pool.clone(), authentication.clone());
+    assert_eq!(
+        super::commands::sign_out_and_pause(&authentication, &cloud)
+            .await
+            .unwrap()
+            .state,
+        "signedOut"
+    );
+    let saved = store.0.lock().unwrap().clone().unwrap_or_default();
+    assert!(!saved.contains("synthetic-refresh"));
+    assert!(!saved.contains("alice"));
+    sqlx::query("DROP TRIGGER reject_account_pause")
+        .execute(&pool)
+        .await
+        .unwrap();
+    assert_eq!(
+        sqlx::query_scalar::<_, i64>("SELECT enabled FROM cloud_sync_config")
+            .fetch_one(&pool)
+            .await
+            .unwrap(),
+        1
+    );
+    let restarted_authentication =
+        AuthService::with_parts(config(), FirebaseClient::new().unwrap(), store);
+    assert_eq!(
+        restarted_authentication.session().await.unwrap().state,
+        "signedOut"
+    );
+    let restarted_cloud = CloudSyncService::new(pool.clone(), restarted_authentication);
+    assert!(
+        restarted_cloud.set_enabled(true, true).await.is_err(),
+        "Restart must not reinterpret a cleared account as permission for legacy publishing"
+    );
+    pool.close().await;
+}
+
+#[tokio::test]
+async fn failed_native_clear_does_not_report_a_damaged_session_as_cleared() {
+    struct RejectingClearStore(MemoryStore);
+    impl SessionStore for RejectingClearStore {
+        fn load(&self) -> Result<Option<Zeroizing<String>>, AuthError> {
+            self.0.load()
+        }
+        fn save(&self, value: &str) -> Result<(), AuthError> {
+            self.0.save(value)
+        }
+        fn clear(&self) -> Result<(), AuthError> {
+            Err(AuthError::CredentialUnavailable)
+        }
+    }
+    let store = Arc::new(RejectingClearStore(MemoryStore(Mutex::new(Some(
+        "damaged".into(),
+    )))));
+    let authentication =
+        AuthService::with_parts(config(), FirebaseClient::new().unwrap(), store.clone());
+    assert!(matches!(
+        authentication.session().await,
+        Err(AuthError::CredentialUnavailable)
+    ));
+    assert!(matches!(
+        authentication.sign_out().await,
+        Err(AuthError::CredentialUnavailable)
+    ));
+    assert!(matches!(authentication.session().await, Err(AuthError::CredentialUnavailable)), "A failed clear must keep the status error recoverable instead of displaying signed-out success");
+    assert_eq!(store.0 .0.lock().unwrap().as_deref(), Some("damaged"));
 }

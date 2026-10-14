@@ -75,7 +75,7 @@ Use the original desktop/profile that already has the Phase 1 connection and its
 
 After signing in and verifying email, Settings offers **Connect existing cloud data**. Review the displayed account carefully and confirm. The original native publisher credential proves ownership; the first person who signs up cannot claim existing data. Existing cloud snapshots, workspace/device IDs, local revisions, prepared uploads, and queued edits are preserved.
 
-Once claimed, old publisher/read-only tokens no longer authorize that workspace. Keep the ignored legacy credential file privately for historical backup, but it is not a new login token. Repeated/lost receipts are recoverable by the same owner/device. No production claim is performed by a deployment command.
+Once claimed, old publisher/read-only tokens no longer authorize that workspace. Keep the ignored legacy credential file privately for historical backup, but it is not a new login token. Repeating a registration receipt requires the current publishing credential from Windows Credential Manager; the non-secret registration ID in SQLite is not recovery proof. A lost first setup response or missing native publishing credential requires explicit **Make this the publishing desktop** confirmation, which replaces the credential and revokes the previous one without rebuilding cloud metadata. No production claim is performed by a deployment command.
 
 If the old credential is unavailable, stop and investigate the original profile's native credential entry; don't rebuild cloud data or assign ownership without proof. If the Firebase account already owns a different workspace, adoption is deliberately rejected rather than merging private data.
 
@@ -86,6 +86,10 @@ Refresh tokens and device credentials are in Windows Credential Manager. ID toke
 Restart restores the saved account profile and refreshes authorization when needed. Temporary network failures preserve it. Invalid/revoked refresh credentials require sign-in again. Rotation is persisted before further network lookup so interrupted requests do not strand the session.
 
 **Sign out** cancels active sync, removes native account credentials, and pauses uploads without deleting local data or the queue. Even a cloud SQLite error must not prevent clearing account credentials. A credential-store failure is reported; resolve it rather than assuming the token was deleted.
+
+If the saved account cannot be loaded, **Clear saved sign-in** removes that account session without first parsing it. After clearing succeeds, sign in again. This does not remove projects, Vault data, cloud snapshots, or the separate publishing credential. If clearing fails, the screen shows a safe error and allows retry; it does not claim success. Clearing replaces the native account entry with a non-secret signed-out marker containing no email, UID, password, or token. That marker prevents legacy publishing after restart even if the SQLite pause failed; it is not a saved login.
+
+Account changes hold background publishing until you deliberately **Review and enable sync** for the current connection. A failed SQLite pause cannot release this in-process hold on the next coordinator tick. A signed-in or unreadable saved account also prevents a restarted app from falling back to the unclaimed legacy-token connection. Pending edits stay local.
 
 **Switch account** changes identity, not the local database. It cannot silently publish existing projects to the new account. Explicitly review linking this computer to another account, then approve the separate first-upload preview. Previously linked cloud data stays separate; it is not downloaded, merged, or deleted. Local SQLite is a workstation database, not a per-user data container: anyone with access to that OS profile can still see its local metadata.
 
@@ -111,5 +115,9 @@ Never send account passwords, ID/refresh/device tokens, ignored credential files
 `GET /v1/workspaces` returns the verified user's workspace/device identifiers (or null). `POST /v1/workspaces` provisions one workspace idempotently; caller-chosen IDs are rejected. `POST /v1/devices` registers/replaces a publisher with explicit replacement and expected-current-device checks. `POST /v1/workspaces/claim` requires the old publisher proof plus verified identity/confirmation. Existing snapshot/read/recovery endpoints keep protocol version 1 and derive workspace context from authorization.
 
 Desktop migration 17 stores owner UID and non-secret registration IDs only. D1 migration 3 stores isolated workspace/device authorization metadata. Desktop migrations 1–16 and D1 migrations 1–2 are unchanged. Existing pre-migration backups apply. On problems, pause sync and preserve data; do not roll back applied migrations or deploy legacy-only code after an ownership claim, since it would remove the claim's protection.
+
+### PR31 recovery hardening rollout
+
+The native-proof receipt check requires deploying the updated Worker with `npm run cloud:deploy`; changing desktop files alone does not protect the live endpoint. Deploy the Worker before distributing the updated desktop. Existing saved publishing credentials remain valid, and no new database migration or secret rotation is required. Older desktops without receipt-proof support may need the updated desktop and explicit publisher-replacement confirmation when reconnecting. Older desktop code does not understand the signed-out marker and fails closed; use the updated desktop rather than deleting the marker or reverting native credentials. Do not rebuild cloud metadata to recover a missing receipt.
 
 See [the implementation plan](firebase-authentication-implementation-plan.md) and [ADR-0002](decisions/0002-firebase-identity-cloud-workspaces.md).

@@ -1,6 +1,6 @@
 use super::{
     config::FirebaseConfig,
-    credentials::{NativeSessionStore, SessionStore},
+    credentials::{NativeSessionStore, SessionStore, SIGNED_OUT_MARKER},
     model::{Account, AuthSession, Authorization, Login, SavedSession},
     transport::{FirebaseClient, Tokens},
     AuthError,
@@ -16,6 +16,7 @@ use zeroize::Zeroizing;
 struct State {
     loaded: bool,
     login: Option<Login>,
+    legacy_publishing_blocked: bool,
 }
 #[derive(Clone)]
 pub(crate) struct AuthService {
@@ -86,6 +87,11 @@ impl AuthService {
             .await
             .map_err(|_| AuthError::CredentialUnavailable)??;
         if let Some(value) = value {
+            if value.as_str() == SIGNED_OUT_MARKER {
+                state.legacy_publishing_blocked = true;
+                state.loaded = true;
+                return Ok(());
+            }
             let mut saved: SavedSession =
                 serde_json::from_str(&value).map_err(|_| AuthError::CredentialUnavailable)?;
             if saved.account.user_id.is_empty()
@@ -144,6 +150,17 @@ impl AuthService {
         }
         Ok(self.public(&state))
     }
+    pub(crate) async fn authorize_legacy_publishing(&self) -> Result<(), AuthError> {
+        let mut state = self.state.lock().await;
+        self.load(&mut state).await?;
+        if state.login.is_some() {
+            return Err(AuthError::AccountMismatch);
+        }
+        if state.legacy_publishing_blocked {
+            return Err(AuthError::SessionExpired);
+        }
+        Ok(())
+    }
     pub(crate) async fn sign_in(
         &self,
         email: String,
@@ -164,6 +181,7 @@ impl AuthService {
         self.save(&login).await?;
         state.login = Some(login);
         state.loaded = true;
+        state.legacy_publishing_blocked = false;
         Ok(self.public(&state))
     }
     fn validate_tokens(tokens: &Tokens, expected: Option<&str>) -> Result<i64, AuthError> {
@@ -212,11 +230,14 @@ impl AuthService {
             Ok(tokens) => tokens,
             Err(AuthError::SessionExpired) => {
                 state.login = None;
+                state.loaded = false;
+                state.legacy_publishing_blocked = true;
                 self.generation.fetch_add(1, Ordering::AcqRel);
                 let store = self.store.clone();
-                tokio::task::spawn_blocking(move || store.delete())
+                tokio::task::spawn_blocking(move || store.clear())
                     .await
                     .map_err(|_| AuthError::CredentialUnavailable)??;
+                state.loaded = true;
                 return Err(AuthError::SessionExpired);
             }
             Err(error) => return Err(error),
@@ -329,10 +350,15 @@ impl AuthService {
         self.generation.fetch_add(1, Ordering::AcqRel);
         let mut state = self.state.lock().await;
         state.login = None;
-        state.loaded = true;
+        // If the native write fails, the next status read must inspect the
+        // retained entry, not report a successful clear from cached state.
+        state.loaded = false;
+        state.legacy_publishing_blocked = true;
         let store = self.store.clone();
-        tokio::task::spawn_blocking(move || store.delete())
+        tokio::task::spawn_blocking(move || store.clear())
             .await
-            .map_err(|_| AuthError::CredentialUnavailable)?
+            .map_err(|_| AuthError::CredentialUnavailable)??;
+        state.loaded = true;
+        Ok(())
     }
 }

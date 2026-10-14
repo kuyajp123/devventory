@@ -1,9 +1,12 @@
 use super::AuthError;
 use zeroize::Zeroizing;
+// Retains no identity or credential. Its presence prevents a restarted app
+// from interpreting sign-out as a never-configured legacy publisher.
+pub(super) const SIGNED_OUT_MARKER: &str = r#"{"signedOut":true}"#;
 pub(crate) trait SessionStore: Send + Sync {
     fn load(&self) -> Result<Option<Zeroizing<String>>, AuthError>;
     fn save(&self, value: &str) -> Result<(), AuthError>;
-    fn delete(&self) -> Result<(), AuthError>;
+    fn clear(&self) -> Result<(), AuthError>;
 }
 pub(crate) struct NativeSessionStore {
     pub(crate) identity: String,
@@ -44,17 +47,9 @@ impl SessionStore for NativeSessionStore {
             Err(AuthError::CredentialUnavailable)
         }
     }
-    fn delete(&self) -> Result<(), AuthError> {
-        #[cfg(windows)]
-        {
-            match self.entry()?.delete_credential() {
-                Ok(()) | Err(keyring::Error::NoEntry) => Ok(()),
-                Err(_) => Err(AuthError::CredentialUnavailable),
-            }
-        }
-        #[cfg(not(windows))]
-        {
-            Err(AuthError::CredentialUnavailable)
-        }
+    fn clear(&self) -> Result<(), AuthError> {
+        // Replace atomically in the native store rather than deleting first.
+        // A failed write is reported; it must not claim the session was cleared.
+        self.save(SIGNED_OUT_MARKER)
     }
 }

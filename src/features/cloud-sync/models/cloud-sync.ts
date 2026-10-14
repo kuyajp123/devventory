@@ -52,6 +52,8 @@ export const stateLabels: Record<CloudSyncStatus['state'], string> = {
   synced: 'Metadata is synced',
 };
 export const problemMessages: Record<string, string> = {
+  AUTH_PUBLISHING_PAUSED:
+    'Publishing is paused after an account change. Review the connection and enable sync again; pending edits remain local.',
   AUTH_SESSION_EXPIRED:
     'Sign in again. Pending edits remain saved on this computer.',
   AUTH_ACCOUNT_MISMATCH:

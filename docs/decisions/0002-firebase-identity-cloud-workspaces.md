@@ -20,7 +20,7 @@ Use Firebase for identity only and extend, rather than replace, Cloud Sync. Veri
 
 Persist refresh/device credentials in Windows Credential Manager, not SQLite or browser storage. Keep local app access independent of sign-in. Preserve the existing queue, snapshot protocol, revision checks, retries, and restored-database recovery.
 
-Derive device credentials with HMAC-SHA-256 from a randomly generated server-only 256-bit key and the workspace/device/generation/registration identity. D1 stores registration hashes, not raw credentials. Deterministic receipts let interrupted registrations retry without rotating credentials. Explicit publisher replacement changes the generation and invalidates the preceding device credential.
+Derive device credentials with HMAC-SHA-256 from a randomly generated server-only 256-bit key and the workspace/device/generation/registration identity. D1 stores registration hashes, not raw credentials. Deterministic receipts can be repeated only with the current native publishing credential; non-secret SQLite registration IDs cannot recover that credential. A lost initial receipt requires explicit publisher replacement rather than silent recovery. Replacement changes the generation and invalidates the preceding device credential without rebuilding the metadata projection.
 
 Adopt the existing private workspace only through verified identity plus proof of the existing publisher credential and explicit confirmation. Never let the first signup claim existing metadata. Retire legacy-token access for that workspace only after its safe claim.
 

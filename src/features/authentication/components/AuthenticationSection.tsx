@@ -51,13 +51,35 @@ export function AuthenticationSection({
           Cloud account status could not be loaded. Local features are still
           available.
         </p>
-        <Button
-          size="sm"
-          variant="secondary"
-          onPress={() => void auth.reload()}
-        >
-          Retry account status
-        </Button>
+        <p className="text-xs text-muted">
+          Clearing the saved sign-in pauses cloud sync and lets you sign in
+          again. Your projects, Vault, and cloud data are not deleted.
+        </p>
+        <div className="flex flex-wrap gap-2">
+          <Button
+            size="sm"
+            variant="secondary"
+            isDisabled={busy || auth.session.isFetching}
+            onPress={() => void auth.reload()}
+          >
+            Retry account status
+          </Button>
+          <Button
+            size="sm"
+            variant="secondary"
+            isDisabled={busy}
+            aria-busy={busy}
+            onPress={() => void action('signOut')}
+          >
+            {busy ? <Spinner size="sm" aria-hidden="true" /> : null}
+            Clear saved sign-in
+          </Button>
+        </div>
+        {error ? (
+          <p role="alert" className="text-sm text-danger">
+            {error}
+          </p>
+        ) : null}
       </div>
     );
   const session = auth.session.data;

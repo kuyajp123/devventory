@@ -43,7 +43,12 @@ pub(crate) async fn sign_in_account(
         .sign_in(input.email, input.password, input.sign_up)
         .await
         .map_err(safe)?;
-    let _ = state.cloud_sync_service().authentication_changed().await;
+    if let Err(error) = state.cloud_sync_service().authentication_changed().await {
+        tracing::warn!(
+            code = error.code(),
+            "Account saved; cloud publishing remains paused"
+        );
+    }
     Ok(session)
 }
 #[tauri::command]
@@ -64,7 +69,12 @@ pub(super) async fn sign_out_and_pause(
     let result = authentication.sign_out().await;
     // A cloud database failure must never prevent native account credentials being cleared.
     // Owned-workspace publishing also fails closed without an authenticated session.
-    let _ = cloud.pause_for_sign_out().await;
+    if let Err(error) = cloud.pause_for_sign_out().await {
+        tracing::warn!(
+            code = error.code(),
+            "Account cleared; cloud publishing remains paused"
+        );
+    }
     result?;
     authentication.session().await
 }
@@ -74,12 +84,18 @@ pub(crate) async fn refresh_auth_session(
     state: State<'_, AppState>,
 ) -> Result<AuthSession, CommandError> {
     main_window(&window)?;
+    state.cloud_sync_service().cancel_auth_work();
     let session = state
         .authentication_service()
         .refresh_session()
         .await
         .map_err(safe)?;
-    let _ = state.cloud_sync_service().authentication_changed().await;
+    if let Err(error) = state.cloud_sync_service().authentication_changed().await {
+        tracing::warn!(
+            code = error.code(),
+            "Account refreshed; cloud publishing remains paused"
+        );
+    }
     Ok(session)
 }
 #[tauri::command]

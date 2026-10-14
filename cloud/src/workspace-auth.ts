@@ -203,7 +203,17 @@ export async function handleWorkspaceRequest(
     )
       .bind(owned.workspace_id, registrationHash)
       .first<Device>();
-    if (existing?.active) return receipt(env, owned, existing);
+    const proof = request.headers.get('X-Devventory-Device') ?? '';
+    if (
+      existing?.active &&
+      owned.publisher_device_id === existing.device_id &&
+      owned.publisher_generation === existing.generation &&
+      /^[a-f0-9]{64}$/.test(proof) &&
+      equal(proof, await deviceToken(env, owned, existing))
+    )
+      return receipt(env, owned, existing);
+    // Registration IDs are public request identifiers, not recovery credentials.
+    // Without native device proof, even a matching ID requires explicit replacement.
     if (
       owned.publisher_device_id &&
       (!parsed.data.replaceConfirmed ||
@@ -212,14 +222,15 @@ export async function handleWorkspaceRequest(
       throw new ApiError(409, 'PUBLISHER_ALREADY_REGISTERED');
     const deviceId = existing?.device_id ?? crypto.randomUUID();
     const generation = owned.publisher_generation + 1;
-    await env.DB.batch([
+    const writes = await env.DB.batch([
       env.DB.prepare(
-        'INSERT INTO cloud_devices (workspace_id,device_id,registration_hash,generation) SELECT workspace_id,?,?,? FROM cloud_workspaces WHERE workspace_id=? AND publisher_generation=? ON CONFLICT(workspace_id,registration_hash) DO UPDATE SET generation=excluded.generation,active=1 WHERE cloud_devices.active=0',
+        'INSERT INTO cloud_devices (workspace_id,device_id,registration_hash,generation) SELECT workspace_id,?,?,? FROM cloud_workspaces WHERE workspace_id=? AND publisher_generation=? ON CONFLICT(workspace_id,registration_hash) DO UPDATE SET generation=excluded.generation,active=1 WHERE cloud_devices.active=0 OR cloud_devices.generation=?',
       ).bind(
         deviceId,
         registrationHash,
         generation,
         owned.workspace_id,
+        owned.publisher_generation,
         owned.publisher_generation,
       ),
       env.DB.prepare(
@@ -236,13 +247,21 @@ export async function handleWorkspaceRequest(
         'UPDATE cloud_devices SET active=0 WHERE workspace_id=? AND device_id<>? AND EXISTS (SELECT 1 FROM cloud_workspaces WHERE workspace_id=? AND publisher_device_id=?)',
       ).bind(owned.workspace_id, deviceId, owned.workspace_id, deviceId),
     ]);
+    if (writes[1].meta.changes !== 1)
+      throw new ApiError(409, 'PUBLISHER_ALREADY_REGISTERED');
     const updated = await workspace(env, identity.uid);
     const device = await env.DB.prepare(
       'SELECT device_id,registration_hash,generation,active FROM cloud_devices WHERE workspace_id=? AND registration_hash=?',
     )
       .bind(owned.workspace_id, registrationHash)
       .first<Device>();
-    if (!updated || !device || updated.publisher_device_id !== device.device_id)
+    if (
+      !updated ||
+      !device ||
+      updated.publisher_device_id !== device.device_id ||
+      updated.publisher_generation !== generation ||
+      device.generation !== generation
+    )
       throw new ApiError(409, 'PUBLISHER_ALREADY_REGISTERED');
     return receipt(env, updated, device);
   }

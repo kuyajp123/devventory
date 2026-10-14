@@ -109,7 +109,132 @@ test('allocates isolated workspaces idempotently and rejects caller-owned IDs', 
     [],
   );
 });
-test('registers one publishing device and repeats lost receipts safely', async (t) => {
+test('copied registration metadata cannot recover a publisher token without native proof', async (t) => {
+  const { request } = await fixture(t);
+  await request('alice', '/v1/workspaces', {});
+  const registrationId = crypto.randomUUID();
+  const first = await (
+    await request('alice', '/v1/devices', { registrationId })
+  ).json();
+  for (const proof of [undefined, '0'.repeat(64)]) {
+    const copied = await request(
+      'alice',
+      '/v1/devices',
+      { registrationId },
+      proof,
+    );
+    assert.equal(copied.status, 409);
+    assert.equal(
+      (await copied.json()).error.code,
+      'PUBLISHER_ALREADY_REGISTERED',
+    );
+  }
+  const proven = await request(
+    'alice',
+    '/v1/devices',
+    { registrationId },
+    first.deviceToken,
+  );
+  assert.equal(proven.status, 200);
+  assert.deepEqual(await proven.json(), first);
+});
+
+test('a lost setup receipt requires explicit replacement and preserves the publisher stream', async (t) => {
+  const { request, DB } = await fixture(t);
+  await request('alice', '/v1/workspaces', {});
+  const registrationId = crypto.randomUUID();
+  const first = await (
+    await request('alice', '/v1/devices', { registrationId })
+  ).json();
+  const streamId = crypto.randomUUID();
+  await DB.prepare(
+    'INSERT INTO workspace_state (workspace_id,device_id,stream_id) VALUES (?,?,?)',
+  )
+    .bind(first.workspaceId, first.deviceId, streamId)
+    .run();
+  const incompleteConfirmation = await request('alice', '/v1/devices', {
+    registrationId,
+    replaceConfirmed: true,
+  });
+  assert.equal(incompleteConfirmation.status, 409);
+  const replaced = await request('alice', '/v1/devices', {
+    registrationId,
+    replaceConfirmed: true,
+    expectedDeviceId: first.deviceId,
+  });
+  assert.equal(replaced.status, 200);
+  const next = await replaced.json();
+  assert.equal(next.workspaceId, first.workspaceId);
+  assert.equal(next.deviceId, first.deviceId);
+  assert.notEqual(next.deviceToken, first.deviceToken);
+  assert.equal(
+    (await request('alice', '/v1/sync/status', undefined, first.deviceToken))
+      .status,
+    403,
+  );
+  assert.equal(
+    (await request('alice', '/v1/sync/status', undefined, next.deviceToken))
+      .status,
+    200,
+  );
+  assert.equal(
+    (await DB.prepare('SELECT COUNT(*) AS count FROM cloud_devices').first())
+      .count,
+    1,
+  );
+  assert.equal(
+    (
+      await DB.prepare(
+        'SELECT stream_id FROM workspace_state WHERE workspace_id=?',
+      )
+        .bind(first.workspaceId)
+        .first()
+    ).stream_id,
+    streamId,
+  );
+});
+
+test('concurrent copies of a registration ID cannot both obtain the first credential', async (t) => {
+  const { request, DB } = await fixture(t);
+  await request('alice', '/v1/workspaces', {});
+  const registrationId = crypto.randomUUID();
+  const attempts = await Promise.all([
+    request('alice', '/v1/devices', { registrationId }),
+    request('alice', '/v1/devices', { registrationId }),
+  ]);
+  assert.deepEqual(
+    attempts.map((response) => response.status).sort(),
+    [200, 409],
+  );
+  const first = await attempts
+    .find((response) => response.status === 200)
+    .json();
+  assert.equal(
+    (await request('alice', '/v1/devices', { registrationId })).status,
+    409,
+  );
+  assert.deepEqual(
+    await (
+      await request(
+        'alice',
+        '/v1/devices',
+        { registrationId },
+        first.deviceToken,
+      )
+    ).json(),
+    first,
+  );
+  assert.equal(
+    (
+      await DB.prepare(
+        'SELECT COUNT(*) AS count FROM cloud_devices WHERE active=1',
+      ).first()
+    ).count,
+    1,
+  );
+});
+
+test('registers one publishing device and repeats receipts with native proof', async (t) => {
   const { request } = await fixture(t);
   await request('alice', '/v1/workspaces', {});
   const registrationId = crypto.randomUUID();
@@ -117,7 +242,7 @@ test('registers one publishing device and repeats lost receipts safely', async (
     await request('alice', '/v1/devices', { registrationId })
   ).json();
   const retry = await (
-    await request('alice', '/v1/devices', { registrationId })
+    await request('alice', '/v1/devices', { registrationId }, first.deviceToken)
   ).json();
   assert.deepEqual(retry, first);
   assert.equal(
@@ -378,7 +503,14 @@ test('explicit publisher replacement revokes old credentials and registration ra
     200,
   );
   assert.deepEqual(
-    await (await request('alice', '/v1/devices', { registrationId })).json(),
+    await (
+      await request(
+        'alice',
+        '/v1/devices',
+        { registrationId },
+        next.deviceToken,
+      )
+    ).json(),
     next,
   );
   assert.equal(

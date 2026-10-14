@@ -280,6 +280,57 @@ impl super::credentials::Credentials for MemoryCredentials {
 }
 struct ServerProcess(std::process::Child);
 #[tokio::test]
+async fn failed_account_pause_keeps_legacy_publishing_blocked_until_explicit_enable() {
+    use super::{
+        service::{CloudSyncService, ConfigureSync},
+        transport::SyncError,
+    };
+    let (_directory, pool) = database().await;
+    let repository = SyncRepository::new(pool.clone());
+    let service = CloudSyncService::with_credentials(
+        pool.clone(),
+        std::sync::Arc::new(MemoryCredentials(std::sync::Mutex::new(
+            std::collections::HashMap::new(),
+        ))),
+    );
+    service
+        .configure(ConfigureSync {
+            api_url: "http://127.0.0.1:9".into(),
+            workspace_id: uuid::Uuid::new_v4().to_string(),
+            device_id: uuid::Uuid::new_v4().to_string(),
+            publisher_token: Some("a".repeat(64)),
+        })
+        .await
+        .unwrap();
+    add_project(&pool, &uuid::Uuid::new_v4().to_string()).await;
+    repository.set_enabled(true).await.unwrap();
+    sqlx::query("CREATE TRIGGER reject_account_pause BEFORE UPDATE OF enabled ON cloud_sync_config WHEN NEW.enabled=0 BEGIN SELECT RAISE(FAIL, 'synthetic pause failure'); END")
+        .execute(&pool).await.unwrap();
+    assert!(service.authentication_changed().await.is_err());
+    sqlx::query("DROP TRIGGER reject_account_pause")
+        .execute(&pool)
+        .await
+        .unwrap();
+    assert!(repository.config().await.unwrap().enabled);
+    for manual in [false, true] {
+        assert!(matches!(
+            service.synchronize(manual).await,
+            Err(SyncError::Cancelled)
+        ));
+    }
+    let status = service.status().await.unwrap();
+    assert!(!status.enabled);
+    assert_eq!(status.state, "paused");
+    assert_eq!(status.problem.as_deref(), Some("AUTH_PUBLISHING_PAUSED"));
+    service.set_enabled(true, true).await.unwrap();
+    assert!(service.status().await.unwrap().enabled);
+    assert!(matches!(
+        service.synchronize(true).await,
+        Err(SyncError::Offline)
+    ));
+}
+
+#[tokio::test]
 async fn saved_publisher_credentials_cannot_be_reused_for_a_different_origin() {
     use super::service::{CloudSyncService, ConfigureSync};
     let (_directory, pool) = database().await;

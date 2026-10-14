@@ -1,4 +1,4 @@
-import { screen, waitFor, within } from '@testing-library/react';
+import { act, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { renderWithProviders } from '@/test/render';
@@ -110,5 +110,110 @@ describe('Cloud account authentication', () => {
     expect(
       await screen.findByText('Verification email sent. Check your inbox.'),
     ).toBeInTheDocument();
+  });
+  it('clears an unreadable saved sign-in and restores the signed-out account controls', async () => {
+    const user = userEvent.setup();
+    const onSessionChanged = vi.fn();
+    vi.mocked(authenticationGateway.session).mockRejectedValue(
+      new Error('synthetic-unreadable-credential-detail'),
+    );
+    vi.mocked(authenticationGateway.signOut).mockResolvedValue(signedOut);
+    renderWithProviders(
+      <AuthenticationSection onSessionChanged={onSessionChanged} />,
+    );
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'Local features are still available.',
+    );
+    const clearSignIn = await screen.findByRole('button', {
+      name: 'Clear saved sign-in',
+    });
+    expect(screen.getByText(/projects.*Vault.*cloud/i)).toHaveTextContent(
+      /not (deleted|removed)|does not (delete|remove)/i,
+    );
+    expect(
+      screen.queryByText('synthetic-unreadable-credential-detail'),
+    ).not.toBeInTheDocument();
+
+    await user.click(clearSignIn);
+
+    expect(await screen.findByText('Not signed in')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Sign in' })).toBeEnabled();
+    expect(
+      screen.queryByRole('button', { name: 'Clear saved sign-in' }),
+    ).not.toBeInTheDocument();
+    expect(authenticationGateway.signOut).toHaveBeenCalledOnce();
+    expect(onSessionChanged).toHaveBeenCalledOnce();
+  });
+  it('keeps a failed saved-sign-in clear visible and retryable without exposing raw details', async () => {
+    const user = userEvent.setup();
+    const onSessionChanged = vi.fn();
+    vi.mocked(authenticationGateway.session).mockRejectedValue(
+      new Error('synthetic-unreadable-credential-detail'),
+    );
+    vi.mocked(authenticationGateway.signOut)
+      .mockRejectedValueOnce(new Error('synthetic-native-credential-detail'))
+      .mockResolvedValueOnce(signedOut);
+    renderWithProviders(
+      <AuthenticationSection onSessionChanged={onSessionChanged} />,
+    );
+
+    await user.click(
+      await screen.findByRole('button', { name: 'Clear saved sign-in' }),
+    );
+
+    expect(
+      await screen.findByText(
+        'The account operation could not be completed. Try again.',
+      ),
+    ).toHaveAttribute('role', 'alert');
+    expect(
+      screen.queryByText('synthetic-native-credential-detail'),
+    ).not.toBeInTheDocument();
+    expect(onSessionChanged).not.toHaveBeenCalled();
+    const clearSignIn = screen.getByRole('button', {
+      name: 'Clear saved sign-in',
+    });
+    expect(clearSignIn).toBeEnabled();
+    expect(
+      screen.getByRole('button', { name: 'Retry account status' }),
+    ).toBeEnabled();
+
+    await user.click(clearSignIn);
+
+    expect(await screen.findByText('Not signed in')).toBeInTheDocument();
+    expect(authenticationGateway.signOut).toHaveBeenCalledTimes(2);
+    expect(onSessionChanged).toHaveBeenCalledOnce();
+  });
+  it('disables recovery controls while the saved sign-in is being cleared', async () => {
+    const user = userEvent.setup();
+    let finishSignOut: ((session: typeof signedOut) => void) | undefined;
+    vi.mocked(authenticationGateway.session).mockRejectedValue(
+      new Error('synthetic-unreadable-credential-detail'),
+    );
+    vi.mocked(authenticationGateway.signOut).mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          finishSignOut = resolve;
+        }),
+    );
+    renderWithProviders(<AuthenticationSection />);
+
+    const clearSignIn = await screen.findByRole('button', {
+      name: 'Clear saved sign-in',
+    });
+    await user.click(clearSignIn);
+
+    expect(clearSignIn).toBeDisabled();
+    expect(
+      screen.getByRole('button', { name: 'Retry account status' }),
+    ).toBeDisabled();
+    await user.click(clearSignIn);
+    expect(authenticationGateway.signOut).toHaveBeenCalledOnce();
+
+    await act(async () => {
+      finishSignOut?.(signedOut);
+    });
+    expect(await screen.findByText('Not signed in')).toBeInTheDocument();
   });
 });

@@ -9,7 +9,7 @@ use chrono::Utc;
 use serde::Deserialize;
 use sqlx::SqlitePool;
 use std::sync::{
-    atomic::{AtomicBool, Ordering},
+    atomic::{AtomicBool, AtomicU64, Ordering},
     Arc,
 };
 use std::time::Duration;
@@ -31,6 +31,8 @@ pub(crate) struct CloudSyncService {
     gate: Arc<Mutex<()>>,
     active: Arc<AtomicBool>,
     cancel: Arc<AtomicBool>,
+    authentication_epoch: Arc<AtomicU64>,
+    approved_authentication_epoch: Arc<AtomicU64>,
     wake: Arc<Notify>,
     started: Arc<AtomicBool>,
     shutdown: Arc<Notify>,
@@ -62,6 +64,8 @@ impl CloudSyncService {
             gate: Arc::new(Mutex::new(())),
             active: Arc::new(AtomicBool::new(false)),
             cancel: Arc::new(AtomicBool::new(false)),
+            authentication_epoch: Arc::new(AtomicU64::new(0)),
+            approved_authentication_epoch: Arc::new(AtomicU64::new(0)),
             wake: Arc::new(Notify::new()),
             started: Arc::new(AtomicBool::new(false)),
             shutdown: Arc::new(Notify::new()),
@@ -127,7 +131,14 @@ impl CloudSyncService {
         self.shutdown.notify_one();
     }
     pub(crate) fn cancel_auth_work(&self) {
+        // Only explicit enable approves this epoch. Resetting per-upload
+        // cancellation or failing to persist a pause cannot resume publishing.
+        self.authentication_epoch.fetch_add(1, Ordering::AcqRel);
         self.cancel.store(true, Ordering::Release);
+    }
+    fn authentication_paused(&self) -> bool {
+        self.authentication_epoch.load(Ordering::Acquire)
+            != self.approved_authentication_epoch.load(Ordering::Acquire)
     }
     pub(crate) async fn authentication_changed(&self) -> Result<(), SyncError> {
         self.cancel_auth_work();
@@ -170,11 +181,16 @@ impl CloudSyncService {
                 Some(auth.generation),
             ))
         } else {
+            // Also fail closed after a restart if a legacy pause never reached SQLite.
+            if let Some(authentication) = &self.authentication {
+                authentication.authorize_legacy_publishing().await?;
+            }
             Ok((transport, credential, None))
         }
     }
     fn check_generation(&self, generation: Option<u64>) -> Result<(), SyncError> {
-        if self.cancel.load(Ordering::Acquire)
+        if self.authentication_paused()
+            || self.cancel.load(Ordering::Acquire)
             || generation.is_some_and(|value| {
                 self.authentication
                     .as_ref()
@@ -237,13 +253,23 @@ impl CloudSyncService {
                 return Err(SyncError::InvalidResponse);
             }
             if owned.workspace_id == config.workspace_id && owned.device_id == config.device_id {
-                // Recover a lost receipt without requiring the now-retired legacy credential.
+                // A matching registration ID alone is not recovery proof. Attach
+                // the native device credential when a previous receipt was saved.
+                let mut transport = transport;
+                if let Ok(proof) = self.token(&config).await {
+                    transport = transport.with_device(proof);
+                }
+                let mut input = serde_json::json!({"registrationId":registration_id});
+                if replace_publisher {
+                    input["replaceConfirmed"] = true.into();
+                    input["expectedDeviceId"] = owned.device_id.into();
+                }
                 transport
                     .request(
                         reqwest::Method::POST,
                         "/v1/devices",
                         &auth.token,
-                        Some(serde_json::json!({"registrationId":registration_id}).to_string()),
+                        Some(input.to_string()),
                     )
                     .await?
             } else {
@@ -285,6 +311,16 @@ impl CloudSyncService {
             if replace_publisher {
                 input["replaceConfirmed"] = true.into();
                 input["expectedDeviceId"] = workspace.device_id.into();
+            }
+            let mut transport = transport;
+            if config.owner_uid.as_deref() == Some(account.user_id.as_str())
+                && config.workspace_id.as_deref() == Some(workspace.workspace_id.as_str())
+            {
+                // Missing proof deliberately falls back to the Worker's explicit
+                // replacement flow; it never grants an automatic recovery token.
+                if let Ok(proof) = self.token(&config).await {
+                    transport = transport.with_device(proof);
+                }
             }
             transport
                 .request(
@@ -341,14 +377,36 @@ impl CloudSyncService {
         confirmed: bool,
     ) -> Result<SyncStatus, SyncError> {
         if !enabled {
-            self.cancel.store(true, Ordering::Release);
+            self.cancel_auth_work();
         }
         let _gate = self.gate.lock().await;
+        let authentication_epoch = self.authentication_epoch.load(Ordering::Acquire);
         let config = self.repository.config().await?;
         if enabled && (!confirmed || config.workspace_id.is_none()) {
             return Err(SyncError::InvalidConfiguration);
         }
+        if enabled {
+            if let Some(uid) = config.owner_uid.as_deref() {
+                let authentication = self
+                    .authentication
+                    .as_ref()
+                    .ok_or(AuthError::Configuration)?;
+                let account = authentication.current_account().await?;
+                if account.user_id != uid {
+                    return Err(AuthError::AccountMismatch.into());
+                }
+                if !account.email_verified {
+                    return Err(AuthError::VerificationRequired.into());
+                }
+            } else if let Some(authentication) = &self.authentication {
+                authentication.authorize_legacy_publishing().await?;
+            }
+        }
         self.repository.set_enabled(enabled).await?;
+        if enabled {
+            self.approved_authentication_epoch
+                .store(authentication_epoch, Ordering::Release);
+        }
         self.wake.notify_one();
         self.status().await
     }
@@ -356,13 +414,20 @@ impl CloudSyncService {
         let config = self.repository.config().await?;
         let pending = self.repository.pending().await?;
         let configured = config.workspace_id.is_some() && !config.api_url.is_empty();
+        let authentication_paused = self.authentication_paused();
+        let enabled = config.enabled && !authentication_paused;
+        let problem = if config.enabled && authentication_paused {
+            Some("AUTH_PUBLISHING_PAUSED".to_owned())
+        } else {
+            config.blocked_code
+        };
         let state = if !configured {
             "notConfigured"
-        } else if !config.enabled {
+        } else if !enabled {
             "paused"
         } else if self.active.load(Ordering::Acquire) {
             "syncing"
-        } else if let Some(code) = config.blocked_code.as_deref() {
+        } else if let Some(code) = problem.as_deref() {
             match code {
                 "OFFLINE" => "offline",
                 "RATE_LIMITED" => "retrying",
@@ -378,7 +443,7 @@ impl CloudSyncService {
         };
         Ok(SyncStatus {
             owner_uid: config.owner_uid,
-            enabled: config.enabled,
+            enabled,
             configured,
             api_url: config.api_url,
             workspace_id: config.workspace_id,
@@ -386,7 +451,7 @@ impl CloudSyncService {
             state: state.into(),
             pending_scopes: pending,
             last_successful_at: config.last_successful_at,
-            problem: config.blocked_code,
+            problem,
             preview: self.repository.preview().await?,
         })
     }
@@ -417,6 +482,9 @@ impl CloudSyncService {
         let Ok(_gate) = self.gate.try_lock() else {
             return Ok(());
         };
+        if self.authentication_paused() {
+            return Err(SyncError::Cancelled);
+        }
         self.cancel.store(false, Ordering::Release);
         let config = self.repository.config().await?;
         if !config.enabled || self.repository.pending().await? == 0 {
