@@ -28,6 +28,8 @@
     "cloud:verify": "node scripts/cloud/verify.mjs",
     "cloud:auth:configure": "node scripts/cloud/configure-auth.mjs",
     "cloud:typecheck": "tsc --noEmit -p cloud/tsconfig.json",
+    "cloud:contract:export": "node scripts/cloud/export-read-contract.mjs",
+    "cloud:contract:check": "node scripts/cloud/export-read-contract.mjs --check",
     "test:e2e": "playwright test",
     "preview": "vite preview",
     "release:plan": "node scripts/release/cli.mjs plan",

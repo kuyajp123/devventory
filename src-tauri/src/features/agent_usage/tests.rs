@@ -25,6 +25,101 @@ fn quota(remaining_percent: Option<f64>, reset_at: &str) -> QuotaWindowState {
 }
 
 #[test]
+fn mobile_quota_contract_fixtures_match_desktop_domain() {
+    #[derive(serde::Deserialize)]
+    #[serde(rename_all = "camelCase")]
+    struct QuotaFixture {
+        remaining_percent: Option<f64>,
+        reset_at: chrono::DateTime<Utc>,
+        reset_reached_at: Option<chrono::DateTime<Utc>>,
+        #[serde(default)]
+        usage_is_stale: bool,
+    }
+    #[derive(serde::Deserialize)]
+    #[serde(rename_all = "camelCase")]
+    struct StatusCase {
+        name: String,
+        quotas: Vec<QuotaFixture>,
+        expected_quota_statuses: Vec<String>,
+        expected_account_status: String,
+        expected_next_reset: Option<chrono::DateTime<Utc>>,
+    }
+    #[derive(serde::Deserialize)]
+    #[serde(rename_all = "camelCase")]
+    struct TimingCase {
+        name: String,
+        now: chrono::DateTime<Utc>,
+        reset_at: chrono::DateTime<Utc>,
+        timezone: chrono_tz::Tz,
+        expected: String,
+    }
+    #[derive(serde::Deserialize)]
+    #[serde(rename_all = "camelCase")]
+    struct Fixtures {
+        fixture_version: u32,
+        now: chrono::DateTime<Utc>,
+        status_cases: Vec<StatusCase>,
+        timing_cases: Vec<TimingCase>,
+    }
+    let fixtures: Fixtures = serde_json::from_str(include_str!(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../cloud/contracts/fixtures/quota-status-v1.json"
+    )))
+    .expect("portable quota fixtures must decode");
+    assert_eq!(fixtures.fixture_version, 1);
+    for case in fixtures.status_cases {
+        let quotas = case
+            .quotas
+            .into_iter()
+            .map(|input| QuotaWindowState {
+                id: Uuid::new_v4(),
+                remaining_percent: input.remaining_percent,
+                reset_at: input.reset_at,
+                reset_reached_at: input.reset_reached_at,
+                usage_is_stale: input.usage_is_stale,
+            })
+            .collect::<Vec<_>>();
+        let statuses = quotas
+            .iter()
+            .map(|quota| {
+                serde_json::to_value(super::domain::derive_quota_status(quota, fixtures.now))
+                    .unwrap()
+            })
+            .collect::<Vec<_>>();
+        assert_eq!(
+            statuses,
+            serde_json::json!(case.expected_quota_statuses)
+                .as_array()
+                .unwrap()
+                .clone(),
+            "{}",
+            case.name
+        );
+        assert_eq!(
+            serde_json::to_value(derive_account_status(&quotas, fixtures.now)).unwrap(),
+            serde_json::json!(case.expected_account_status),
+            "{}",
+            case.name
+        );
+        assert_eq!(
+            derive_next_reset(&quotas, fixtures.now),
+            case.expected_next_reset,
+            "{}",
+            case.name
+        );
+    }
+    for case in fixtures.timing_cases {
+        assert_eq!(
+            serde_json::to_value(derive_reset_timing(case.reset_at, case.timezone, case.now))
+                .unwrap(),
+            serde_json::json!(case.expected),
+            "{}",
+            case.name
+        );
+    }
+}
+
+#[test]
 fn ipc_enums_serialize_using_the_frontend_contract() {
     assert_eq!(
         serde_json::to_value(AgentPlatform::GithubCopilot).unwrap(),

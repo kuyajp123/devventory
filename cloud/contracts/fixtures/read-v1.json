@@ -1,0 +1,381 @@
+{
+  "fixtureVersion": 1,
+  "workspaces": [
+    { "protocolVersion": 1, "workspaceId": null, "deviceId": null },
+    {
+      "protocolVersion": 1,
+      "workspaceId": "11111111-1111-4111-8111-111111111111",
+      "deviceId": null
+    },
+    {
+      "protocolVersion": 1,
+      "workspaceId": "11111111-1111-4111-8111-111111111111",
+      "deviceId": "22222222-2222-4222-8222-222222222222"
+    }
+  ],
+  "pages": [
+    {
+      "path": "/v1/projects",
+      "response": {
+        "protocolVersion": 1,
+        "items": [
+          {
+            "kind": "project",
+            "id": "44444444-4444-4444-8444-444444444444",
+            "data": {
+              "id": "44444444-4444-4444-8444-444444444444",
+              "name": "Companion fixture",
+              "description": null,
+              "projectType": "mobile",
+              "createdAt": "2026-10-15T00:00:00Z",
+              "updatedAt": "2026-10-15T01:00:00Z"
+            },
+            "snapshotId": "55555555-5555-4555-8555-555555555555",
+            "observedAt": "2026-10-15T01:00:00Z",
+            "receivedAt": "2026-10-15T01:01:00Z"
+          }
+        ],
+        "nextCursor": null
+      }
+    },
+    {
+      "path": "/v1/projects/44444444-4444-4444-8444-444444444444/tracker?kind=environment&snapshotId=55555555-5555-4555-8555-555555555555",
+      "response": {
+        "protocolVersion": 1,
+        "items": [
+          {
+            "kind": "environment",
+            "id": "66666666-6666-4666-8666-666666666666",
+            "data": {
+              "id": "66666666-6666-4666-8666-666666666666",
+              "name": "Development",
+              "description": "Synthetic metadata",
+              "sortOrder": 0,
+              "createdAt": "2026-10-15T00:00:00Z",
+              "updatedAt": "2026-10-15T01:00:00Z"
+            },
+            "snapshotId": "55555555-5555-4555-8555-555555555555",
+            "observedAt": "2026-10-15T01:00:00Z",
+            "receivedAt": "2026-10-15T01:01:00Z"
+          }
+        ],
+        "nextCursor": null
+      }
+    },
+    {
+      "path": "/v1/projects/44444444-4444-4444-8444-444444444444/tracker?kind=source&snapshotId=55555555-5555-4555-8555-555555555555",
+      "response": {
+        "protocolVersion": 1,
+        "items": [
+          {
+            "kind": "source",
+            "id": "77777777-7777-4777-8777-777777777777",
+            "data": {
+              "id": "77777777-7777-4777-8777-777777777777",
+              "environmentId": "66666666-6666-4666-8666-666666666666",
+              "name": ".env.example",
+              "origin": "file",
+              "parseStatus": "parsed",
+              "sortOrder": 0,
+              "lastParsedAt": "2026-10-15T01:00:00Z",
+              "lastSuccessfulParseAt": "2026-10-15T01:00:00Z"
+            },
+            "snapshotId": "55555555-5555-4555-8555-555555555555",
+            "observedAt": "2026-10-15T01:00:00Z",
+            "receivedAt": "2026-10-15T01:01:00Z"
+          }
+        ],
+        "nextCursor": null
+      }
+    },
+    {
+      "path": "/v1/projects/44444444-4444-4444-8444-444444444444/tracker?kind=key&limit=1&snapshotId=55555555-5555-4555-8555-555555555555",
+      "response": {
+        "protocolVersion": 1,
+        "items": [
+          {
+            "kind": "key",
+            "id": "API_URL",
+            "data": { "name": "API_URL" },
+            "snapshotId": "55555555-5555-4555-8555-555555555555",
+            "observedAt": "2026-10-15T01:00:00Z",
+            "receivedAt": "2026-10-15T01:01:00Z"
+          }
+        ],
+        "nextCursor": "API_URL"
+      }
+    },
+    {
+      "path": "/v1/projects/44444444-4444-4444-8444-444444444444/tracker?kind=key&limit=1&cursor=API_URL&snapshotId=55555555-5555-4555-8555-555555555555",
+      "response": {
+        "protocolVersion": 1,
+        "items": [
+          {
+            "kind": "key",
+            "id": "OPTIONAL_FLAG",
+            "data": { "name": "OPTIONAL_FLAG" },
+            "snapshotId": "55555555-5555-4555-8555-555555555555",
+            "observedAt": "2026-10-15T01:00:00Z",
+            "receivedAt": "2026-10-15T01:01:00Z"
+          }
+        ],
+        "nextCursor": null
+      }
+    },
+    {
+      "path": "/v1/projects/44444444-4444-4444-8444-444444444444/tracker?kind=cell&snapshotId=55555555-5555-4555-8555-555555555555",
+      "response": {
+        "protocolVersion": 1,
+        "items": [
+          {
+            "kind": "cell",
+            "id": "API_URL:66666666-6666-4666-8666-666666666666",
+            "data": {
+              "keyId": "API_URL",
+              "environmentId": "66666666-6666-4666-8666-666666666666",
+              "state": "duplicate"
+            },
+            "snapshotId": "55555555-5555-4555-8555-555555555555",
+            "observedAt": "2026-10-15T01:00:00Z",
+            "receivedAt": "2026-10-15T01:01:00Z"
+          }
+        ],
+        "nextCursor": null
+      }
+    },
+    {
+      "path": "/v1/projects/44444444-4444-4444-8444-444444444444/tracker?kind=occurrence&snapshotId=55555555-5555-4555-8555-555555555555",
+      "response": {
+        "protocolVersion": 1,
+        "items": [
+          {
+            "kind": "occurrence",
+            "id": "88888888-8888-4888-8888-888888888888",
+            "data": {
+              "keyId": "API_URL",
+              "environmentId": "66666666-6666-4666-8666-666666666666",
+              "sourceId": "77777777-7777-4777-8777-777777777777",
+              "sourceName": ".env.example",
+              "origin": "file",
+              "lineNumber": 12,
+              "isCommented": false
+            },
+            "snapshotId": "55555555-5555-4555-8555-555555555555",
+            "observedAt": "2026-10-15T01:00:00Z",
+            "receivedAt": "2026-10-15T01:01:00Z"
+          }
+        ],
+        "nextCursor": null
+      }
+    },
+    {
+      "path": "/v1/projects/44444444-4444-4444-8444-444444444444/tracker?kind=rule&snapshotId=55555555-5555-4555-8555-555555555555",
+      "response": {
+        "protocolVersion": 1,
+        "items": [
+          {
+            "kind": "rule",
+            "id": "99999999-9999-4999-8999-999999999999",
+            "data": {
+              "id": "99999999-9999-4999-8999-999999999999",
+              "keyName": "API_URL",
+              "ruleType": "required",
+              "severity": "error",
+              "description": null,
+              "sortOrder": 0,
+              "enabled": true,
+              "createdAt": "2026-10-15T00:00:00Z",
+              "updatedAt": "2026-10-15T01:00:00Z"
+            },
+            "snapshotId": "55555555-5555-4555-8555-555555555555",
+            "observedAt": "2026-10-15T01:00:00Z",
+            "receivedAt": "2026-10-15T01:01:00Z"
+          }
+        ],
+        "nextCursor": null
+      }
+    },
+    {
+      "path": "/v1/projects/44444444-4444-4444-8444-444444444444/tracker?kind=ruleTarget&snapshotId=55555555-5555-4555-8555-555555555555",
+      "response": {
+        "protocolVersion": 1,
+        "items": [
+          {
+            "kind": "ruleTarget",
+            "id": "99999999-9999-4999-8999-999999999999:66666666-6666-4666-8666-666666666666",
+            "data": {
+              "ruleId": "99999999-9999-4999-8999-999999999999",
+              "environmentId": "66666666-6666-4666-8666-666666666666"
+            },
+            "snapshotId": "55555555-5555-4555-8555-555555555555",
+            "observedAt": "2026-10-15T01:00:00Z",
+            "receivedAt": "2026-10-15T01:01:00Z"
+          }
+        ],
+        "nextCursor": null
+      }
+    },
+    {
+      "path": "/v1/projects/44444444-4444-4444-8444-444444444444/tracker?kind=issue&snapshotId=55555555-5555-4555-8555-555555555555",
+      "response": {
+        "protocolVersion": 1,
+        "items": [
+          {
+            "kind": "issue",
+            "id": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+            "data": {
+              "id": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+              "environmentId": "66666666-6666-4666-8666-666666666666",
+              "ruleId": "99999999-9999-4999-8999-999999999999",
+              "keyName": "API_URL",
+              "issueType": "duplicate",
+              "severity": "error",
+              "status": "open",
+              "lineNumber": 12,
+              "firstSeenAt": "2026-10-15T00:00:00Z",
+              "lastSeenAt": "2026-10-15T01:00:00Z",
+              "resolvedAt": null,
+              "updatedAt": "2026-10-15T01:00:00Z",
+              "message": "Key occurs more than once."
+            },
+            "snapshotId": "55555555-5555-4555-8555-555555555555",
+            "observedAt": "2026-10-15T01:00:00Z",
+            "receivedAt": "2026-10-15T01:01:00Z"
+          }
+        ],
+        "nextCursor": null
+      }
+    },
+    {
+      "path": "/v1/projects/44444444-4444-4444-8444-444444444444/tracker?kind=validation&snapshotId=55555555-5555-4555-8555-555555555555",
+      "response": {
+        "protocolVersion": 1,
+        "items": [
+          {
+            "kind": "validation",
+            "id": "44444444-4444-4444-8444-444444444444",
+            "data": {
+              "health": "error",
+              "lastSuccessfulAt": "2026-10-15T01:00:00Z"
+            },
+            "snapshotId": "55555555-5555-4555-8555-555555555555",
+            "observedAt": "2026-10-15T01:00:00Z",
+            "receivedAt": "2026-10-15T01:01:00Z"
+          }
+        ],
+        "nextCursor": null
+      }
+    },
+    {
+      "path": "/v1/agent-accounts",
+      "response": {
+        "protocolVersion": 1,
+        "items": [
+          {
+            "kind": "agentAccount",
+            "id": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+            "data": {
+              "id": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+              "platform": "codex",
+              "customPlatform": null,
+              "signInMethod": "email",
+              "identifier": "fixture@example.com",
+              "trackingMode": "manual",
+              "defaultTimezone": "Asia/Manila",
+              "createdAt": "2026-10-15T00:00:00Z",
+              "updatedAt": "2026-10-15T01:00:00Z"
+            },
+            "snapshotId": "cccccccc-cccc-4ccc-8ccc-cccccccccccc",
+            "observedAt": "2026-10-15T01:00:00Z",
+            "receivedAt": "2026-10-15T01:01:00Z"
+          }
+        ],
+        "nextCursor": null
+      }
+    },
+    {
+      "path": "/v1/agent-accounts/bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb/quotas?snapshotId=cccccccc-cccc-4ccc-8ccc-cccccccccccc",
+      "response": {
+        "protocolVersion": 1,
+        "items": [
+          {
+            "kind": "quota",
+            "id": "dddddddd-dddd-4ddd-8ddd-dddddddddddd",
+            "data": {
+              "id": "dddddddd-dddd-4ddd-8ddd-dddddddddddd",
+              "accountId": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+              "label": "Weekly",
+              "remainingPercent": null,
+              "resetAt": "2026-10-17T08:00:00+08:00",
+              "timezone": "Asia/Manila",
+              "trackingSource": "manual",
+              "usageUpdatedAt": null,
+              "usageIsStale": true,
+              "resetReachedAt": null,
+              "reminders": {
+                "beforeResetHours": 24,
+                "resetDay": true,
+                "resetReached": false
+              },
+              "createdAt": "2026-10-15T00:00:00Z",
+              "updatedAt": "2026-10-15T01:00:00Z"
+            },
+            "snapshotId": "cccccccc-cccc-4ccc-8ccc-cccccccccccc",
+            "observedAt": "2026-10-15T01:00:00Z",
+            "receivedAt": "2026-10-15T01:01:00Z"
+          }
+        ],
+        "nextCursor": null
+      }
+    }
+  ],
+  "emptyPage": { "protocolVersion": 1, "items": [], "nextCursor": null },
+  "errors": [
+    {
+      "status": 401,
+      "response": {
+        "error": {
+          "code": "UNAUTHORIZED",
+          "message": "Cloud synchronization request could not be completed."
+        }
+      }
+    },
+    {
+      "status": 403,
+      "response": {
+        "error": {
+          "code": "EMAIL_VERIFICATION_REQUIRED",
+          "message": "Cloud synchronization request could not be completed."
+        }
+      }
+    },
+    {
+      "status": 409,
+      "response": {
+        "error": {
+          "code": "WORKSPACE_REQUIRED",
+          "message": "Cloud synchronization request could not be completed."
+        }
+      }
+    },
+    {
+      "status": 410,
+      "response": {
+        "error": {
+          "code": "SNAPSHOT_EXPIRED",
+          "message": "Cloud synchronization request could not be completed."
+        }
+      }
+    },
+    {
+      "status": 429,
+      "headers": { "Retry-After": "60" },
+      "response": {
+        "error": {
+          "code": "RATE_LIMITED",
+          "message": "Cloud synchronization request could not be completed."
+        }
+      }
+    }
+  ]
+}

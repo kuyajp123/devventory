@@ -93,3 +93,31 @@ The first full browser run passed 20 journeys and timed out at the existing onbo
 Recovery-screen screenshots at desktop and 1000×650 use synthetic data and show readable controls without overflow. No real credential or production record was accessed for these regression tests. Native publishing credentials and existing local/cloud data were not cleared or rotated by the test harness.
 
 **Rollout is pending:** this hardening has not been committed, pushed, deployed, merged, or used to publish an application release. Production still runs the previously recorded Worker version; the receipt-proof fix becomes live only after deploying the updated Worker. See the [rollout instructions](firebase-authentication-setup.md#pr31-recovery-hardening-rollout), then restart/use the updated desktop. Review threads were not resolved remotely.
+
+## Mobile integration readiness follow-up — 2026-10-15
+
+The implementation/rollout statements above describe the earlier checkpoint.
+Current repository base `0f1ef9d` includes the merged authentication recovery
+hardening (`4617b67`, PR32) and subsequent development/installed profile isolation
+(PR33). Read-only Wrangler deployment history still reports live version
+`41fe33a5-5ed6-4108-856b-d68c73498df5`; deployment of the merged hardening is not
+confirmed. No deployment was performed during this readiness check.
+
+Read-only status now provides fresh publication evidence: the installed profile
+is account-linked and enabled, with zero pending scopes and no blocked code; its
+last successful sync is `2026-10-15T03:41:25.051Z`. Remote D1's latest publication
+matches that timestamp, with one owned workspace, one active publisher, and 24
+visible scopes. The aggregate query wrote zero rows and exposed no record payloads.
+The separate development profile remains sync-disabled and account-linked.
+
+The user confirmed offline edits across full restart/reconnect have completed
+successfully. Real second-account isolation is still unaccepted. Use a separate
+OS/profile or genuinely isolated synthetic database; do not link the owner's real
+database to a test identity. Record the intended desktop build/profile and Worker
+version with the acceptance outcome.
+
+The [mobile read API contract](mobile-read-api-v1.md) and synthetic producer/consumer
+fixtures now support mobile preparation. They do not prove deployment or private
+account acceptance. The Phase 1 gate remains open until the intended Worker/build
+and real second-account isolation have been verified; mobile application wiring
+must wait for that checkpoint.
