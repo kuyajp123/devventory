@@ -469,7 +469,8 @@ mod tests {
         assert_eq!(marked.width(), 16);
         assert_eq!(marked.height(), 16);
         assert_ne!(marked.rgba(), base.rgba());
-        assert!(marked.rgba().chunks_exact(4).any(|pixel| pixel[3] > 0));
+        let (pixels, _) = marked.rgba().as_chunks::<4>();
+        assert!(pixels.iter().any(|pixel| pixel[3] > 0));
     }
 
     #[test]

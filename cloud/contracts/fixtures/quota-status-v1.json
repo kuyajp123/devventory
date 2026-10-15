@@ -1,0 +1,193 @@
+{
+  "fixtureVersion": 1,
+  "now": "2026-10-15T00:00:00Z",
+  "statusCases": [
+    {
+      "name": "no quotas",
+      "quotas": [],
+      "expectedQuotaStatuses": [],
+      "expectedAccountStatus": "unknown",
+      "expectedNextReset": null
+    },
+    {
+      "name": "zero remaining",
+      "quotas": [{ "remainingPercent": 0, "resetAt": "2026-10-17T00:00:00Z" }],
+      "expectedQuotaStatuses": ["exhausted"],
+      "expectedAccountStatus": "exhausted",
+      "expectedNextReset": "2026-10-17T00:00:00Z"
+    },
+    {
+      "name": "limited threshold is inclusive",
+      "quotas": [{ "remainingPercent": 20, "resetAt": "2026-10-17T00:00:00Z" }],
+      "expectedQuotaStatuses": ["limited"],
+      "expectedAccountStatus": "limited",
+      "expectedNextReset": "2026-10-17T00:00:00Z"
+    },
+    {
+      "name": "above limited threshold",
+      "quotas": [
+        { "remainingPercent": 20.01, "resetAt": "2026-10-17T00:00:00Z" }
+      ],
+      "expectedQuotaStatuses": ["available"],
+      "expectedAccountStatus": "available",
+      "expectedNextReset": "2026-10-17T00:00:00Z"
+    },
+    {
+      "name": "unknown measurement",
+      "quotas": [
+        { "remainingPercent": null, "resetAt": "2026-10-17T00:00:00Z" }
+      ],
+      "expectedQuotaStatuses": ["unknown"],
+      "expectedAccountStatus": "unknown",
+      "expectedNextReset": "2026-10-17T00:00:00Z"
+    },
+    {
+      "name": "reset soon threshold is inclusive",
+      "quotas": [
+        { "remainingPercent": null, "resetAt": "2026-10-16T00:00:00Z" }
+      ],
+      "expectedQuotaStatuses": ["resetSoon"],
+      "expectedAccountStatus": "resetSoon",
+      "expectedNextReset": "2026-10-16T00:00:00Z"
+    },
+    {
+      "name": "outside reset soon threshold",
+      "quotas": [
+        { "remainingPercent": null, "resetAt": "2026-10-16T00:00:01Z" }
+      ],
+      "expectedQuotaStatuses": ["unknown"],
+      "expectedAccountStatus": "unknown",
+      "expectedNextReset": "2026-10-16T00:00:01Z"
+    },
+    {
+      "name": "elapsed reset beats old exhausted measurement",
+      "quotas": [{ "remainingPercent": 0, "resetAt": "2026-10-15T00:00:00Z" }],
+      "expectedQuotaStatuses": ["available"],
+      "expectedAccountStatus": "available",
+      "expectedNextReset": null
+    },
+    {
+      "name": "matching reset marker beats old measurement",
+      "quotas": [
+        {
+          "remainingPercent": 0,
+          "resetAt": "2026-10-17T00:00:00Z",
+          "resetReachedAt": "2026-10-17T00:00:00Z"
+        }
+      ],
+      "expectedQuotaStatuses": ["available"],
+      "expectedAccountStatus": "available",
+      "expectedNextReset": null
+    },
+    {
+      "name": "old reset marker does not cover new window",
+      "quotas": [
+        {
+          "remainingPercent": 0,
+          "resetAt": "2026-10-17T00:00:00Z",
+          "resetReachedAt": "2026-10-14T00:00:00Z"
+        }
+      ],
+      "expectedQuotaStatuses": ["exhausted"],
+      "expectedAccountStatus": "exhausted",
+      "expectedNextReset": "2026-10-17T00:00:00Z"
+    },
+    {
+      "name": "stale measurement retains status until reset",
+      "quotas": [
+        {
+          "remainingPercent": 0,
+          "resetAt": "2026-10-17T00:00:00Z",
+          "usageIsStale": true
+        }
+      ],
+      "expectedQuotaStatuses": ["exhausted"],
+      "expectedAccountStatus": "exhausted",
+      "expectedNextReset": "2026-10-17T00:00:00Z"
+    },
+    {
+      "name": "exhausted precedes limited",
+      "quotas": [
+        { "remainingPercent": 20, "resetAt": "2026-10-17T00:00:00Z" },
+        { "remainingPercent": 0, "resetAt": "2026-10-16T00:00:00Z" }
+      ],
+      "expectedQuotaStatuses": ["limited", "exhausted"],
+      "expectedAccountStatus": "exhausted",
+      "expectedNextReset": "2026-10-16T00:00:00Z"
+    },
+    {
+      "name": "limited precedes unknown",
+      "quotas": [
+        { "remainingPercent": null, "resetAt": "2026-10-17T00:00:00Z" },
+        { "remainingPercent": 20, "resetAt": "2026-10-16T00:00:00Z" }
+      ],
+      "expectedQuotaStatuses": ["unknown", "limited"],
+      "expectedAccountStatus": "limited",
+      "expectedNextReset": "2026-10-16T00:00:00Z"
+    },
+    {
+      "name": "unknown precedes reset soon",
+      "quotas": [
+        { "remainingPercent": 50, "resetAt": "2026-10-16T00:00:00Z" },
+        { "remainingPercent": null, "resetAt": "2026-10-17T00:00:00Z" }
+      ],
+      "expectedQuotaStatuses": ["resetSoon", "unknown"],
+      "expectedAccountStatus": "unknown",
+      "expectedNextReset": "2026-10-16T00:00:00Z"
+    },
+    {
+      "name": "reset soon precedes available",
+      "quotas": [
+        { "remainingPercent": 50, "resetAt": "2026-10-16T00:00:00Z" },
+        { "remainingPercent": 75, "resetAt": "2026-10-17T00:00:00Z" }
+      ],
+      "expectedQuotaStatuses": ["resetSoon", "available"],
+      "expectedAccountStatus": "resetSoon",
+      "expectedNextReset": "2026-10-16T00:00:00Z"
+    }
+  ],
+  "timingCases": [
+    {
+      "name": "elapsed at equality",
+      "now": "2026-10-15T00:00:00Z",
+      "resetAt": "2026-10-15T00:00:00Z",
+      "timezone": "Asia/Manila",
+      "expected": "elapsed"
+    },
+    {
+      "name": "same local day",
+      "now": "2026-10-15T00:00:00Z",
+      "resetAt": "2026-10-15T15:59:59Z",
+      "timezone": "Asia/Manila",
+      "expected": "today"
+    },
+    {
+      "name": "tomorrow at local midnight",
+      "now": "2026-10-15T00:00:00Z",
+      "resetAt": "2026-10-15T16:00:00Z",
+      "timezone": "Asia/Manila",
+      "expected": "tomorrow"
+    },
+    {
+      "name": "future local date",
+      "now": "2026-10-15T00:00:00Z",
+      "resetAt": "2026-10-16T16:00:00Z",
+      "timezone": "Asia/Manila",
+      "expected": "future"
+    },
+    {
+      "name": "spring DST local midnight",
+      "now": "2026-03-08T05:00:00Z",
+      "resetAt": "2026-03-09T04:00:00Z",
+      "timezone": "America/New_York",
+      "expected": "tomorrow"
+    },
+    {
+      "name": "autumn DST repeated hour",
+      "now": "2026-11-01T05:30:00Z",
+      "resetAt": "2026-11-01T06:30:00Z",
+      "timezone": "America/New_York",
+      "expected": "today"
+    }
+  ]
+}
